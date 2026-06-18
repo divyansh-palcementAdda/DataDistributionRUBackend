@@ -1,102 +1,197 @@
 package com.app.datadistribution.service.impl;
-import java.io.InputStream;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.user.UserPageResponse;
+import com.app.datadistribution.dto.user.UserRequest;
+import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserUpdateRequest;
+import com.app.datadistribution.entity.Role;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.enums.ActivityType;
+import com.app.datadistribution.enums.RoleType;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.DuplicateResourceException;
+import com.app.datadistribution.exception.ResourcesNotFoundException;
+import com.app.datadistribution.mapper.UserMapper;
+import com.app.datadistribution.repository.RoleRepository;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.IActivityLogService;
+import com.app.datadistribution.service.interfaces.IUserService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
-import com.app.datadistribution.Model.ActivityType;
-import com.app.datadistribution.Model.Role;
-import com.app.datadistribution.Model.User;
-import com.app.datadistribution.Model.UserDevice;
-import com.app.datadistribution.Model.UserStatus;
-import com.app.datadistribution.exception.AccessDeniedException;
-import com.app.datadistribution.exception.BadRequestException;
-import com.app.datadistribution.exception.ResourcesNotFoundException;
-import com.app.datadistribution.payload.PageResponse;
-import com.app.datadistribution.payload.SuccessEntry;
-import com.app.datadistribution.payload.UserDTO;
-import com.app.datadistribution.payload.UserDeviceDTO;
-import com.app.datadistribution.payload.UserRequest;
-import com.app.datadistribution.payload.UserUpdateRequest;
-import com.app.datadistribution.repository.IUserRepository;
-import com.app.datadistribution.repository.RoleRepository;
-import com.app.datadistribution.repository.UserDeviceRepository;
-import com.app.datadistribution.security.UserSecurityUtil;
-import com.app.datadistribution.service.interfaces.IActivityLogService;
-import com.app.datadistribution.service.interfaces.IEmailService;
-import com.app.datadistribution.service.interfaces.IUserService;
-
-
-import jakarta.mail.MessagingException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
-@Slf4j
-public class UserServiceImpl implements IUserService {@Override
-	public UserDTO updateUser(Long userId, UserUpdateRequest request)
-			throws AccessDeniedException, ResourcesNotFoundException, BadRequestException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+public class UserServiceImpl implements IUserService {
 
-	@Override
-	public void deleteUser(Long userId) throws AccessDeniedException, ResourcesNotFoundException, BadRequestException {
-		// TODO Auto-generated method stub
-		
-	}
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
+    private final IActivityLogService activityLogService;
 
-	@Override
-	public UserDTO getUserById(Long userId) throws AccessDeniedException, ResourcesNotFoundException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getUserById(UUID userId) throws ResourcesNotFoundException {
+        User user = userRepository.findById(userId)
+                .filter(u -> !u.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + userId));
+        return userMapper.toDto(user);
+    }
 
-	@Override
-	public List<UserDeviceDTO> getMyDevices() throws AccessDeniedException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+    @Override
+    @Transactional(readOnly = true)
+    public UserPageResponse getUsers(PageRequestDTO pageRequest) {
+        Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
+        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, pageRequest.getSortBy()));
 
-	@Override
-	public List<UserDeviceDTO> getMyLoginActivities() throws AccessDeniedException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+        Specification<User> spec = Specification.where(isNotDeleted());
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            spec = spec.and(searchUsers(pageRequest.getSearch()));
+        }
 
-	@Override
-	public void logoutDevice(Long deviceId) throws AccessDeniedException, BadRequestException {
-		// TODO Auto-generated method stub
-		
-	}
+        Page<User> userPage = userRepository.findAll(spec, pageable);
+        List<UserResponse> content = userPage.getContent().stream()
+                .map(userMapper::toDto)
+                .collect(Collectors.toList());
 
-	@Override
-	public void logoutAllDevices() throws AccessDeniedException {
-		// TODO Auto-generated method stub
-		
-	}}
+        return UserPageResponse.builder()
+                .content(content)
+                .page(userPage.getNumber())
+                .size(userPage.getSize())
+                .totalElements(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .last(userPage.isLast())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public UserResponse createUser(UserRequest request) throws BadRequestException {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
+        }
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Email is already registered: " + request.getEmail());
+        }
+
+        Set<Role> roles = request.getRoles().stream()
+                .map(roleName -> roleRepository.findByName(roleName)
+                        .orElseThrow(() -> new ResourcesNotFoundException("Role not found: " + roleName)))
+                .collect(Collectors.toSet());
+
+        if (roles.isEmpty()) {
+            Role defaultRole = roleRepository.findByName(RoleType.USER.name())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role USER not found"));
+            roles.add(defaultRole);
+        }
+
+        User user = User.builder()
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .username(request.getUsername())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .active(request.isActive())
+                .locked(request.isLocked())
+                .emailVerified(request.isEmailVerified())
+                .profileImage(request.getProfileImage())
+                .roles(roles)
+                .tokenVersion(1L)
+                .build();
+
+        User saved = userRepository.save(user);
+        activityLogService.logActivity(ActivityType.USER_CREATED, "Created user: " + saved.getUsername());
+        return userMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateUser(UUID userId, UserUpdateRequest request) throws ResourcesNotFoundException, BadRequestException {
+        User user = userRepository.findById(userId)
+                .filter(u -> !u.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + userId));
+
+        if (!user.getUsername().equalsIgnoreCase(request.getUsername()) && userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
+        }
+
+        if (!user.getEmail().equalsIgnoreCase(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Email is already registered: " + request.getEmail());
+        }
+
+        Set<Role> roles = request.getRoles().stream()
+                .map(roleName -> roleRepository.findByName(roleName)
+                        .orElseThrow(() -> new ResourcesNotFoundException("Role not found: " + roleName)))
+                .collect(Collectors.toSet());
+
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setEmail(request.getEmail());
+        user.setPhone(request.getPhone());
+        user.setUsername(request.getUsername());
+        
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            // Invalidate current logins since password has changed
+            user.setTokenVersion(user.getTokenVersion() + 1);
+        }
+
+        user.setProfileImage(request.getProfileImage());
+        user.setRoles(roles);
+        user.setActive(request.isActive());
+        user.setLocked(request.isLocked());
+        user.setEmailVerified(request.isEmailVerified());
+
+        User updated = userRepository.save(user);
+        activityLogService.logActivity(ActivityType.USER_UPDATED, "Updated user: " + updated.getUsername());
+        return userMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(UUID userId) throws ResourcesNotFoundException {
+        User user = userRepository.findById(userId)
+                .filter(u -> !u.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + userId));
+
+        user.setDeleted(true);
+        user.setActive(false);
+        userRepository.save(user);
+        activityLogService.logActivity(ActivityType.USER_DELETED, "Soft deleted user: " + user.getUsername());
+    }
+
+    private Specification<User> isNotDeleted() {
+        return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
+    }
+
+    private Specification<User> searchUsers(String keyword) {
+        return (root, query, cb) -> {
+            String searchPattern = "%" + keyword.toLowerCase() + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("firstName")), searchPattern),
+                    cb.like(cb.lower(root.get("lastName")), searchPattern),
+                    cb.like(cb.lower(root.get("email")), searchPattern),
+                    cb.like(cb.lower(root.get("username")), searchPattern),
+                    cb.like(cb.lower(root.get("department")), searchPattern)
+            );
+        };
+    }
+}

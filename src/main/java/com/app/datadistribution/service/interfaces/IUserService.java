@@ -1,25 +1,24 @@
 package com.app.datadistribution.service.interfaces;
 
-import java.util.List;
-
+import java.util.UUID;
+import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.user.UserPageResponse;
+import com.app.datadistribution.dto.user.UserRequest;
+import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserUpdateRequest;
 import com.app.datadistribution.exception.AccessDeniedException;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
-import com.app.datadistribution.payload.UserDTO;
-import com.app.datadistribution.payload.UserDeviceDTO;
-import com.app.datadistribution.payload.UserUpdateRequest;
 
 public interface IUserService {
 
-	UserDTO updateUser(Long userId, UserUpdateRequest request) throws AccessDeniedException, ResourcesNotFoundException, BadRequestException;
+    UserResponse getUserById(UUID userId) throws ResourcesNotFoundException;
 
-	void deleteUser(Long userId) throws AccessDeniedException, ResourcesNotFoundException, BadRequestException;
+    UserPageResponse getUsers(PageRequestDTO pageRequest);
 
-	UserDTO getUserById(Long userId) throws AccessDeniedException, ResourcesNotFoundException;
+    UserResponse createUser(UserRequest request) throws BadRequestException;
 
+    UserResponse updateUser(UUID userId, UserUpdateRequest request) throws ResourcesNotFoundException, BadRequestException;
 
-	List<UserDeviceDTO> getMyDevices() throws AccessDeniedException;
-	List<UserDeviceDTO> getMyLoginActivities() throws AccessDeniedException;
-	void logoutDevice(Long deviceId) throws AccessDeniedException, BadRequestException;
-	void logoutAllDevices() throws AccessDeniedException;
+    void deleteUser(UUID userId) throws ResourcesNotFoundException;
 }

@@ -1,24 +1,22 @@
-// RefreshTokenService.java  (updated with isAccessTokenValidForUser helper)
 package com.app.datadistribution.service.impl;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import com.app.datadistribution.Model.RefreshToken;
-import com.app.datadistribution.Model.User;
-import com.app.datadistribution.Model.UserDevice;
-import com.app.datadistribution.Model.UserStatus;
+import com.app.datadistribution.entity.RefreshToken;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.entity.UserDevice;
 import com.app.datadistribution.exception.AccessDeniedException;
+import com.app.datadistribution.exception.InvalidRefreshTokenException;
 import com.app.datadistribution.repository.RefreshTokenRepository;
 import com.app.datadistribution.repository.UserDeviceRepository;
-import com.app.datadistribution.security.JwtProvider;
-
+import com.app.datadistribution.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
-    private final JwtProvider jwtProvider;
+    private final JwtService jwtService;
     private final UserDeviceRepository userDeviceRepository;
 
     @Value("${jwt.access.expiration-ms:900000}")
@@ -41,9 +39,9 @@ public class RefreshTokenService {
     public RefreshToken createRefreshToken(User user, String accessToken, String clientIp, String deviceInfo) throws AccessDeniedException {
         validateUser(user);
 
-        String refreshTokenString = jwtProvider.generateRefreshToken(
+        String refreshTokenString = jwtService.generateRefreshToken(
             user.getUsername(),
-            Map.of("userId", user.getUserId(), "tokenVersion", user.getTokenVersion())
+            Map.of("userId", user.getId(), "tokenVersion", user.getTokenVersion())
         );
 
         RefreshToken token = RefreshToken.builder()
@@ -62,9 +60,8 @@ public class RefreshTokenService {
 
         RefreshToken saved = refreshTokenRepository.save(token);
 
-        // Create active user device session record
         UserDevice device = UserDevice.builder()
-                .userId(user.getUserId())
+                .userId(user.getId())
                 .refreshTokenId(saved.getId())
                 .deviceName(getDevice(deviceInfo))
                 .browser(getBrowser(deviceInfo))
@@ -78,12 +75,10 @@ public class RefreshTokenService {
         UserDevice savedDevice = userDeviceRepository.save(device);
 
         saved.setDeviceId(savedDevice.getId());
-        refreshTokenRepository.save(saved);
-
-        return saved;
+        return refreshTokenRepository.save(saved);
     }
 
-    private String getBrowser(String userAgent) {
+    public static String getBrowser(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) return "Unknown";
         String ua = userAgent.toLowerCase();
         if (ua.contains("edg")) return "Edge";
@@ -94,7 +89,7 @@ public class RefreshTokenService {
         return "Browser";
     }
 
-    private String getOs(String userAgent) {
+    public static String getOs(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) return "Unknown";
         String ua = userAgent.toLowerCase();
         if (ua.contains("windows")) return "Windows";
@@ -105,7 +100,7 @@ public class RefreshTokenService {
         return "OS";
     }
 
-    private String getDevice(String userAgent) {
+    public static String getDevice(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) return "Unknown";
         String ua = userAgent.toLowerCase();
         if (ua.contains("iphone")) return "iPhone";
@@ -123,35 +118,49 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByRefreshToken(token);
     }
 
-    @Transactional
-    public RefreshToken refreshAccessToken(String refreshTokenStr) throws AccessDeniedException {
-        RefreshToken rt = findByRefreshToken(refreshTokenStr)
-                .orElseThrow(() -> new AccessDeniedException("Invalid refresh token"));
+    public RefreshToken validateAndGetRefreshToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            throw new InvalidRefreshTokenException("Refresh token is required");
+        }
+        RefreshToken rt = refreshTokenRepository.findByToken(token)
+                .orElseThrow(() -> new InvalidRefreshTokenException("Refresh token does not exist"));
 
-        if (rt.isRefreshExpired()) {
-            refreshTokenRepository.delete(rt);
-            throw new AccessDeniedException("Refresh token has expired");
+        if (rt.isRefreshExpired() || rt.getExpiryDate().isBefore(Instant.now())) {
+            throw new InvalidRefreshTokenException("Refresh token has expired");
+        }
+
+        if (rt.isRevoked()) {
+            throw new InvalidRefreshTokenException("Refresh token has been revoked");
+        }
+
+        if (rt.getDeviceId() != null) {
+            UserDevice device = userDeviceRepository.findById(rt.getDeviceId())
+                    .orElseThrow(() -> new InvalidRefreshTokenException("Device associated with token not found"));
+            if (!device.isActive()) {
+                throw new InvalidRefreshTokenException("Device associated with token is inactive");
+            }
         }
 
         User user = rt.getUser();
-        if (user.getStatus() != UserStatus.ACTIVE || !user.isEmailVerified()) {
-            throw new AccessDeniedException("Account not active or not verified");
+        if (user == null || !user.isActive() || !user.isEmailVerified()) {
+            throw new InvalidRefreshTokenException("User account is no longer active or email not verified");
         }
 
-        String newAccessToken = jwtProvider.generateAccessToken(
-                user.getUsername(),
-                Map.of("userId", user.getUserId())
-        );
+        if (rt.getTokenVersion() == null || !rt.getTokenVersion().equals(user.getTokenVersion())) {
+            throw new InvalidRefreshTokenException("Refresh token version mismatch");
+        }
 
-        rt.setAccessToken(newAccessToken);
-        rt.setAccessTokenExpiry(Instant.now().plusMillis(accessTokenDurationMs));
-        rt.setLastUsed(Instant.now());
-
-        return refreshTokenRepository.save(rt);
+        return rt;
     }
 
-    public boolean isAccessTokenValidForUser(Long userId, String accessToken) {
-        return refreshTokenRepository.findByUser_UserIdAndAccessToken(userId, accessToken)
+    @Transactional
+    public RefreshToken refreshAccessToken(String refreshTokenStr) {
+        RefreshToken rt = validateAndGetRefreshToken(refreshTokenStr);
+        return verifyAndRefresh(rt);
+    }
+
+    public boolean isAccessTokenValidForUser(UUID userId, String accessToken) {
+        return refreshTokenRepository.findByUser_IdAndAccessToken(userId, accessToken)
                 .map(RefreshToken::isAccessExpired)
                 .map(expired -> !expired)
                 .orElse(false);
@@ -159,26 +168,27 @@ public class RefreshTokenService {
 
     @Transactional
     public void revokeByRefreshToken(String refreshToken) {
-        findByRefreshToken(refreshToken).ifPresent(rt -> {
-            log.info("Revoking session for user {} from {}", rt.getUser().getUserId(), rt.getClientIp());
+        refreshTokenRepository.findByToken(refreshToken).ifPresent(rt -> {
+            log.info("Revoking session for user {} from {}", rt.getUser().getId(), rt.getClientIp());
             
-            // Mark UserDevice as inactive
-            userDeviceRepository.findByRefreshTokenId(rt.getId()).ifPresent(device -> {
-                device.setActive(false);
-                device.setLogoutAt(Instant.now());
-                device.setRefreshTokenId(null);
-                userDeviceRepository.save(device);
-            });
-
-            refreshTokenRepository.delete(rt);
+            rt.setRevoked(true);
+            refreshTokenRepository.save(rt);
+            
+            if (rt.getDeviceId() != null) {
+                userDeviceRepository.findById(rt.getDeviceId()).ifPresent(device -> {
+                    device.setActive(false);
+                    device.setLogoutAt(Instant.now());
+                    device.setRefreshTokenId(null);
+                    userDeviceRepository.save(device);
+                });
+            }
         });
     }
 
     @Transactional
-    public void revokeAllByUserId(Long userId) {
+    public void revokeAllByUserId(UUID userId) {
         if (userId == null) return;
 
-        // Mark all devices for this user as inactive
         List<UserDevice> activeDevices = userDeviceRepository.findByUserIdAndIsActiveTrue(userId);
         for (UserDevice device : activeDevices) {
             device.setActive(false);
@@ -192,72 +202,28 @@ public class RefreshTokenService {
     }
 
     private void validateUser(User user) throws AccessDeniedException {
-        if (user == null || user.getStatus() != UserStatus.ACTIVE || !user.isEmailVerified()) {
+        if (user == null || !user.isActive() || !user.isEmailVerified()) {
             throw new AccessDeniedException("Cannot create session – account inactive or unverified");
         }
     }
 
-    /**
-     * Verifies that the refresh token is still valid (not expired, user still active/verified)
-     * and performs access token rotation if everything is okay.
-     * 
-     * @param rt the RefreshToken entity loaded from database
-     * @return the updated RefreshToken entity (with new access token & updated expiry)
-     * @throws AccessDeniedException if refresh token is expired, revoked, or user is invalid
-     */
     @Transactional
-    public RefreshToken verifyAndRefresh(RefreshToken rt) throws AccessDeniedException {
-        // 1. Basic null & existence check (should already be handled by caller, but defensive)
-        if (rt == null) {
-            throw new AccessDeniedException("Refresh token not found");
-        }
+    public RefreshToken verifyAndRefresh(RefreshToken rt) {
+        RefreshToken validated = validateAndGetRefreshToken(rt.getRefreshToken());
+        User user = validated.getUser();
 
-        // 2. Check refresh token expiry
-        if (rt.isRefreshExpired()) {
-            // Optional: auto-cleanup
-            refreshTokenRepository.delete(rt);
-            throw new AccessDeniedException("Refresh token has expired");
-        }
-
-        // 2.1 Check if refresh token was revoked
-        if (rt.isRevoked()) {
-            refreshTokenRepository.delete(rt);
-            throw new AccessDeniedException("Refresh token has been revoked");
-        }
-
-        // 3. Check if user is still in good standing
-        User user = rt.getUser();
-        if (user == null || user.getStatus() != UserStatus.ACTIVE || !user.isEmailVerified()) {
-            // In strict systems you might revoke all tokens here
-            refreshTokenRepository.delete(rt);
-            throw new AccessDeniedException("User account is no longer active or email not verified");
-        }
-
-        // 3.1 Check if token version mismatch
-        if (rt.getTokenVersion() == null || !rt.getTokenVersion().equals(user.getTokenVersion())) {
-            refreshTokenRepository.delete(rt);
-            throw new AccessDeniedException("Refresh token version mismatch");
-        }
-
-        // 4. (Optional but recommended) Check if access token was already compromised/rotated too many times
-        // You could add a rotation counter or last-used check here if paranoid
-
-        // 5. Generate brand new access token
         Map<String, Object> claims = Map.of(
-            "userId", user.getUserId(),
+            "userId", user.getId().toString(),
             "tokenVersion", user.getTokenVersion()
         );
-        String newAccessToken = jwtProvider.generateAccessToken(user.getUsername(), claims);
+        String newAccessToken = jwtService.generateAccessToken(user.getUsername(), claims);
 
-        // 6. Update entity
-        rt.setAccessToken(newAccessToken);
-        rt.setAccessTokenExpiry(Instant.now().plusMillis(accessTokenDurationMs));
-        rt.setLastUsed(Instant.now());
+        validated.setAccessToken(newAccessToken);
+        validated.setAccessTokenExpiry(Instant.now().plusMillis(accessTokenDurationMs));
+        validated.setLastUsed(Instant.now());
 
-        // 7. Persist changes
-        RefreshToken saved = refreshTokenRepository.save(rt);
+        RefreshToken saved = refreshTokenRepository.save(validated);
 
-        // Update active device last activity
         userDeviceRepository.findByRefreshTokenId(saved.getId()).ifPresent(device -> {
             device.setLastActivityAt(Instant.now());
             userDeviceRepository.save(device);

@@ -1,22 +1,25 @@
 package com.app.datadistribution.repository;
+
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
 
-import com.app.datadistribution.Model.Role;
-import com.app.datadistribution.payload.RoleDTO;
+import com.app.datadistribution.dto.user.RoleDTO;
+import com.app.datadistribution.entity.Role;
 
-public interface RoleRepository extends JpaRepository<Role, Long> {
+@Repository
+public interface RoleRepository extends JpaRepository<Role, UUID> {
 
     Optional<Role> findByName(String name);
 
     boolean existsByName(String name);
 
-    // Summary list (ADMIN UI)
     @Query("""
-        SELECT new com.cms.app.payload.RoleDTO(
+        SELECT new com.app.datadistribution.dto.user.RoleDTO(
             r.id,
             r.name,
             COUNT(u)

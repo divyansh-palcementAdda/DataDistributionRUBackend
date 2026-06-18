@@ -3,8 +3,8 @@ package com.app.datadistribution.mapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-import com.app.datadistribution.Model.Role;
-import com.app.datadistribution.payload.RoleDTO;
+import com.app.datadistribution.dto.user.RoleDTO;
+import com.app.datadistribution.entity.Role;
 
 @Mapper(componentModel = "spring")
 public interface RoleMapper {

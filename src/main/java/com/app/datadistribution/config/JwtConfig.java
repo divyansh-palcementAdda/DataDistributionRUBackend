@@ -20,7 +20,6 @@ public class JwtConfig {
 
     @Positive(message = "Access token expiration must be positive")
     private long accessTokenExpirationMs = 900_000L; // 15 min
-//    private long accessTokenExpirationMs = 900_000L; // 15 min
 
     @Positive(message = "Refresh token expiration must be positive")
     private long refreshTokenExpirationMs = 604_800_000L; // 7 days

@@ -1,11 +1,11 @@
 package com.app.datadistribution.service.impl;
-import java.time.LocalDateTime;
+
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,31 +14,30 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import com.app.datadistribution.Model.ActivityType;
-import com.app.datadistribution.Model.RefreshToken;
-import com.app.datadistribution.Model.Role;
-import com.app.datadistribution.Model.User;
-import com.app.datadistribution.Model.UserStatus;
+import com.app.datadistribution.dto.auth.LoginRequest;
+import com.app.datadistribution.dto.auth.LoginResponse;
+import com.app.datadistribution.dto.auth.RegisterRequest;
+import com.app.datadistribution.dto.auth.TokenResponse;
+import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.entity.Permission;
+import com.app.datadistribution.entity.RefreshToken;
+import com.app.datadistribution.entity.Role;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.enums.ActivityType;
+import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.AccessDeniedException;
 import com.app.datadistribution.exception.AuthenticationFailedException;
 import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.DuplicateResourceException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.mapper.UserMapper;
-import com.app.datadistribution.payload.JwtResponse;
-import com.app.datadistribution.payload.LoginRequest;
-import com.app.datadistribution.payload.UserDTO;
-import com.app.datadistribution.payload.UserRequest;
-import com.app.datadistribution.repository.IUserRepository;
 import com.app.datadistribution.repository.RoleRepository;
-import com.app.datadistribution.security.JwtProvider;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.security.JwtService;
 import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
 import com.app.datadistribution.service.interfaces.IAuthService;
-import com.app.datadistribution.service.interfaces.IEmailService;
-
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,28 +47,26 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthServiceImpl implements IAuthService {
 
     private final AuthenticationManager authenticationManager;
-    private final IUserRepository userRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtProvider jwtProvider;
+    private final JwtService jwtService;
     private final UserMapper userMapper;
     private final RefreshTokenService refreshTokenService;
-    private final RoleRepository roleRepository;
     private final IActivityLogService activityLogService;
-    private final IEmailService emailService;
-    private final OtpService otpService;
 
     @Override
     @Transactional
-    public JwtResponse login(@Valid LoginRequest loginRequest, HttpServletRequest httpRequest)
+    public LoginResponse login(LoginRequest loginRequest, HttpServletRequest httpRequest)
             throws AuthenticationFailedException, AccessDeniedException {
-    	String identifier = loginRequest.getEmailOrUsername().trim().toLowerCase();
-    	String clientIp = extractClientIp(httpRequest);
+        
+        String identifier = loginRequest.getEmailOrUsername().trim().toLowerCase();
+        String clientIp = extractClientIp(httpRequest);
         String deviceInfo = httpRequest.getHeader("User-Agent");
 
         log.info("LOGIN ATTEMPT | Identifier: {} | IP: {}", identifier, clientIp);
 
-        User user = userRepository
-        	    .findByEmailIgnoreCaseOrUsernameIgnoreCase(identifier, identifier)
+        User user = userRepository.findByEmailIgnoreCaseOrUsernameIgnoreCase(identifier, identifier)
                 .orElseThrow(() -> {
                     log.warn("LOGIN FAILED | Invalid credentials for: {}", identifier);
                     activityLogService.logActivity(ActivityType.LOGIN_FAILED,
@@ -77,79 +74,109 @@ public class AuthServiceImpl implements IAuthService {
                     return new AuthenticationFailedException("Invalid credentials");
                 });
 
-        if (!user.isEmailVerified() || user.getStatus() != UserStatus.ACTIVE) {
-            log.warn("LOGIN BLOCKED | Account not active/verified: {} | Status: {}", 
-                     user.getEmail(), user.getStatus());
-            activityLogService.logActivity(ActivityType.LOGIN_FAILED,
-                    "Login blocked - account inactive or unverified", user.getEmail());
-            throw new AuthenticationFailedException("Account not active or email not verified");
+        if (!user.isActive()) {
+            log.warn("LOGIN BLOCKED | Account inactive: {}", user.getEmail());
+            activityLogService.logActivity(ActivityType.LOGIN_FAILED, "Login blocked - account inactive", user.getEmail());
+            throw new AccessDeniedException("Account is inactive");
         }
+
+        if (user.isLocked()) {
+            log.warn("LOGIN BLOCKED | Account locked: {}", user.getEmail());
+            activityLogService.logActivity(ActivityType.LOGIN_FAILED, "Login blocked - account locked", user.getEmail());
+            throw new AccessDeniedException("Account is locked");
+        }
+
+        if (!user.isEmailVerified()) {
+            log.warn("LOGIN BLOCKED | Email not verified: {}", user.getEmail());
+            activityLogService.logActivity(ActivityType.LOGIN_FAILED, "Login blocked - email not verified", user.getEmail());
+            throw new AuthenticationFailedException("Email is not verified");
+        }
+
         Authentication authentication = authenticationManager.authenticate(
-        	    new UsernamePasswordAuthenticationToken(user.getUsername(), loginRequest.getPassword()));
+                new UsernamePasswordAuthenticationToken(user.getUsername(), loginRequest.getPassword()));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
         Map<String, Object> claims = Map.of(
-            "userId", userDetails.getId(),
+            "userId", userDetails.getId().toString(),
             "tokenVersion", userDetails.getTokenVersion()
         );
-        String accessToken = jwtProvider.generateAccessToken(userDetails.getUsername(), claims);
+        String accessToken = jwtService.generateAccessToken(userDetails.getUsername(), claims);
 
         RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(
                 user, accessToken, clientIp, deviceInfo);
 
-        log.info("LOGIN SUCCESS | User: {} | ID: {} | IP: {}", 
-                 user.getEmail(), user.getUserId(), clientIp);
+        log.info("LOGIN SUCCESS | User: {} | ID: {} | IP: {}", user.getEmail(), user.getId(), clientIp);
 
-        // Log successful activity
         activityLogService.logActivity(
                 ActivityType.LOGIN,
-                "User logged in successfully",
-                user.getEmail() + " (" + clientIp + ")"
+                String.format("Login successful. IP: %s, Browser: %s, OS: %s, Device: %s", clientIp, RefreshTokenService.getBrowser(deviceInfo), RefreshTokenService.getOs(deviceInfo), RefreshTokenService.getDevice(deviceInfo)),
+                user.getEmail()
         );
 
-        return JwtResponse.builder()
+        LoginResponse.RoleInfo roleInfo = null;
+        if (!user.getRoles().isEmpty()) {
+            Role primaryRole = user.getRoles().iterator().next();
+            roleInfo = LoginResponse.RoleInfo.builder()
+                    .id(primaryRole.getId())
+                    .name(primaryRole.getName())
+                    .build();
+        }
+
+        List<LoginResponse.PermissionInfo> permissionInfos = user.getRoles().stream()
+                .filter(Role::isActive)
+                .flatMap(r -> r.getPermissions().stream())
+                .map(p -> LoginResponse.PermissionInfo.builder()
+                        .id(p.getId())
+                        .name(p.getName())
+                        .build())
+                .distinct()
+                .collect(Collectors.toList());
+
+        LoginResponse.UserLoginInfo userInfo = LoginResponse.UserLoginInfo.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .role(roleInfo)
+                .permissions(permissionInfos)
+                .build();
+
+        return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshTokenEntity.getRefreshToken())
-                .type("Bearer")
-                .id(userDetails.getId())
-                .username(userDetails.getUsername())
-                .email(userDetails.getEmail())
-                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .tokenType("Bearer")
+                .user(userInfo)
                 .build();
     }
 
     @Override
     @Transactional
-    public JwtResponse refreshAccessToken(String refreshToken) throws AccessDeniedException, BadRequestException {
+    public TokenResponse refreshToken(String refreshToken) throws BadRequestException {
         if (!StringUtils.hasText(refreshToken)) {
             throw new BadRequestException("Refresh token is required");
         }
 
-        RefreshToken rt = refreshTokenService.findByRefreshToken(refreshToken)
-                .orElseThrow(() -> new AccessDeniedException("Invalid or expired refresh token"));
-
+        RefreshToken rt = refreshTokenService.validateAndGetRefreshToken(refreshToken);
         RefreshToken updated = refreshTokenService.verifyAndRefresh(rt);
         User user = updated.getUser();
+        String clientIp = updated.getClientIp();
+        String deviceInfo = updated.getDeviceInfo();
 
-        log.info("TOKEN REFRESHED | User: {} | Email: {} | IP: {}", 
-                 user.getUsername(), user.getEmail(), updated.getClientIp());
+        log.info("TOKEN REFRESHED | User: {} | Email: {}", user.getUsername(), user.getEmail());
 
         activityLogService.logActivity(
                 ActivityType.TOKEN_REFRESH,
-                "Access token refreshed successfully",
+                String.format("Token refreshed. IP: %s, Browser: %s, OS: %s, Device: %s", clientIp, RefreshTokenService.getBrowser(deviceInfo), RefreshTokenService.getOs(deviceInfo), RefreshTokenService.getDevice(deviceInfo)),
                 user.getEmail()
         );
 
-        return JwtResponse.builder()
+        return TokenResponse.builder()
                 .accessToken(updated.getAccessToken())
                 .refreshToken(updated.getRefreshToken())
-                .type("Bearer")
-                .id(user.getUserId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .roles(user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .tokenType("Bearer")
                 .build();
     }
 
@@ -157,22 +184,30 @@ public class AuthServiceImpl implements IAuthService {
     @Transactional
     public void logout(String refreshToken) {
         if (StringUtils.hasText(refreshToken)) {
-            refreshTokenService.revokeByRefreshToken(refreshToken);
-            log.info("LOGOUT SUCCESS | Refresh token revoked");
+            refreshTokenService.findByRefreshToken(refreshToken).ifPresent(rt -> {
+                User user = rt.getUser();
+                String deviceInfo = rt.getDeviceInfo();
+                String clientIp = rt.getClientIp();
 
-            // Best effort - get current user if possible
-            String currentUser = getCurrentUsername();
-            activityLogService.logActivity(ActivityType.LOGOUT, 
-                    "User logged out", currentUser != null ? currentUser : "System");
+                refreshTokenService.revokeByRefreshToken(refreshToken);
+                log.info("LOGOUT SUCCESS | Refresh token revoked");
+
+                activityLogService.logActivity(
+                        ActivityType.LOGOUT,
+                        String.format("Logout from device. IP: %s, Browser: %s, OS: %s, Device: %s", clientIp, RefreshTokenService.getBrowser(deviceInfo), RefreshTokenService.getOs(deviceInfo), RefreshTokenService.getDevice(deviceInfo)),
+                        user.getEmail()
+                );
+            });
         }
     }
 
     @Override
     @Transactional
-    public void logoutAll(Long userId) {
+    public void logoutAll(UUID userId) {
         if (userId != null) {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourcesNotFoundException("User not found: " + userId));
+            
             user.setTokenVersion(user.getTokenVersion() + 1);
             userRepository.save(user);
 
@@ -180,66 +215,49 @@ public class AuthServiceImpl implements IAuthService {
             log.info("GLOBAL LOGOUT SUCCESS | All sessions revoked for userId={}", userId);
 
             activityLogService.logActivity(ActivityType.GLOBAL_LOGOUT,
-                    "All sessions terminated for user",
-                    "Admin/User ID: " + userId);
+                    "All sessions terminated for user. Forced logout from all devices.",
+                    user.getEmail());
         }
     }
 
     @Override
     @Transactional
-    public UserDTO register(@Valid UserRequest request)
-            throws AccessDeniedException, BadRequestException {
-
-        validateUserRequest(request);
-
-        Optional<User> existingOpt = userRepository.findByEmail(request.getEmail());
-
-        if (existingOpt.isPresent()) {
-            User existing = existingOpt.get();
-            if (existing.getStatus() == UserStatus.INACTIVE) {
-                log.info("REACTIVATING INACTIVE USER | Email: {}", existing.getEmail());
-
-                existing.setStatus(UserStatus.ACTIVE);
-                existing.setUpdatedAt(LocalDateTime.now());
-                if (StringUtils.hasText(request.getPassword())) {
-                    existing.setPassword(passwordEncoder.encode(request.getPassword()));
-                }
-                Set<Role> roles = resolveRoles(request);
-                existing.setRoles(roles);
-
-                User saved = userRepository.save(existing);
-
-                activityLogService.logActivity(ActivityType.USER_REACTIVATED,
-                        "Inactive user reactivated during registration",
-                        saved.getEmail());
-
-                log.info("USER REACTIVATED SUCCESSFULLY | ID: {}", saved.getUserId());
-                return userMapper.toDto(saved);
-            } else {
-                throw new BadRequestException("Email already registered and active: " + request.getEmail());
-            }
+    public UserResponse register(RegisterRequest request) throws BadRequestException {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
         }
 
-        // New user registration
-        Set<Role> roles = resolveRoles(request);
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Email is already registered: " + request.getEmail());
+        }
+
+        Set<Role> roles = request.getRoles().stream()
+                .map(roleName -> roleRepository.findByName(roleName)
+                        .orElseThrow(() -> new ResourcesNotFoundException("Role not found: " + roleName)))
+                .collect(Collectors.toSet());
+
+        if (roles.isEmpty()) {
+            Role defaultRole = roleRepository.findByName(RoleType.USER.name())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role USER not found"));
+            roles.add(defaultRole);
+        }
 
         User user = User.builder()
-                .username(request.getUsername())
-                .fullName(request.getFullName())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
                 .email(request.getEmail())
+                .phone(request.getPhone())
+                .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .status(UserStatus.ACTIVE)
+                .active(true)
+                .locked(false)
+                .emailVerified(true) // Set to verified directly to allow immediate login
                 .roles(roles)
-                .emailVerified(false)
-                .verificationToken(UUID.randomUUID().toString())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .tokenVersion(1L)
                 .build();
 
         User saved = userRepository.save(user);
-
-        log.info("NEW USER REGISTERED SUCCESSFULLY | ID: {} | Email: {}", 
-                 saved.getUserId(), saved.getEmail());
+        log.info("USER REGISTERED SUCCESSFULLY | ID: {} | Email: {}", saved.getId(), saved.getEmail());
 
         activityLogService.logActivity(
                 ActivityType.REGISTER,
@@ -248,28 +266,6 @@ public class AuthServiceImpl implements IAuthService {
         );
 
         return userMapper.toDto(saved);
-    }
-
-    // ───────────────────────────── Utilities ─────────────────────────────
-
-    private void validateUserRequest(UserRequest req) throws BadRequestException {
-        if (req == null) throw new BadRequestException("User registration data is required.");
-        if (!StringUtils.hasText(req.getEmail())) throw new BadRequestException("Email is required.");
-        if (!StringUtils.hasText(req.getUsername())) throw new BadRequestException("Username is required.");
-        if (!StringUtils.hasText(req.getPassword())) throw new BadRequestException("Password is required.");
-    }
-
-    private Set<Role> resolveRoles(UserRequest request) throws BadRequestException {
-        if (request.getRoles() == null || request.getRoles().isEmpty()) {
-            Role defaultRole = roleRepository.findByName("ROLE_USER")
-                    .orElseThrow(() -> new ResourcesNotFoundException("Role", "name", "ROLE_USER"));
-            return Set.of(defaultRole);
-        }
-
-        return request.getRoles().stream()
-                .map(roleName -> roleRepository.findByName(roleName)
-                        .orElseThrow(() -> new ResourcesNotFoundException("Role", "name", roleName)))
-                .collect(Collectors.toSet());
     }
 
     private String getCurrentUsername() {
@@ -282,7 +278,6 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     public static String extractClientIp(HttpServletRequest request) {
-        // ... (your existing implementation remains the same)
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
             ip = request.getHeader("X-Real-IP");
@@ -292,30 +287,4 @@ public class AuthServiceImpl implements IAuthService {
         }
         return ip != null ? ip.split(",")[0].trim() : "unknown";
     }
-    @Override
-    public void sendOtp(String email) throws BadRequestException {
-        if (!StringUtils.hasText(email)) {
-            throw new BadRequestException("Email is required");
-        }
-        
-        String otp = otpService.generateOtp(email);
-        try {
-            emailService.sendOtpEmail(email, otp);
-            log.info("OTP sent to email: {}", email);
-        } catch (Exception e) {
-        	log.error("Failed to send OTP email to {}: {}", email, e.getMessage());
-        	throw new RuntimeException("Failed to send OTP email");
-        }
-    }
-
-    @Override
-    public void verifyOtp(String email, String otp) throws BadRequestException {
-        if (!StringUtils.hasText(email) || !StringUtils.hasText(otp)) {
-            throw new BadRequestException("Email and OTP are required");
-        }
-        
-        if (!otpService.verifyOtp(email, otp)) {
-            throw new BadRequestException("Invalid or expired OTP");
-        }
-    }
-}
+}
