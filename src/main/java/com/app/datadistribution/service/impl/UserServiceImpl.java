@@ -1,5 +1,6 @@
 package com.app.datadistribution.service.impl;
 
+import org.springframework.cache.annotation.CacheEvict;
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.user.UserPageResponse;
 import com.app.datadistribution.dto.user.UserRequest;
@@ -124,6 +125,7 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "userPermissions", allEntries = true)
     public UserResponse updateUser(UUID userId, UserUpdateRequest request) throws ResourcesNotFoundException, BadRequestException {
         User user = userRepository.findById(userId)
                 .filter(u -> !u.isDeleted())
@@ -167,6 +169,7 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "userPermissions", allEntries = true)
     public void deleteUser(UUID userId) throws ResourcesNotFoundException {
         User user = userRepository.findById(userId)
                 .filter(u -> !u.isDeleted())
@@ -176,6 +179,33 @@ public class UserServiceImpl implements IUserService {
         user.setActive(false);
         userRepository.save(user);
         activityLogService.logActivity(ActivityType.USER_DELETED, "Soft deleted user: " + user.getUsername());
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "userPermissions", allEntries = true)
+    public void assignRole(UUID userId, UUID roleId) throws ResourcesNotFoundException, BadRequestException {
+        User user = userRepository.findById(userId)
+                .filter(u -> !u.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + userId));
+
+        Role role = roleRepository.findByIdAndIsDeletedFalse(roleId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Role not found with id: " + roleId));
+
+        if (!role.isActive()) {
+            throw new BadRequestException("Cannot assign inactive role '" + role.getName() + "' to user");
+        }
+
+        Set<Role> roles = new HashSet<>();
+        roles.add(role);
+        user.setRoles(roles);
+
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        userRepository.save(user);
+
+        log.info("Assigned role '{}' to user '{}'", role.getName(), user.getUsername());
+        activityLogService.logActivity(ActivityType.USER_ROLE_CHANGED, 
+                String.format("Changed role of user '%s' to '%s'", user.getUsername(), role.getName()));
     }
 
     private Specification<User> isNotDeleted() {

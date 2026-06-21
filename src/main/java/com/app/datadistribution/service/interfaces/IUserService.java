@@ -21,4 +21,6 @@ public interface IUserService {
     UserResponse updateUser(UUID userId, UserUpdateRequest request) throws ResourcesNotFoundException, BadRequestException;
 
     void deleteUser(UUID userId) throws ResourcesNotFoundException;
+
+    void assignRole(UUID userId, UUID roleId) throws ResourcesNotFoundException, BadRequestException;
 }

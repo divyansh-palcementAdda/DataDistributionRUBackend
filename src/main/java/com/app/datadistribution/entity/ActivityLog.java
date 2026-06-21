@@ -54,6 +54,9 @@ public class ActivityLog {
     @Column(length = 100)
     private String performedBy;
 
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

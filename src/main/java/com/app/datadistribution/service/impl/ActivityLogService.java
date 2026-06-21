@@ -10,6 +10,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import jakarta.servlet.http.HttpServletRequest;
 
 import com.app.datadistribution.dto.ActivityLogDTO;
 import com.app.datadistribution.entity.ActivityLog;
@@ -35,6 +39,7 @@ public class ActivityLogService implements IActivityLogService {
                 .activityType(type)
                 .description(description)
                 .performedBy(performedBy != null ? performedBy : "System")
+                .ipAddress(extractClientIp())
                 .build();
         repository.save(activityLog);
     }
@@ -140,8 +145,29 @@ public class ActivityLogService implements IActivityLogService {
                 .title(title != null ? title : type.getDefaultTitle())
                 .description(description)
                 .performedBy(performedBy)
+                .ipAddress(extractClientIp())
                 .build();
         repository.save(logEntry);
         log.debug("Activity logged: {} by {}", type, performedBy);
+    }
+
+    private String extractClientIp() {
+        try {
+            RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+            if (attributes instanceof ServletRequestAttributes servletAttributes) {
+                HttpServletRequest request = servletAttributes.getRequest();
+                String ip = request.getHeader("X-Forwarded-For");
+                if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+                    ip = request.getHeader("X-Real-IP");
+                }
+                if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+                    ip = request.getRemoteAddr();
+                }
+                return ip != null ? ip.split(",")[0].trim() : "unknown";
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract client IP: {}", e.getMessage());
+        }
+        return "unknown";
     }
 }

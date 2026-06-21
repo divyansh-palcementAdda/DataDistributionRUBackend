@@ -170,7 +170,7 @@ public class LeadController {
     }
 
     @GetMapping("/stats/source-wise")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_STATS')")
+    @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get lead stats source-wise")
     public ResponseEntity<ApiResponse<List<LeadSourceStatsResponse>>> getSourceWiseStats() {
         List<LeadSourceStatsResponse> response = leadService.getSourceWiseStats();
@@ -178,7 +178,7 @@ public class LeadController {
     }
 
     @GetMapping("/stats/status-wise")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_STATS')")
+    @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get lead stats status-wise")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStatusWiseStats() {
         Map<String, Long> response = leadService.getStatusWiseStats();

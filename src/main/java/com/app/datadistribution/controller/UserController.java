@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -90,5 +91,15 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable("id") UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PatchMapping("/{userId}/role/{roleId}")
+    @PreAuthorize("hasAuthority('USER_ROLE_ASSIGN')")
+    @Operation(summary = "Change user role")
+    public ResponseEntity<ApiResponse<Void>> assignRole(
+            @PathVariable("userId") UUID userId,
+            @PathVariable("roleId") UUID roleId) throws ResourcesNotFoundException, BadRequestException {
+        userService.assignRole(userId, roleId);
+        return ResponseEntity.ok(ApiResponse.success("User role updated successfully", null, HttpStatus.OK.value()));
     }
 }

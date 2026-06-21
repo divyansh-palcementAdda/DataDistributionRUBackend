@@ -16,17 +16,26 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
 
     Optional<Role> findByName(String name);
 
+    Optional<Role> findByNameAndIsDeletedFalse(String name);
+
+    Optional<Role> findByIdAndIsDeletedFalse(UUID id);
+
     boolean existsByName(String name);
+
+    boolean existsByNameAndIsDeletedFalse(String name);
 
     @Query("""
         SELECT new com.app.datadistribution.dto.user.RoleDTO(
             r.id,
             r.name,
+            r.description,
+            r.active,
             COUNT(u)
         )
         FROM Role r
         LEFT JOIN r.users u
-        GROUP BY r.id, r.name
+        WHERE r.isDeleted = false
+        GROUP BY r.id, r.name, r.description, r.active
     """)
     List<RoleDTO> fetchAllSummary();
 }

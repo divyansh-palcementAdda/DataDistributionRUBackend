@@ -1,6 +1,5 @@
 package com.app.datadistribution.dto.auth;
 
-import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,20 +10,16 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginResponse {
+public class UserProfileResponse {
 
-    private String accessToken;
-    private String refreshToken;
-    @Builder.Default
-    private String tokenType = "Bearer";
-    private UserLoginInfo user;
+    private UserInfo user;
     private RoleInfo role;
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class UserLoginInfo {
+    public static class UserInfo {
         private UUID id;
         private String username;
         private String email;

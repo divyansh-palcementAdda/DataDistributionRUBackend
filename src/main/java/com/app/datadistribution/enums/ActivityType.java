@@ -20,7 +20,20 @@ public enum ActivityType {
     REGISTER("🆕", "#f0fdf4", "User Registered"),
     TOKEN_REFRESH("🔄", "#eff6ff", "Token Refreshed"),
     LOGOUT("🚪", "#fef3c7", "User Logout"),
-    GLOBAL_LOGOUT("🌍", "#fef3c7", "Logged out from all devices");
+    GLOBAL_LOGOUT("🌍", "#fef3c7", "Logged out from all devices"),
+
+    // ================= ROLE & PERMISSION =================
+    ROLE_CREATED("🔐", "#f0fdf4", "Role Created"),
+    ROLE_UPDATED("✏️", "#e0f2fe", "Role Updated"),
+    ROLE_DELETED("🗑️", "#fee2e2", "Role Deleted"),
+    ROLE_ACTIVATED("♻️", "#f0fdf4", "Role Activated"),
+    ROLE_DEACTIVATED("⏸️", "#fef3c7", "Role Deactivated"),
+    PERMISSION_CREATED("🔑", "#f0fdf4", "Permission Created"),
+    PERMISSION_UPDATED("✏️", "#e0f2fe", "Permission Updated"),
+    PERMISSION_DELETED("🗑️", "#fee2e2", "Permission Deleted"),
+    PERMISSION_ASSIGNED("🔗", "#e0f2fe", "Permission Assigned To Role"),
+    PERMISSION_REMOVED("❌", "#fee2e2", "Permission Removed From Role"),
+    USER_ROLE_CHANGED("🔄", "#e0f2fe", "User Role Changed");
 
     private final String icon;
     private final String iconBg;

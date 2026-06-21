@@ -6,7 +6,10 @@ import com.app.datadistribution.dto.auth.LoginResponse;
 import com.app.datadistribution.dto.auth.RegisterRequest;
 import com.app.datadistribution.dto.auth.TokenResponse;
 import com.app.datadistribution.security.UserDetailsImpl;
+import com.app.datadistribution.dto.auth.UserProfileResponse;
+import com.app.datadistribution.dto.user.PermissionDTO;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.exception.AccessDeniedException;
 import com.app.datadistribution.exception.AuthenticationFailedException;
@@ -15,6 +18,7 @@ import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.IAuthService;
+import com.app.datadistribution.service.interfaces.IRoleService;
 import com.app.datadistribution.service.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +27,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +46,7 @@ public class AuthController {
     private final IAuthService authService;
     private final IUserService userService;
     private final UserRepository userRepository;
+    private final IRoleService roleService;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user")
@@ -95,7 +101,7 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "Get current authenticated user profile")
-    public ResponseEntity<ApiResponse<UserResponse>> getMe() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<UserProfileResponse>> getMe() throws UnauthorizedException {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new UnauthorizedException("User is not authenticated");
@@ -103,7 +109,44 @@ public class AuthController {
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
-        UserResponse response = userService.getUserById(user.getId());
+
+        UserProfileResponse.RoleInfo roleInfo = null;
+        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+            Role primaryRole = user.getRoles().iterator().next();
+            roleInfo = UserProfileResponse.RoleInfo.builder()
+                    .id(primaryRole.getId())
+                    .name(primaryRole.getName())
+                    .build();
+        }
+
+        UserProfileResponse.UserInfo userInfo = UserProfileResponse.UserInfo.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .build();
+
+        UserProfileResponse response = UserProfileResponse.builder()
+                .user(userInfo)
+                .role(roleInfo)
+                .build();
+
         return ResponseEntity.ok(ApiResponse.success("User profile fetched successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/my-permissions")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get permissions of currently authenticated user")
+    public ResponseEntity<ApiResponse<java.util.Collection<PermissionDTO>>> getMyPermissions() throws UnauthorizedException {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new UnauthorizedException("User is not authenticated");
+        }
+        String username = authentication.getName();
+        
+        java.util.Collection<PermissionDTO> permissions = roleService.getCachedPermissionsForUser(username);
+        
+        return ResponseEntity.ok(ApiResponse.success("User permissions fetched successfully", permissions, HttpStatus.OK.value()));
     }
 }

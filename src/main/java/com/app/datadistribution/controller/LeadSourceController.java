@@ -25,7 +25,7 @@ public class LeadSourceController {
     private final ILeadSourceService leadSourceService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_CREATE')")
+    @PreAuthorize("hasAuthority('LEADSOURCE_CREATE')")
     @Operation(summary = "Create a new lead source")
     public ResponseEntity<ApiResponse<LeadSourceResponse>> create(@Valid @RequestBody LeadSourceRequest request) {
         LeadSourceResponse response = leadSourceService.create(request);
@@ -34,7 +34,7 @@ public class LeadSourceController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_UPDATE')")
+    @PreAuthorize("hasAuthority('LEADSOURCE_UPDATE')")
     @Operation(summary = "Update an existing lead source")
     public ResponseEntity<ApiResponse<LeadSourceResponse>> update(
             @PathVariable("id") UUID id,
@@ -44,7 +44,7 @@ public class LeadSourceController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_READ')")
+    @PreAuthorize("hasAuthority('LEADSOURCE_READ')")
     @Operation(summary = "Get lead source details by ID")
     public ResponseEntity<ApiResponse<LeadSourceResponse>> getById(@PathVariable("id") UUID id) {
         LeadSourceResponse response = leadSourceService.getById(id);
@@ -52,7 +52,7 @@ public class LeadSourceController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_READ')")
+    @PreAuthorize("hasAuthority('LEADSOURCE_READ')")
     @Operation(summary = "Get list of lead sources with pagination, sorting, and search filtering")
     public ResponseEntity<ApiResponse<LeadSourcePageResponse>> getAll(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -74,15 +74,15 @@ public class LeadSourceController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_DELETE')")
+    @PreAuthorize("hasAuthority('LEADSOURCE_DELETE')")
     @Operation(summary = "Soft delete a lead source")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable("id") UUID id) {
         leadSourceService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Lead source deleted successfully", null, HttpStatus.OK.value()));
     }
 
-    @PostMapping("/{id}/toggle-active")
-    @PreAuthorize("hasAuthority('LEAD_SOURCE_UPDATE')")
+    @PutMapping("/{id}/toggle-active")
+    @PreAuthorize("hasAuthority('LEADSOURCE_UPDATE')")
     @Operation(summary = "Toggle lead source active/inactive status")
     public ResponseEntity<ApiResponse<LeadSourceResponse>> toggleActive(@PathVariable("id") UUID id) {
         LeadSourceResponse response = leadSourceService.toggleActive(id);

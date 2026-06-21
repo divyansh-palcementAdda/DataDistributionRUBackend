@@ -124,24 +124,12 @@ public class AuthServiceImpl implements IAuthService {
                     .build();
         }
 
-        List<LoginResponse.PermissionInfo> permissionInfos = user.getRoles().stream()
-                .filter(Role::isActive)
-                .flatMap(r -> r.getPermissions().stream())
-                .map(p -> LoginResponse.PermissionInfo.builder()
-                        .id(p.getId())
-                        .name(p.getName())
-                        .build())
-                .distinct()
-                .collect(Collectors.toList());
-
         LoginResponse.UserLoginInfo userInfo = LoginResponse.UserLoginInfo.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
-                .role(roleInfo)
-                .permissions(permissionInfos)
                 .build();
 
         return LoginResponse.builder()
@@ -149,6 +137,7 @@ public class AuthServiceImpl implements IAuthService {
                 .refreshToken(refreshTokenEntity.getRefreshToken())
                 .tokenType("Bearer")
                 .user(userInfo)
+                .role(roleInfo)
                 .build();
     }
 

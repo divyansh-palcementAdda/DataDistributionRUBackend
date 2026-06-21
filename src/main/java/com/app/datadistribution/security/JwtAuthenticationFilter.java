@@ -2,6 +2,7 @@ package com.app.datadistribution.security;
 
 import java.io.IOException;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,6 +30,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
+
+        // Skip OPTIONS requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String path = request.getServletPath();
 
@@ -60,10 +67,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
 
-                String username = jwtService.extractSubject(jwt);
+                String userIdStr = null;
+                try {
+                    userIdStr = jwtService.extractClaim(jwt, claims -> claims.get("userId", String.class));
+                } catch (Exception e) {
+                    log.warn("Failed to extract userId from JWT: {}", e.getMessage());
+                }
 
-                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                if (userIdStr != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UUID userId = UUID.fromString(userIdStr);
+                    UserDetails userDetails = userDetailsService.loadUserById(userId);
 
                     if (userDetails.isEnabled()) {
                         Long tokenVersionFromJwt = null;
@@ -82,7 +95,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         if (userDetails instanceof UserDetailsImpl && 
                             (tokenVersionFromJwt == null || !tokenVersionFromJwt.equals(((UserDetailsImpl) userDetails).getTokenVersion()))) {
                             log.warn("JWT request rejected: token version mismatch for user {}. Token version: {}, User version: {}", 
-                                     username, tokenVersionFromJwt, ((UserDetailsImpl) userDetails).getTokenVersion());
+                                     userDetails.getUsername(), tokenVersionFromJwt, ((UserDetailsImpl) userDetails).getTokenVersion());
                         } else {
                             UsernamePasswordAuthenticationToken authToken =
                                     new UsernamePasswordAuthenticationToken(
@@ -96,9 +109,57 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             );
 
                             SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                            log.info("SECURITY DEBUG | Authenticated user: {} | Roles & Authorities: {} | Endpoint: {}", 
+                                     userDetails.getUsername(), userDetails.getAuthorities(), request.getRequestURI());
                         }
                     } else {
-                        log.warn("JWT request rejected: user {} is not active or email not verified", username);
+                        log.warn("JWT request rejected: user with ID {} is not active or email not verified", userId);
+                    }
+                } else if (userIdStr == null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    String username = jwtService.extractSubject(jwt);
+
+                    if (username != null) {
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                        if (userDetails.isEnabled()) {
+                            Long tokenVersionFromJwt = null;
+                            try {
+                                tokenVersionFromJwt = jwtService.extractClaim(jwt, claims -> {
+                                    Object verObj = claims.get("tokenVersion");
+                                    if (verObj instanceof Number) {
+                                        return ((Number) verObj).longValue();
+                                    }
+                                    return null;
+                                });
+                            } catch (Exception e) {
+                                log.warn("Failed to extract token version from JWT: {}", e.getMessage());
+                            }
+
+                            if (userDetails instanceof UserDetailsImpl && 
+                                (tokenVersionFromJwt == null || !tokenVersionFromJwt.equals(((UserDetailsImpl) userDetails).getTokenVersion()))) {
+                                log.warn("JWT request rejected: token version mismatch for user {}. Token version: {}, User version: {}", 
+                                         username, tokenVersionFromJwt, ((UserDetailsImpl) userDetails).getTokenVersion());
+                            } else {
+                                UsernamePasswordAuthenticationToken authToken =
+                                        new UsernamePasswordAuthenticationToken(
+                                                userDetails,
+                                                null,
+                                                userDetails.getAuthorities()
+                                        );
+
+                                authToken.setDetails(
+                                        new WebAuthenticationDetailsSource().buildDetails(request)
+                                );
+
+                                SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                                log.info("SECURITY DEBUG (fallback) | Authenticated user: {} | Roles & Authorities: {} | Endpoint: {}", 
+                                         userDetails.getUsername(), userDetails.getAuthorities(), request.getRequestURI());
+                            }
+                        } else {
+                            log.warn("JWT request rejected: user {} is not active or email not verified", username);
+                        }
                     }
                 }
             }
