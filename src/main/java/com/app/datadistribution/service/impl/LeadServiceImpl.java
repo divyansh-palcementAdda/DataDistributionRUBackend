@@ -35,6 +35,7 @@ public class LeadServiceImpl implements ILeadService {
     private final UserRepository userRepository;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
     private final LeadFeedbackRepository leadFeedbackRepository;
+    private final CourseRepository courseRepository;
     private final LeadMapper leadMapper;
 
     @Override
@@ -60,11 +61,19 @@ public class LeadServiceImpl implements ILeadService {
             throw new BadRequestException("Lead code already exists: " + leadCode);
         }
 
+        Course course = null;
+        if (request.getCourseId() != null) {
+            course = courseRepository.findById(request.getCourseId())
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getCourseId()));
+        }
+
         Lead lead = leadMapper.toEntity(request);
         lead.setLeadCode(leadCode);
         lead.setSource(source);
         lead.setAssignedTo(assignedTo);
         lead.setCreatedByUser(currentUser);
+        lead.setCourse(course);
         lead.setCurrentStatus(LeadStatus.RAW);
         lead.setActive(true);
 
@@ -102,6 +111,13 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + request.getAssignedToUserId()));
         }
 
+        Course course = null;
+        if (request.getCourseId() != null) {
+            course = courseRepository.findById(request.getCourseId())
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getCourseId()));
+        }
+
         lead.setFullName(request.getFullName());
         lead.setPhoneNumber(request.getPhoneNumber());
         lead.setAlternatePhoneNumber(request.getAlternatePhoneNumber());
@@ -114,6 +130,7 @@ public class LeadServiceImpl implements ILeadService {
         lead.setCourseInterested(request.getCourseInterested());
         lead.setRemarks(request.getRemarks());
         lead.setAssignedTo(assignedTo);
+        lead.setCourse(course);
         lead.setActive(request.isActive());
         if (request.getNextFollowUpDate() != null) {
             lead.setNextFollowUpDate(request.getNextFollowUpDate());
@@ -135,13 +152,19 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, UUID sourceId) {
+    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, UUID sourceId, UUID courseId, Boolean withoutCourse) {
         Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
         Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, pageRequest.getSortBy()));
 
         Specification<Lead> spec = Specification.where(isNotDeleted());
         if (sourceId != null) {
             spec = spec.and(filterBySource(sourceId));
+        }
+        if (courseId != null) {
+            spec = spec.and(filterByCourse(courseId));
+        }
+        if (Boolean.TRUE.equals(withoutCourse)) {
+            spec = spec.and(filterWithoutCourse());
         }
         if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
             spec = spec.and(searchLeads(pageRequest.getSearch()));
@@ -282,6 +305,14 @@ public class LeadServiceImpl implements ILeadService {
 
     private Specification<Lead> filterBySource(UUID sourceId) {
         return (root, query, cb) -> cb.equal(root.get("source").get("id"), sourceId);
+    }
+
+    private Specification<Lead> filterByCourse(UUID courseId) {
+        return (root, query, cb) -> cb.equal(root.get("course").get("id"), courseId);
+    }
+
+    private Specification<Lead> filterWithoutCourse() {
+        return (root, query, cb) -> cb.isNull(root.get("course"));
     }
 
     private Specification<Lead> searchLeads(String keyword) {

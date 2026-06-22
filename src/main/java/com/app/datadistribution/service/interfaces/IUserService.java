@@ -16,6 +16,8 @@ public interface IUserService {
 
     UserPageResponse getUsers(PageRequestDTO pageRequest);
 
+    UserPageResponse getUsersByRoles(java.util.List<String> roleNames, String status, PageRequestDTO pageRequest);
+
     UserResponse createUser(UserRequest request) throws BadRequestException;
 
     UserResponse updateUser(UUID userId, UserUpdateRequest request) throws ResourcesNotFoundException, BadRequestException;

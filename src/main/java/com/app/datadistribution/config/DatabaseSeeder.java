@@ -64,7 +64,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().equals(PermissionType.USER_UPDATE.name())
 						|| p.getName().equals(PermissionType.AUTH_READ.name())
 						|| p.getName().startsWith("LEAD_")
-						|| p.getName().startsWith("LEADSOURCE_"))
+						|| p.getName().startsWith("LEADSOURCE_")
+						|| p.getName().equals(PermissionType.COURSE_VIEW.name())
+						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name()))
 				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 

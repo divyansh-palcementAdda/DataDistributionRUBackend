@@ -1,5 +1,6 @@
 package com.app.datadistribution.dto.lead;
 
+import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.user.UserResponse;
 import com.app.datadistribution.enums.LeadStatus;
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ public class LeadResponse {
     private LeadSourceResponse source;
     private String sourceDetails;
     private String courseInterested;
+    private CourseSummaryDTO course;
     private String remarks;
     private LeadStatus currentStatus;
     private UserResponse assignedTo;

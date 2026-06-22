@@ -54,6 +54,8 @@ public class LeadRequest {
     @Size(max = 150, message = "Course interested must be less than 150 characters")
     private String courseInterested;
 
+    private UUID courseId;
+
     private String remarks;
 
     private UUID assignedToUserId;

@@ -64,6 +64,10 @@ public class Lead extends BaseEntity {
     @Column(name = "course_interested", length = 150)
     private String courseInterested;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    private Course course;
+
     @Column(columnDefinition = "TEXT")
     private String remarks;
 

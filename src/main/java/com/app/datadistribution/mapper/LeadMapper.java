@@ -2,6 +2,7 @@ package com.app.datadistribution.mapper;
 
 import com.app.datadistribution.dto.lead.*;
 import com.app.datadistribution.entity.*;
+import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -51,4 +52,18 @@ public interface LeadMapper {
     // --- LeadFollowUp ---
     @Mapping(source = "createdByUser", target = "createdBy")
     LeadFollowUpResponse toDto(LeadFollowUp followUp);
+
+    default CourseSummaryDTO mapCourse(Course course) {
+        if (course == null) {
+            return CourseSummaryDTO.builder()
+                    .courseName("NO_COURSE")
+                    .build();
+        }
+        return CourseSummaryDTO.builder()
+                .id(course.getId())
+                .courseName(course.getCourseName())
+                .courseCode(course.getCourseCode())
+                .status(course.getStatus())
+                .build();
+    }
 }

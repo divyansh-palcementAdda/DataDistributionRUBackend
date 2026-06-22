@@ -13,7 +13,7 @@ public interface ILeadService {
     LeadResponse create(LeadRequest request) throws BadRequestException, UnauthorizedException;
     LeadResponse update(UUID id, LeadRequest request);
     LeadResponse getById(UUID id);
-    LeadPageResponse getAllLeads(PageRequestDTO pageRequest, UUID sourceId);
+    LeadPageResponse getAllLeads(PageRequestDTO pageRequest, UUID sourceId, UUID courseId, Boolean withoutCourse);
     void deleteLead(UUID id);
     LeadResponse changeStatus(UUID id, LeadStatusChangeRequest request) throws BadRequestException, UnauthorizedException;
     List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId);
