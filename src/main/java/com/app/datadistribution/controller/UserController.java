@@ -9,7 +9,11 @@ import com.app.datadistribution.dto.user.UserUpdateRequest;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.service.interfaces.IUserService;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -58,6 +62,33 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", response, HttpStatus.OK.value()));
     }
 
+    @GetMapping("/by-role")
+    @PreAuthorize("hasAuthority('USER_READ')")
+    @Operation(summary = "Get users filtered by one or more roles with pagination, sorting, search, and status filtering")
+    public ResponseEntity<ApiResponse<UserPageResponse>> getUsersByRole(
+            @RequestParam(value = "roleName", required = false) String roleName,
+            @RequestParam(value = "roleNames", required = false) String roleNames,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "sortBy", defaultValue = "id") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
+            @RequestParam(value = "search", required = false) String search) throws BadRequestException, ResourcesNotFoundException {
+
+        List<String> resolvedRoleNames = resolveRoleNames(roleName, roleNames);
+
+        PageRequestDTO request = PageRequestDTO.builder()
+                .page(page)
+                .size(size)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .search(search)
+                .build();
+
+        UserPageResponse response = userService.getUsersByRoles(resolvedRoleNames, status, request);
+        return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('USER_READ')")
     @Operation(summary = "Get user details by ID")
@@ -101,5 +132,22 @@ public class UserController {
             @PathVariable("roleId") UUID roleId) throws ResourcesNotFoundException, BadRequestException {
         userService.assignRole(userId, roleId);
         return ResponseEntity.ok(ApiResponse.success("User role updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    private List<String> resolveRoleNames(String roleName, String roleNames) throws BadRequestException {
+        List<String> resolved = new ArrayList<>();
+        if (roleName != null && !roleName.isBlank()) {
+            resolved.add(roleName.trim());
+        }
+        if (roleNames != null && !roleNames.isBlank()) {
+            Arrays.stream(roleNames.split(","))
+                    .map(String::trim)
+                    .filter(name -> !name.isEmpty())
+                    .forEach(resolved::add);
+        }
+        if (resolved.isEmpty()) {
+            throw new BadRequestException("At least one role must be specified via roleName or roleNames");
+        }
+        return resolved.stream().distinct().collect(Collectors.toList());
     }
 }

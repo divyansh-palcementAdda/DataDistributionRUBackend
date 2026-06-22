@@ -83,9 +83,6 @@ public class CustomUserDetailsService implements UserDetailsService {
             }
         }
 
-        log.info("SECURITY DEBUG | User: {} | Roles Loaded: {} | Permissions Loaded: {} | Total Authorities: {}",
-                user.getUsername(), loadedRoles, loadedPermissions, authorities);
-
         return new UserDetailsImpl(
                 user.getId(),
                 user.getUsername(),

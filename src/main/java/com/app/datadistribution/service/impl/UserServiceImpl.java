@@ -28,6 +28,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -67,18 +69,54 @@ public class UserServiceImpl implements IUserService {
         }
 
         Page<User> userPage = userRepository.findAll(spec, pageable);
-        List<UserResponse> content = userPage.getContent().stream()
-                .map(userMapper::toDto)
+        return toUserPageResponse(userPage);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserPageResponse getUsersByRoles(List<String> roleNames, String status, PageRequestDTO pageRequest)
+            throws BadRequestException, ResourcesNotFoundException {
+        if (roleNames == null || roleNames.isEmpty()) {
+            throw new BadRequestException("At least one role name is required");
+        }
+
+        List<String> normalizedRoles = roleNames.stream()
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .distinct()
                 .collect(Collectors.toList());
 
-        return UserPageResponse.builder()
-                .content(content)
-                .page(userPage.getNumber())
-                .size(userPage.getSize())
-                .totalElements(userPage.getTotalElements())
-                .totalPages(userPage.getTotalPages())
-                .last(userPage.isLast())
-                .build();
+        if (normalizedRoles.isEmpty()) {
+            throw new BadRequestException("At least one role name is required");
+        }
+
+        for (String roleName : normalizedRoles) {
+            roleRepository.findByNameAndIsDeletedFalse(roleName)
+                    .orElseThrow(() -> new ResourcesNotFoundException("Role not found: " + roleName));
+        }
+
+        if (status != null && !status.isBlank()
+                && !status.equalsIgnoreCase("ACTIVE")
+                && !status.equalsIgnoreCase("INACTIVE")) {
+            throw new BadRequestException("Invalid status. Allowed values: ACTIVE, INACTIVE");
+        }
+
+        Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
+        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, pageRequest.getSortBy()));
+
+        Specification<User> spec = Specification.where(isNotDeleted())
+                .and(hasRolesIn(normalizedRoles));
+
+        if (status != null && !status.isBlank()) {
+            spec = spec.and(filterByActiveStatus(status));
+        }
+
+        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
+            spec = spec.and(searchUsers(pageRequest.getSearch()));
+        }
+
+        Page<User> userPage = userRepository.findAll(spec, pageable);
+        return toUserPageResponse(userPage);
     }
 
     @Override
@@ -208,8 +246,43 @@ public class UserServiceImpl implements IUserService {
                 String.format("Changed role of user '%s' to '%s'", user.getUsername(), role.getName()));
     }
 
+    private UserPageResponse toUserPageResponse(Page<User> userPage) {
+        List<UserResponse> content = userPage.getContent().stream()
+                .map(userMapper::toDto)
+                .collect(Collectors.toList());
+
+        return UserPageResponse.builder()
+                .content(content)
+                .page(userPage.getNumber())
+                .size(userPage.getSize())
+                .totalElements(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .last(userPage.isLast())
+                .build();
+    }
+
     private Specification<User> isNotDeleted() {
         return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
+    }
+
+    private Specification<User> hasRolesIn(List<String> roleNames) {
+        return (root, query, cb) -> {
+            query.distinct(true);
+            Join<User, Role> rolesJoin = root.join("roles", JoinType.INNER);
+            return cb.and(
+                    rolesJoin.get("name").in(roleNames),
+                    cb.equal(rolesJoin.get("isDeleted"), false)
+            );
+        };
+    }
+
+    private Specification<User> filterByActiveStatus(String status) {
+        return (root, query, cb) -> {
+            if ("ACTIVE".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("active"), true);
+            }
+            return cb.equal(root.get("active"), false);
+        };
     }
 
     private Specification<User> searchUsers(String keyword) {

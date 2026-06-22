@@ -110,9 +110,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                             SecurityContextHolder.getContext().setAuthentication(authToken);
 
-                            log.info("SECURITY DEBUG | Authenticated user: {} | Roles & Authorities: {} | Endpoint: {}", 
-                                     userDetails.getUsername(), userDetails.getAuthorities(), request.getRequestURI());
-                        }
+                            }
                     } else {
                         log.warn("JWT request rejected: user with ID {} is not active or email not verified", userId);
                     }
