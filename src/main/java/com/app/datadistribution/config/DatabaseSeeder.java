@@ -8,6 +8,10 @@ import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.repository.PermissionRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.entity.LeadStatusSentiment;
+import com.app.datadistribution.enums.LeadStatus;
+import com.app.datadistribution.enums.SentimentCategory;
+import com.app.datadistribution.repository.LeadStatusSentimentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -28,6 +32,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
+	private final LeadStatusSentimentRepository leadStatusSentimentRepository;
+
 
 	@Override
 	@Transactional
@@ -36,6 +42,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedPermissions();
 		seedRoles();
 		seedUsers();
+		seedLeadStatusSentiments();
 		log.info("Database seeding completed successfully!");
 	}
 
@@ -66,13 +73,18 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().startsWith("LEAD_")
 						|| p.getName().startsWith("LEADSOURCE_")
 						|| p.getName().equals(PermissionType.COURSE_VIEW.name())
-						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name()))
+						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name())
+						|| p.getName().startsWith("FOLLOWUP_")
+						|| p.getName().startsWith("FEEDBACK_"))
 				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
 		// 3. USER Role
 		Set<Permission> userPermissions = allPermissions.stream()
-				.filter(p -> p.getName().equals(PermissionType.USER_READ.name())).collect(Collectors.toSet());
+				.filter(p -> p.getName().equals(PermissionType.USER_READ.name())
+						|| p.getName().startsWith("FOLLOWUP_")
+						|| p.getName().startsWith("FEEDBACK_"))
+				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.USER.name(), "Standard User Role", userPermissions);
 	}
 
@@ -133,4 +145,35 @@ public class DatabaseSeeder implements CommandLineRunner {
 			log.info("Seeded default standard user");
 		}
 	}
+
+	private void seedLeadStatusSentiments() {
+		for (LeadStatus status : LeadStatus.values()) {
+			if (!leadStatusSentimentRepository.findByLeadStatus(status).isPresent()) {
+				SentimentCategory category = getCategoryForStatus(status);
+				LeadStatusSentiment mapping = LeadStatusSentiment.builder()
+						.leadStatus(status)
+						.sentimentCategory(category)
+						.build();
+				leadStatusSentimentRepository.save(mapping);
+				log.info("Seeded sentiment mapping: {} -> {}", status, category);
+			}
+		}
+	}
+
+	private SentimentCategory getCategoryForStatus(LeadStatus status) {
+		switch (status) {
+			case HOT_LEAD:
+			case INTERESTED_LEAD:
+			case CONNECTED:
+				return SentimentCategory.POSITIVE;
+			case COLD_LEAD:
+			case BAD_LEAD:
+			case NOT_INTERESTED:
+			case NOT_CONNECTED:
+				return SentimentCategory.NEGATIVE;
+			default:
+				return SentimentCategory.NEUTRAL;
+		}
+	}
 }
+

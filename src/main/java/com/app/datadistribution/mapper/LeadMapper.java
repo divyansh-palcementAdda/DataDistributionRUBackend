@@ -3,11 +3,14 @@ package com.app.datadistribution.mapper;
 import com.app.datadistribution.dto.lead.*;
 import com.app.datadistribution.entity.*;
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
+import com.app.datadistribution.dto.followup.FollowUpResponseDTO;
+import com.app.datadistribution.dto.feedback.FeedbackResponseDTO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring", uses = {UserMapper.class}, builder = @org.mapstruct.Builder(disableBuilder = true))
 public interface LeadMapper {
+
 
     // --- LeadSource ---
     LeadSourceResponse toDto(LeadSource source);
@@ -66,4 +69,19 @@ public interface LeadMapper {
                 .status(course.getStatus())
                 .build();
     }
+
+    // --- FollowUpResponseDTO ---
+    @Mapping(source = "createdByUser", target = "createdBy")
+    @Mapping(source = "lead.id", target = "leadId")
+    @Mapping(source = "lead.leadCode", target = "leadCode")
+    @Mapping(source = "lead.fullName", target = "leadFullName")
+    FollowUpResponseDTO toFollowUpResponseDto(LeadFollowUp followUp);
+
+    // --- FeedbackResponseDTO ---
+    @Mapping(source = "createdByUser", target = "createdBy")
+    @Mapping(source = "lead.id", target = "leadId")
+    @Mapping(source = "lead.leadCode", target = "leadCode")
+    @Mapping(source = "lead.fullName", target = "leadFullName")
+    FeedbackResponseDTO toFeedbackResponseDto(LeadFeedback feedback);
 }
+

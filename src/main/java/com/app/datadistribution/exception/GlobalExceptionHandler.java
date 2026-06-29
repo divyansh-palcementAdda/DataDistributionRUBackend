@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -175,6 +176,13 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleUploadSize(MaxUploadSizeExceededException ex) {
 		return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(
 				ApiResponse.error("File size exceeds maximum upload limit", HttpStatus.PAYLOAD_TOO_LARGE.value()));
+	}
+
+	@ExceptionHandler(PropertyReferenceException.class)
+	public ResponseEntity<ApiResponse<Void>> handlePropertyReferenceException(PropertyReferenceException ex) {
+		log.warn("Property reference exception: {}", ex.getMessage());
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+				.body(ApiResponse.error("Invalid sort field.", HttpStatus.BAD_REQUEST.value()));
 	}
 
 	@ExceptionHandler(Exception.class)
