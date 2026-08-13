@@ -2,8 +2,8 @@ package com.app.datadistribution.dto.lead;
 
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.enums.LeadStatus;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,12 +26,14 @@ public class LeadResponse {
     private String city;
     private String state;
     private String country;
-    private LeadSourceResponse source;
+    private List<LeadSourceResponse> leadSources;
     private String sourceDetails;
     private String courseInterested;
     private CourseSummaryDTO course;
+    private BoardResponse board;
+    private GradeResponse grade;
     private String remarks;
-    private LeadStatus currentStatus;
+    private LeadStatusResponse currentStatus;
     private UserResponse assignedTo;
     private UserResponse createdBy;
     private boolean active;

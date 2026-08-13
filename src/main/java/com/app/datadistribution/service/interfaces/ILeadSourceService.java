@@ -11,6 +11,7 @@ public interface ILeadSourceService {
     LeadSourceResponse update(UUID id, LeadSourceRequest request);
     LeadSourceResponse getById(UUID id);
     LeadSourcePageResponse getAll(PageRequestDTO request);
+    LeadSourcePageResponse getAll(PageRequestDTO request, String status);
     void delete(UUID id);
     LeadSourceResponse toggleActive(UUID id);
 }

@@ -1,6 +1,5 @@
 package com.app.datadistribution.dto.lead;
 
-import com.app.datadistribution.dto.user.UserResponse;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -14,10 +13,14 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LeadFeedbackResponse {
+public class GradeResponse {
     private UUID id;
-    private String feedback;
-    private LeadStatusResponse statusAtTime;
-    private UserResponse createdBy;
+    private String name;
+    private String code;
+    private String description;
+    private boolean active;
+    private String status;
+    private Integer displayOrder;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

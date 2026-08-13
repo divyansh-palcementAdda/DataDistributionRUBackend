@@ -58,16 +58,28 @@ public class LeadController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('LEAD_READ')")
-    @Operation(summary = "Get list of leads with pagination, sorting, search, and source/course filtering")
+    @Operation(summary = "Get list of leads with pagination, sorting, search, source, status, and course filtering")
     public ResponseEntity<ApiResponse<LeadPageResponse>> getAllLeads(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "sortBy", defaultValue = "id") String sortBy,
+            @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "sourceId", required = false) UUID sourceId,
+            @RequestParam(value = "leadSourceIds", required = false) List<UUID> leadSourceIds,
             @RequestParam(value = "courseId", required = false) UUID courseId,
-            @RequestParam(value = "withoutCourse", required = false) Boolean withoutCourse) {
+            @RequestParam(value = "withoutCourse", required = false) Boolean withoutCourse,
+            @RequestParam(value = "statusId", required = false) UUID statusId,
+            @RequestParam(value = "statusIds", required = false) List<UUID> statusIds,
+            @RequestParam(value = "boardId", required = false) UUID boardId,
+            @RequestParam(value = "boardIds", required = false) List<UUID> boardIds,
+            @RequestParam(value = "gradeId", required = false) UUID gradeId,
+            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) {
+
+        List<UUID> sourceIdsToFilter = leadSourceIds;
+        if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
+            sourceIdsToFilter = List.of(sourceId);
+        }
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -77,7 +89,7 @@ public class LeadController {
                 .search(search)
                 .build();
 
-        LeadPageResponse response = leadService.getAllLeads(pageRequest, sourceId, courseId, withoutCourse);
+        LeadPageResponse response = leadService.getAllLeads(pageRequest, sourceIdsToFilter, courseId, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds);
         return ResponseEntity.ok(ApiResponse.success("Leads retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -164,7 +176,7 @@ public class LeadController {
     }
 
     @GetMapping("/{id}/status-history")
-    @PreAuthorize("hasAuthority('LEAD_HISTORY_READ')")
+    @PreAuthorize("hasAuthority('LEAD_STATUS_HISTORY_VIEW') or hasAuthority('LEAD_HISTORY_READ')")
     @Operation(summary = "Get status history for a lead")
     public ResponseEntity<ApiResponse<List<LeadStatusHistoryResponse>>> getStatusHistory(@PathVariable("id") UUID id) {
         List<LeadStatusHistoryResponse> response = leadService.getStatusHistoryByLeadId(id);

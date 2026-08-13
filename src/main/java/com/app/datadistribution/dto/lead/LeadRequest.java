@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,8 +46,7 @@ public class LeadRequest {
     @Size(max = 100, message = "Country must be less than 100 characters")
     private String country;
 
-    @NotNull(message = "Lead source is required")
-    private UUID sourceId;
+    private List<UUID> leadSourceIds;
 
     @Size(max = 255, message = "Source details must be less than 255 characters")
     private String sourceDetails;
@@ -56,9 +56,15 @@ public class LeadRequest {
 
     private UUID courseId;
 
+    private UUID boardId;
+
+    private UUID gradeId;
+
     private String remarks;
 
     private UUID assignedToUserId;
+
+    private UUID statusId;
 
     @Builder.Default
     private boolean active = true;

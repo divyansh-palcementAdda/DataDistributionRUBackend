@@ -1,12 +1,15 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
-import com.app.datadistribution.enums.LeadStatus;
 import com.app.datadistribution.enums.SentimentCategory;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,8 +26,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LeadStatusSentiment extends BaseEntity {
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "lead_status", nullable = false, unique = true, length = 50)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lead_status_id")
     private LeadStatus leadStatus;
 
     @Enumerated(EnumType.STRING)

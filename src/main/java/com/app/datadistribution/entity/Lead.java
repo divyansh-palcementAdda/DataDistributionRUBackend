@@ -1,7 +1,6 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
-import com.app.datadistribution.enums.LeadStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,9 +11,13 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.JoinTable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -54,9 +57,14 @@ public class Lead extends BaseEntity {
     @Column(length = 100)
     private String country;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_id")
-    private LeadSource source;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "lead_lead_sources",
+        joinColumns = @JoinColumn(name = "lead_id"),
+        inverseJoinColumns = @JoinColumn(name = "lead_source_id")
+    )
+    @Builder.Default
+    private Set<LeadSource> leadSources = new HashSet<>();
 
     @Column(name = "source_details", length = 255)
     private String sourceDetails;
@@ -68,11 +76,19 @@ public class Lead extends BaseEntity {
     @JoinColumn(name = "course_id")
     private Course course;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "board_id")
+    private Board board;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grade_id")
+    private Grade grade;
+
     @Column(columnDefinition = "TEXT")
     private String remarks;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "current_status", nullable = false, length = 50)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lead_status_id")
     private LeadStatus currentStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)

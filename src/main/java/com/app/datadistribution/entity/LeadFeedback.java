@@ -1,11 +1,8 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
-import com.app.datadistribution.enums.LeadStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -32,8 +29,8 @@ public class LeadFeedback extends BaseEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String feedback;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status_at_time", nullable = false, length = 50)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "status_at_time_id")
     private LeadStatus statusAtTime;
 
     @ManyToOne(fetch = FetchType.LAZY)

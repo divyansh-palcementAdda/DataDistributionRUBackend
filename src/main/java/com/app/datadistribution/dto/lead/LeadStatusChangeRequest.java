@@ -1,8 +1,7 @@
 package com.app.datadistribution.dto.lead;
 
-import com.app.datadistribution.enums.LeadStatus;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,8 +15,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LeadStatusChangeRequest {
 
-    @NotNull(message = "New status is required")
-    private LeadStatus newStatus;
+    private UUID newStatusId;
+    private String statusCode;
 
     @NotBlank(message = "Feedback is required when changing lead status")
     private String feedback;

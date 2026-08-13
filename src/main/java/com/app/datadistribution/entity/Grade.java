@@ -11,18 +11,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "lead_sources")
+@Table(name = "lead_grades")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LeadSource extends BaseEntity {
+public class Grade extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "code", nullable = false, unique = true, length = 50)
+    @Column(nullable = false, unique = true, length = 50)
     private String code;
 
     @Column(length = 255)
@@ -31,6 +31,10 @@ public class LeadSource extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @Column(name = "display_order", nullable = false)
+    @Builder.Default
+    private Integer displayOrder = 0;
 
     public String getStatus() {
         return active ? "ACTIVE" : "INACTIVE";

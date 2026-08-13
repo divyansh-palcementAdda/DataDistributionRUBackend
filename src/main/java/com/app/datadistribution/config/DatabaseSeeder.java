@@ -8,9 +8,9 @@ import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.repository.PermissionRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
-import com.app.datadistribution.entity.LeadStatusSentiment;
-import com.app.datadistribution.enums.LeadStatus;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.enums.SentimentCategory;
+import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.LeadStatusSentimentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -33,7 +35,12 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LeadStatusSentimentRepository leadStatusSentimentRepository;
-
+	private final LeadStatusRepository leadStatusRepository;
+	private final com.app.datadistribution.repository.BoardRepository boardRepository;
+	private final com.app.datadistribution.repository.GradeRepository gradeRepository;
+	private final com.app.datadistribution.repository.LeadSourceRepository leadSourceRepository;
+	private final com.app.datadistribution.entity.LeadSource leadSourceEntityHelper = null;
+	private final jakarta.persistence.EntityManager entityManager;
 
 	@Override
 	@Transactional
@@ -42,7 +49,10 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedPermissions();
 		seedRoles();
 		seedUsers();
-		seedLeadStatusSentiments();
+		seedLeadStatuses();
+		seedLeadSources();
+		seedBoards();
+		seedGrades();
 		log.info("Database seeding completed successfully!");
 	}
 
@@ -72,6 +82,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().equals(PermissionType.AUTH_READ.name())
 						|| p.getName().startsWith("LEAD_")
 						|| p.getName().startsWith("LEADSOURCE_")
+						|| p.getName().startsWith("BOARD_")
+						|| p.getName().startsWith("GRADE_")
 						|| p.getName().equals(PermissionType.COURSE_VIEW.name())
 						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name())
 						|| p.getName().startsWith("FOLLOWUP_")
@@ -146,33 +158,216 @@ public class DatabaseSeeder implements CommandLineRunner {
 		}
 	}
 
-	private void seedLeadStatusSentiments() {
-		for (LeadStatus status : LeadStatus.values()) {
-			if (!leadStatusSentimentRepository.findByLeadStatus(status).isPresent()) {
-				SentimentCategory category = getCategoryForStatus(status);
-				LeadStatusSentiment mapping = LeadStatusSentiment.builder()
-						.leadStatus(status)
-						.sentimentCategory(category)
-						.build();
-				leadStatusSentimentRepository.save(mapping);
-				log.info("Seeded sentiment mapping: {} -> {}", status, category);
+	private void seedLeadStatuses() {
+		createStatusIfNotExist("Raw", "RAW", "Newly received unverified lead", 1, SentimentCategory.NEUTRAL);
+		createStatusIfNotExist("Connected", "CONNECTED", "Contact established with lead", 2, SentimentCategory.POSITIVE);
+		createStatusIfNotExist("Not Connected", "NOT_CONNECTED", "Unable to establish contact", 3, SentimentCategory.NEGATIVE);
+		createStatusIfNotExist("Hot Lead", "HOT_LEAD", "High intent lead ready for conversion", 4, SentimentCategory.POSITIVE);
+		createStatusIfNotExist("Cold Lead", "COLD_LEAD", "Low engagement or inactive lead", 5, SentimentCategory.NEGATIVE);
+		createStatusIfNotExist("Bad Lead", "BAD_LEAD", "Invalid contact or unreachable lead", 6, SentimentCategory.NEGATIVE);
+		createStatusIfNotExist("Interested Lead", "INTERESTED_LEAD", "Expressing interest in course/service", 7, SentimentCategory.POSITIVE);
+		createStatusIfNotExist("Not Interested", "NOT_INTERESTED", "Lead explicitly declined offer", 8, SentimentCategory.NEGATIVE);
+		createStatusIfNotExist("Not Registered Yet", "NOT_REGISTERED_YET", "Pending registration details", 9, SentimentCategory.NEUTRAL);
+
+		migrateExistingLeadStatusData();
+	}
+
+	private void createStatusIfNotExist(String name, String code, String description, int displayOrder, SentimentCategory sentimentCategory) {
+		if (!leadStatusRepository.findByCodeIgnoreCase(code).isPresent()) {
+			LeadStatus status = LeadStatus.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.displayOrder(displayOrder)
+					.sentimentCategory(sentimentCategory)
+					.active(true)
+					.build();
+			leadStatusRepository.save(status);
+			log.info("Seeded default lead status: {} ({})", name, code);
+		}
+	}
+
+	private void migrateExistingLeadStatusData() {
+		if (columnExists("leads", "current_status")) {
+			try {
+				entityManager.createNativeQuery(
+					"UPDATE leads l " +
+					"JOIN lead_statuses ls ON LOWER(l.current_status) = LOWER(ls.code) " +
+					"SET l.lead_status_id = ls.id " +
+					"WHERE l.lead_status_id IS NULL AND l.current_status IS NOT NULL"
+				).executeUpdate();
+			} catch (Exception e) {
+				log.debug("Native migration for leads.lead_status_id skipped or completed: {}", e.getMessage());
+			}
+		}
+
+		if (columnExists("lead_status_histories", "old_status")) {
+			try {
+				entityManager.createNativeQuery(
+					"UPDATE lead_status_histories h " +
+					"JOIN lead_statuses ls ON LOWER(h.old_status) = LOWER(ls.code) " +
+					"SET h.previous_status_id = ls.id " +
+					"WHERE h.previous_status_id IS NULL AND h.old_status IS NOT NULL"
+				).executeUpdate();
+			} catch (Exception e) {
+				log.debug("Native migration for lead_status_histories.previous_status_id skipped or completed: {}", e.getMessage());
+			}
+		}
+
+		if (columnExists("lead_status_histories", "new_status")) {
+			try {
+				entityManager.createNativeQuery(
+					"UPDATE lead_status_histories h " +
+					"JOIN lead_statuses ls ON LOWER(h.new_status) = LOWER(ls.code) " +
+					"SET h.new_status_id = ls.id " +
+					"WHERE h.new_status_id IS NULL AND h.new_status IS NOT NULL"
+				).executeUpdate();
+			} catch (Exception e) {
+				log.debug("Native migration for lead_status_histories.new_status_id skipped or completed: {}", e.getMessage());
+			}
+		}
+
+		if (columnExists("lead_feedbacks", "status_at_time")) {
+			try {
+				entityManager.createNativeQuery(
+					"UPDATE lead_feedbacks f " +
+					"JOIN lead_statuses ls ON LOWER(f.status_at_time) = LOWER(ls.code) " +
+					"SET f.status_at_time_id = ls.id " +
+					"WHERE f.status_at_time_id IS NULL AND f.status_at_time IS NOT NULL"
+				).executeUpdate();
+			} catch (Exception e) {
+				log.debug("Native migration for lead_feedbacks.status_at_time_id skipped or completed: {}", e.getMessage());
+			}
+		}
+
+		// Fallback: Assign default 'RAW' status ID to any remaining null status foreign keys
+		try {
+			leadStatusRepository.findByCodeIgnoreCase("RAW").ifPresent(rawStatus -> {
+				UUID defaultId = rawStatus.getId();
+				entityManager.createNativeQuery("UPDATE leads SET lead_status_id = :defaultId WHERE lead_status_id IS NULL")
+						.setParameter("defaultId", defaultId)
+						.executeUpdate();
+				entityManager.createNativeQuery("UPDATE lead_status_histories SET new_status_id = :defaultId WHERE new_status_id IS NULL")
+						.setParameter("defaultId", defaultId)
+						.executeUpdate();
+				entityManager.createNativeQuery("UPDATE lead_feedbacks SET status_at_time_id = :defaultId WHERE status_at_time_id IS NULL")
+						.setParameter("defaultId", defaultId)
+						.executeUpdate();
+			});
+		} catch (Exception e) {
+			log.debug("Fallback migration for default status ID skipped or completed: {}", e.getMessage());
+		}
+	}
+
+	private void seedLeadSources() {
+		List<com.app.datadistribution.entity.LeadSource> sources = leadSourceRepository.findAll();
+		for (com.app.datadistribution.entity.LeadSource source : sources) {
+			if (source.getCode() == null || source.getCode().isBlank()) {
+				String baseCode = source.getName().replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
+				if (baseCode.length() > 20) baseCode = baseCode.substring(0, 20);
+				if (baseCode.isBlank()) baseCode = "SRC";
+				String candidate = baseCode;
+				if (leadSourceRepository.existsByCodeIgnoreCaseAndIdNot(candidate, source.getId())) {
+					candidate = baseCode + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+				}
+				source.setCode(candidate);
+				leadSourceRepository.save(source);
+				log.info("Assigned code {} to lead source {}", candidate, source.getName());
+			}
+		}
+
+		if (leadSourceRepository.count() == 0) {
+			createSourceIfNotExist("Meta Ads", "META_ADS", "Meta / Facebook / Instagram Advertising");
+			createSourceIfNotExist("Google Search", "GOOGLE_SEARCH", "Google Ads and Organic Search");
+			createSourceIfNotExist("Website Form", "WEBSITE_FORM", "Direct website inquiry forms");
+			createSourceIfNotExist("Referral", "REFERRAL", "Customer and employee referrals");
+			createSourceIfNotExist("Walk In", "WALK_IN", "Direct campus or office walk-in");
+		}
+
+		migrateExistingLeadSourcesJoin();
+	}
+
+	private void createSourceIfNotExist(String name, String code, String description) {
+		if (!leadSourceRepository.findByNameIgnoreCase(name).isPresent()) {
+			com.app.datadistribution.entity.LeadSource source = com.app.datadistribution.entity.LeadSource.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.active(true)
+					.build();
+			leadSourceRepository.save(source);
+			log.info("Seeded default lead source: {} ({})", name, code);
+		}
+	}
+
+	private void migrateExistingLeadSourcesJoin() {
+		if (columnExists("leads", "source_id")) {
+			try {
+				entityManager.createNativeQuery(
+					"INSERT IGNORE INTO lead_lead_sources (lead_id, lead_source_id) " +
+					"SELECT id, source_id FROM leads WHERE source_id IS NOT NULL"
+				).executeUpdate();
+			} catch (Exception e) {
+				log.debug("Native migration for lead_lead_sources skipped or completed: {}", e.getMessage());
 			}
 		}
 	}
 
-	private SentimentCategory getCategoryForStatus(LeadStatus status) {
-		switch (status) {
-			case HOT_LEAD:
-			case INTERESTED_LEAD:
-			case CONNECTED:
-				return SentimentCategory.POSITIVE;
-			case COLD_LEAD:
-			case BAD_LEAD:
-			case NOT_INTERESTED:
-			case NOT_CONNECTED:
-				return SentimentCategory.NEGATIVE;
-			default:
-				return SentimentCategory.NEUTRAL;
+	private boolean columnExists(String tableName, String columnName) {
+		try {
+			Object result = entityManager.createNativeQuery(
+				"SELECT COUNT(*) FROM information_schema.COLUMNS " +
+				"WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName AND COLUMN_NAME = :columnName"
+			)
+			.setParameter("tableName", tableName)
+			.setParameter("columnName", columnName)
+			.getSingleResult();
+			return result != null && ((Number) result).longValue() > 0;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private void seedBoards() {
+		createBoardIfNotExist("CBSE", "CBSE", "Central Board of Secondary Education", 1);
+		createBoardIfNotExist("ICSE", "ICSE", "Indian Certificate of Secondary Education", 2);
+		createBoardIfNotExist("State Board", "STATE_BOARD", "State Board of Education", 3);
+		createBoardIfNotExist("IB", "IB", "International Baccalaureate", 4);
+		createBoardIfNotExist("IGCSE", "IGCSE", "International General Certificate of Secondary Education", 5);
+	}
+
+	private void createBoardIfNotExist(String name, String code, String description, int displayOrder) {
+		if (!boardRepository.findByCodeIgnoreCase(code).isPresent()) {
+			com.app.datadistribution.entity.Board board = com.app.datadistribution.entity.Board.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.displayOrder(displayOrder)
+					.active(true)
+					.build();
+			boardRepository.save(board);
+			log.info("Seeded default board: {} ({})", name, code);
+		}
+	}
+
+	private void seedGrades() {
+		createGradeIfNotExist("Grade A Data", "GRADE_A", "Grade A high-quality lead data", 1);
+		createGradeIfNotExist("Grade B Data", "GRADE_B", "Grade B standard lead data", 2);
+		createGradeIfNotExist("Grade C Data", "GRADE_C", "Grade C average lead data", 3);
+		createGradeIfNotExist("Grade D Data", "GRADE_D", "Grade D low priority lead data", 4);
+	}
+
+	private void createGradeIfNotExist(String name, String code, String description, int displayOrder) {
+		if (!gradeRepository.findByCodeIgnoreCase(code).isPresent()) {
+			com.app.datadistribution.entity.Grade grade = com.app.datadistribution.entity.Grade.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.displayOrder(displayOrder)
+					.active(true)
+					.build();
+			gradeRepository.save(grade);
+			log.info("Seeded default grade: {} ({})", name, code);
 		}
 	}
 }

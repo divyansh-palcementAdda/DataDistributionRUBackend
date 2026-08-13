@@ -1,7 +1,6 @@
 package com.app.datadistribution.dto.lead;
 
 import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.enums.LeadStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -17,9 +16,15 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LeadStatusHistoryResponse {
     private UUID id;
-    private LeadStatus oldStatus;
-    private LeadStatus newStatus;
+    private UUID leadId;
+    private String leadCode;
+    private LeadStatusResponse previousStatus;
+    private LeadStatusResponse newStatus;
     private UserResponse changedBy;
     private LocalDateTime changedAt;
     private String feedback;
+
+    public LeadStatusResponse getOldStatus() {
+        return previousStatus;
+    }
 }

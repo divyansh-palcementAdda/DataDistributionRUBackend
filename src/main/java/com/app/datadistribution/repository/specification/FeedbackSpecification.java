@@ -1,8 +1,8 @@
 package com.app.datadistribution.repository.specification;
 
 import com.app.datadistribution.entity.LeadFeedback;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.User;
-import com.app.datadistribution.enums.LeadStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;

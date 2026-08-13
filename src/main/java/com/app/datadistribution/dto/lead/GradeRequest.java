@@ -13,9 +13,9 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class LeadSourceRequest {
+public class GradeRequest {
 
-    @NotBlank(message = "Lead source name is required")
+    @NotBlank(message = "Grade name is required")
     @Size(max = 100, message = "Name must be less than 100 characters")
     private String name;
 
@@ -27,4 +27,7 @@ public class LeadSourceRequest {
 
     @Builder.Default
     private boolean active = true;
+
+    @Builder.Default
+    private Integer displayOrder = 0;
 }

@@ -1,11 +1,8 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
-import com.app.datadistribution.enums.LeadStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -29,12 +26,12 @@ public class LeadStatusHistory extends BaseEntity {
     @JoinColumn(name = "lead_id", nullable = false)
     private Lead lead;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "old_status", length = 50)
-    private LeadStatus oldStatus;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "previous_status_id")
+    private LeadStatus previousStatus;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "new_status", nullable = false, length = 50)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "new_status_id")
     private LeadStatus newStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -43,4 +40,12 @@ public class LeadStatusHistory extends BaseEntity {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String feedback;
+
+    public LeadStatus getOldStatus() {
+        return previousStatus;
+    }
+
+    public void setOldStatus(LeadStatus oldStatus) {
+        this.previousStatus = oldStatus;
+    }
 }

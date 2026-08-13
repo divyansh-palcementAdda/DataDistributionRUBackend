@@ -12,6 +12,33 @@ import org.mapstruct.Mapping;
 public interface LeadMapper {
 
 
+    // --- Board ---
+    BoardResponse toDto(Board board);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    Board toEntity(BoardRequest dto);
+
+    // --- Grade ---
+    GradeResponse toDto(Grade grade);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    Grade toEntity(GradeRequest dto);
+
+    // --- LeadStatus ---
+    LeadStatusResponse toDto(LeadStatus status);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    LeadStatus toEntity(LeadStatusRequest dto);
+
     // --- LeadSource ---
     LeadSourceResponse toDto(LeadSource source);
     
@@ -29,7 +56,10 @@ public interface LeadMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "deleted", ignore = true)
-    @Mapping(target = "source", ignore = true)
+    @Mapping(target = "leadSources", ignore = true)
+    @Mapping(target = "currentStatus", ignore = true)
+    @Mapping(target = "board", ignore = true)
+    @Mapping(target = "grade", ignore = true)
     @Mapping(target = "assignedTo", ignore = true)
     @Mapping(target = "createdByUser", ignore = true)
     @Mapping(target = "feedbacks", ignore = true)
@@ -45,6 +75,8 @@ public interface LeadMapper {
     // --- LeadStatusHistory ---
     @Mapping(source = "changedByUser", target = "changedBy")
     @Mapping(source = "createdAt", target = "changedAt")
+    @Mapping(source = "lead.id", target = "leadId")
+    @Mapping(source = "lead.leadCode", target = "leadCode")
     LeadStatusHistoryResponse toDto(LeadStatusHistory history);
 
     // --- LeadAssignmentHistory ---

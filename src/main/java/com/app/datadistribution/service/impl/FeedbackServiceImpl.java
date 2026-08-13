@@ -5,15 +5,16 @@ import com.app.datadistribution.dto.feedback.FeedbackPagedResponseDTO;
 import com.app.datadistribution.dto.feedback.FeedbackResponseDTO;
 import com.app.datadistribution.dto.feedback.FeedbackSummaryDTO;
 import com.app.datadistribution.entity.LeadFeedback;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusSentiment;
 import com.app.datadistribution.entity.User;
-import com.app.datadistribution.enums.LeadStatus;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.enums.SentimentCategory;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.LeadFeedbackRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.LeadStatusSentimentRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.repository.specification.FeedbackSpecification;
@@ -41,6 +42,7 @@ public class FeedbackServiceImpl implements FeedbackService {
     private final LeadFeedbackRepository leadFeedbackRepository;
     private final UserRepository userRepository;
     private final LeadStatusSentimentRepository leadStatusSentimentRepository;
+    private final LeadStatusRepository leadStatusRepository;
     private final LeadMapper leadMapper;
 
     @Override
@@ -110,11 +112,8 @@ public class FeedbackServiceImpl implements FeedbackService {
         }
 
         // Fetch dynamic status lists mapped to POSITIVE and NEGATIVE sentiments from Database
-        List<LeadStatus> positiveStatuses = leadStatusSentimentRepository.findBySentimentCategory(SentimentCategory.POSITIVE)
-                .stream().map(LeadStatusSentiment::getLeadStatus).collect(Collectors.toList());
-
-        List<LeadStatus> negativeStatuses = leadStatusSentimentRepository.findBySentimentCategory(SentimentCategory.NEGATIVE)
-                .stream().map(LeadStatusSentiment::getLeadStatus).collect(Collectors.toList());
+        List<LeadStatus> positiveStatuses = leadStatusRepository.findBySentimentCategory(SentimentCategory.POSITIVE);
+        List<LeadStatus> negativeStatuses = leadStatusRepository.findBySentimentCategory(SentimentCategory.NEGATIVE);
 
         Specification<LeadFeedback> todaySpec = baseSpec.and(FeedbackSpecification.createdToday());
         Specification<LeadFeedback> positiveSpec = baseSpec.and(FeedbackSpecification.hasStatusAtTimeIn(positiveStatuses));

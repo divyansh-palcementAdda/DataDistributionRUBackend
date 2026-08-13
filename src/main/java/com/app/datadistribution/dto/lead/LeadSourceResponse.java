@@ -16,8 +16,10 @@ import lombok.Setter;
 public class LeadSourceResponse {
     private UUID id;
     private String name;
+    private String code;
     private String description;
     private boolean active;
+    private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

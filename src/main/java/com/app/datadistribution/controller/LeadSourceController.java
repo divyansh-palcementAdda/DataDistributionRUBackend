@@ -53,13 +53,14 @@ public class LeadSourceController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('LEADSOURCE_READ')")
-    @Operation(summary = "Get list of lead sources with pagination, sorting, and search filtering")
+    @Operation(summary = "Get list of lead sources with pagination, sorting, search, and status filtering")
     public ResponseEntity<ApiResponse<LeadSourcePageResponse>> getAll(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam(value = "sortBy", defaultValue = "id") String sortBy,
+            @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) {
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "status", required = false) String status) {
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -69,7 +70,7 @@ public class LeadSourceController {
                 .search(search)
                 .build();
 
-        LeadSourcePageResponse response = leadSourceService.getAll(pageRequest);
+        LeadSourcePageResponse response = leadSourceService.getAll(pageRequest, status);
         return ResponseEntity.ok(ApiResponse.success("Lead sources retrieved successfully", response, HttpStatus.OK.value()));
     }
 

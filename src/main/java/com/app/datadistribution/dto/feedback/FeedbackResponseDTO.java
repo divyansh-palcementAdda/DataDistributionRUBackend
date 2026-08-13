@@ -1,7 +1,7 @@
 package com.app.datadistribution.dto.feedback;
 
+import com.app.datadistribution.dto.lead.LeadStatusResponse;
 import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.enums.LeadStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -21,7 +21,7 @@ public class FeedbackResponseDTO {
     private String leadCode;
     private String leadFullName;
     private String feedback;
-    private LeadStatus statusAtTime;
+    private LeadStatusResponse statusAtTime;
     private UserResponse createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

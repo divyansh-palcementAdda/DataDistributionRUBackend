@@ -17,6 +17,6 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
     @Query("SELECT l.currentStatus, COUNT(l) FROM Lead l WHERE l.isDeleted = false GROUP BY l.currentStatus")
     List<Object[]> countByStatus();
 
-    @Query("SELECT l.source, COUNT(l) FROM Lead l WHERE l.isDeleted = false GROUP BY l.source")
+    @Query("SELECT s, COUNT(l) FROM Lead l JOIN l.leadSources s WHERE l.isDeleted = false AND s.isDeleted = false GROUP BY s")
     List<Object[]> countBySource();
 }
