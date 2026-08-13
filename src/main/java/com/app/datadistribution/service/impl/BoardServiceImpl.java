@@ -31,6 +31,7 @@ public class BoardServiceImpl implements IBoardService {
 
     private final BoardRepository boardRepository;
     private final LeadMapper leadMapper;
+    private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "name", "code", "description", "active", "displayOrder", "createdAt", "updatedAt"
@@ -53,6 +54,13 @@ public class BoardServiceImpl implements IBoardService {
 
         Board saved = boardRepository.save(board);
         log.info("Created board: {} with code {}", saved.getName(), saved.getCode());
+
+        try {
+            dashboardCardPermissionService.ensureEntityCardAndPermission("BOARD", saved.getCode(), saved.getName(), "BOARD");
+        } catch (Exception e) {
+            log.warn("Failed to generate dashboard card/permission for new board {}", saved.getCode(), e);
+        }
+
         return leadMapper.toDto(saved);
     }
 

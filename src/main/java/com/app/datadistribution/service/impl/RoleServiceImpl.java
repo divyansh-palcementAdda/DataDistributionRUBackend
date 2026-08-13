@@ -52,14 +52,19 @@ public class RoleServiceImpl implements IRoleService {
             throw new BadRequestException("Role '" + request.getName() + "' already exists");
         }
 
+        List<Permission> cardPermissions = permissionRepository.findAllByIsDeletedFalse().stream()
+                .filter(p -> p.getName().startsWith("DASHBOARD_CARD_"))
+                .collect(Collectors.toList());
+
         Role role = Role.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .active(true)
+                .permissions(new HashSet<>(cardPermissions))
                 .build();
 
         Role saved = repository.save(role);
-        log.info("Created role: {}", saved.getName());
+        log.info("Created role: {} with {} default card permissions", saved.getName(), cardPermissions.size());
 
         activityLogService.logActivity(ActivityType.ROLE_CREATED, "Created role: " + saved.getName());
 

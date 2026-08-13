@@ -31,6 +31,7 @@ public class LeadStatusServiceImpl implements ILeadStatusService {
 
     private final LeadStatusRepository leadStatusRepository;
     private final LeadMapper leadMapper;
+    private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "name", "code", "description", "active", "displayOrder", "createdAt", "updatedAt"
@@ -56,6 +57,13 @@ public class LeadStatusServiceImpl implements ILeadStatusService {
 
         LeadStatus saved = leadStatusRepository.save(leadStatus);
         log.info("Created lead status: {} with code {}", saved.getName(), saved.getCode());
+
+        try {
+            dashboardCardPermissionService.ensureEntityCardAndPermission("LEAD_STATUS", saved.getCode(), saved.getName(), "LEAD_STATUS");
+        } catch (Exception e) {
+            log.warn("Failed to generate dashboard card/permission for new lead status {}", saved.getCode(), e);
+        }
+
         return leadMapper.toDto(saved);
     }
 

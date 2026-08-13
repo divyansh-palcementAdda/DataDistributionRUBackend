@@ -38,6 +38,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final LeadStatusRepository leadStatusRepository;
 	private final com.app.datadistribution.repository.BoardRepository boardRepository;
 	private final com.app.datadistribution.repository.GradeRepository gradeRepository;
+	private final com.app.datadistribution.repository.DashboardCardRepository dashboardCardRepository;
+	private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 	private final com.app.datadistribution.repository.LeadSourceRepository leadSourceRepository;
 	private final com.app.datadistribution.entity.LeadSource leadSourceEntityHelper = null;
 	private final jakarta.persistence.EntityManager entityManager;
@@ -53,6 +55,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedLeadSources();
 		seedBoards();
 		seedGrades();
+		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
 
@@ -84,6 +87,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().startsWith("LEADSOURCE_")
 						|| p.getName().startsWith("BOARD_")
 						|| p.getName().startsWith("GRADE_")
+						|| p.getName().startsWith("DASHBOARD_")
 						|| p.getName().equals(PermissionType.COURSE_VIEW.name())
 						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name())
 						|| p.getName().startsWith("FOLLOWUP_")
@@ -95,7 +99,11 @@ public class DatabaseSeeder implements CommandLineRunner {
 		Set<Permission> userPermissions = allPermissions.stream()
 				.filter(p -> p.getName().equals(PermissionType.USER_READ.name())
 						|| p.getName().startsWith("FOLLOWUP_")
-						|| p.getName().startsWith("FEEDBACK_"))
+						|| p.getName().startsWith("FEEDBACK_")
+						|| p.getName().equals(PermissionType.DASHBOARD_VIEW.name())
+						|| p.getName().equals(PermissionType.DASHBOARD_CARD_VIEW.name())
+						|| p.getName().equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
+						|| p.getName().equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name()))
 				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.USER.name(), "Standard User Role", userPermissions);
 	}
@@ -368,6 +376,41 @@ public class DatabaseSeeder implements CommandLineRunner {
 					.build();
 			gradeRepository.save(grade);
 			log.info("Seeded default grade: {} ({})", name, code);
+		}
+	}
+
+	private void seedDashboardCards() {
+		Set<com.app.datadistribution.entity.Role> allRoles = new HashSet<>(roleRepository.findAll());
+		createCardIfNotExist("TOTAL_LEADS", "Total Leads", "Total leads in scope", "SUMMARY", "METRIC", "trending_up", 1, allRoles);
+		createCardIfNotExist("TOTAL_FOLLOWUPS_TODAY", "Follow-Ups Scheduled Today", "Follow-ups scheduled today", "SUMMARY", "METRIC", "calendar_today", 2, allRoles);
+		createCardIfNotExist("TOTAL_COUNSELLORS_LOGGED_TODAY", "Counsellors Logged Today", "Total counsellors logged in today", "SUMMARY", "METRIC", "people", 3, allRoles);
+		createCardIfNotExist("TOTAL_COUNSELLORS_WORKING", "Counsellors Currently Working", "Active counsellors working in last 8 hours", "SUMMARY", "METRIC", "badge", 4, allRoles);
+		createCardIfNotExist("CONVERSATION_RATIO", "Conversation Ratio", "Feedback count to total lead ratio", "SUMMARY", "METRIC", "bar_chart", 5, allRoles);
+		createCardIfNotExist("LEAD_STATUS_GROUP", "Lead Status Distribution", "Dynamic lead breakdown by status", "LEAD_STATUS", "GROUP_CHART", "pie_chart", 6, allRoles);
+		createCardIfNotExist("LEAD_SOURCE_GROUP", "Lead Source Distribution", "Dynamic lead breakdown by source", "LEAD_SOURCE", "GROUP_CHART", "source", 7, allRoles);
+		createCardIfNotExist("BOARD_GROUP", "Board Wise Overview", "Dynamic lead breakdown by board", "BOARD", "GROUP_CHART", "school", 8, allRoles);
+		createCardIfNotExist("GRADE_GROUP", "Grade Wise Overview", "Dynamic lead breakdown by grade", "GRADE", "GROUP_CHART", "grade", 9, allRoles);
+		createCardIfNotExist("COURSE_GROUP", "Course Wise Overview", "Dynamic lead breakdown by course", "COURSE", "GROUP_CHART", "book", 10, allRoles);
+		createCardIfNotExist("RECENT_ACTIVITY", "Recent System Activity", "Recent status changes and feedback logs", "ACTIVITY", "LIST", "history", 11, allRoles);
+	}
+
+	private void createCardIfNotExist(String code, String name, String description, String section, String cardType, String icon, int displayOrder, Set<com.app.datadistribution.entity.Role> roles) {
+		if (!dashboardCardRepository.findByCodeIgnoreCase(code).isPresent()) {
+			com.app.datadistribution.entity.DashboardCard card = com.app.datadistribution.entity.DashboardCard.builder()
+					.code(code)
+					.name(name)
+					.description(description)
+					.section(section)
+					.cardType(cardType)
+					.icon(icon)
+					.displayOrder(displayOrder)
+					.active(true)
+					.allowedRoles(roles)
+					.build();
+			dashboardCardPermissionService.registerCardAndPermission(card);
+			log.info("Seeded default dashboard card with unique permission: {} ({})", name, code);
+		} else {
+			dashboardCardRepository.findByCodeIgnoreCase(code).ifPresent(dashboardCardPermissionService::registerCardAndPermission);
 		}
 	}
 }

@@ -1,0 +1,207 @@
+package com.app.datadistribution.controller;
+
+import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.dto.dashboard.*;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.service.interfaces.IDashboardService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/dashboard")
+@RequiredArgsConstructor
+@Tag(name = "Dashboard Management", description = "Centralized endpoints for dynamic, role-aware CRM dashboard")
+public class DashboardController {
+
+    private final IDashboardService dashboardService;
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get scope-aware dashboard summary with dynamic sections and metrics")
+    public ResponseEntity<ApiResponse<DashboardSummaryDTO>> getDashboardSummary(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        DashboardSummaryDTO summary = dashboardService.getDashboardSummary(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Dashboard summary retrieved successfully", summary, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/cards")
+    @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
+    @Operation(summary = "Get resolved dashboard cards with role permissions and user preferences applied")
+    public ResponseEntity<ApiResponse<List<DashboardCardDTO>>> getResolvedCards() throws UnauthorizedException {
+        List<DashboardCardDTO> cards = dashboardService.getResolvedCards();
+        return ResponseEntity.ok(ApiResponse.success("Resolved dashboard cards retrieved successfully", cards, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/lead-status")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get lead status breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getLeadStatusBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getLeadStatusBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Lead status breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/lead-source")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get lead source breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getLeadSourceBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getLeadSourceBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Lead source breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/board")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get board breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getBoardBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getBoardBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Board breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/grade")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get grade breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getGradeBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getGradeBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Grade breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/course")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get course breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getCourseBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getCourseBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Course breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/recent-activity")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get recent lead activity audit feed for current user scope")
+    public ResponseEntity<ApiResponse<List<Object>>> getRecentActivity() throws UnauthorizedException {
+        List<Object> result = dashboardService.getRecentActivity();
+        return ResponseEntity.ok(ApiResponse.success("Recent activity retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/preferences")
+    @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
+    @Operation(summary = "Get current authenticated user's card preferences")
+    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferences() throws UnauthorizedException {
+        List<UserDashboardPreferenceDTO> preferences = dashboardService.getUserPreferences();
+        return ResponseEntity.ok(ApiResponse.success("User dashboard preferences retrieved successfully", preferences, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/preferences/{cardId}/visibility")
+    @PreAuthorize("hasAuthority('DASHBOARD_CARD_PREFERENCE_UPDATE')")
+    @Operation(summary = "Update user card visibility preference for authorized card")
+    public ResponseEntity<ApiResponse<Void>> updateCardVisibility(
+            @PathVariable("cardId") UUID cardId,
+            @Valid @RequestBody CardPreferenceUpdateRequest request) throws BadRequestException, UnauthorizedException {
+
+        dashboardService.updateCardVisibility(cardId, Boolean.TRUE.equals(request.getVisible()));
+        return ResponseEntity.ok(ApiResponse.success("Card visibility preference updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/preferences/order")
+    @PreAuthorize("hasAuthority('DASHBOARD_CARD_ORDER_UPDATE')")
+    @Operation(summary = "Update user card display order preference for authorized cards")
+    public ResponseEntity<ApiResponse<Void>> updateCardOrders(
+            @Valid @RequestBody CardOrderUpdateRequest request) throws BadRequestException, UnauthorizedException {
+
+        dashboardService.updateCardOrders(request);
+        return ResponseEntity.ok(ApiResponse.success("Card display order preference updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/preferences/reset")
+    @PreAuthorize("hasAuthority('DASHBOARD_CARD_PREFERENCE_UPDATE')")
+    @Operation(summary = "Reset current user's dashboard preferences back to role defaults")
+    public ResponseEntity<ApiResponse<Void>> resetUserPreferences() throws BadRequestException, UnauthorizedException {
+        dashboardService.resetUserPreferences();
+        return ResponseEntity.ok(ApiResponse.success("Dashboard preferences reset to role defaults successfully", null, HttpStatus.OK.value()));
+    }
+
+    // --- Admin Endpoints for Card Role Access & User Preferences ---
+
+    @GetMapping("/admin/cards/{cardId}/roles")
+    @PreAuthorize("hasAuthority('ROLE_READ') or hasAuthority('DASHBOARD_VIEW_ALL')")
+    @Operation(summary = "Get roles assigned to a dashboard card")
+    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.user.RoleDTO>>> getCardRoles(@PathVariable("cardId") UUID cardId) throws BadRequestException {
+        List<com.app.datadistribution.dto.user.RoleDTO> roles = dashboardService.getCardRoles(cardId);
+        return ResponseEntity.ok(ApiResponse.success("Card roles retrieved successfully", roles, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/admin/cards/{cardId}/roles")
+    @PreAuthorize("hasAuthority('ROLE_UPDATE') or hasAuthority('DASHBOARD_VIEW_ALL')")
+    @Operation(summary = "Assign or revoke roles allowed for a dashboard card")
+    public ResponseEntity<ApiResponse<Void>> updateCardRolePermissions(
+            @PathVariable("cardId") UUID cardId,
+            @Valid @RequestBody CardRoleAssignRequest request) throws BadRequestException {
+
+        dashboardService.updateCardRolePermissions(cardId, request.getRoleIds());
+        return ResponseEntity.ok(ApiResponse.success("Card role permissions updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/admin/users/{userId}/preferences")
+    @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
+    @Operation(summary = "Admin: Get dashboard card preferences for a specific user")
+    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferencesForUser(@PathVariable("userId") UUID userId) throws BadRequestException, UnauthorizedException {
+        List<UserDashboardPreferenceDTO> preferences = dashboardService.getUserPreferencesForUser(userId);
+        return ResponseEntity.ok(ApiResponse.success("Target user dashboard preferences retrieved successfully", preferences, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/admin/users/{userId}/preferences/{cardId}/visibility")
+    @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
+    @Operation(summary = "Admin: Update card visibility preference for a specific user")
+    public ResponseEntity<ApiResponse<Void>> updateCardVisibilityForUser(
+            @PathVariable("userId") UUID userId,
+            @PathVariable("cardId") UUID cardId,
+            @Valid @RequestBody CardPreferenceUpdateRequest request) throws BadRequestException, UnauthorizedException {
+
+        dashboardService.updateCardVisibilityForUser(userId, cardId, Boolean.TRUE.equals(request.getVisible()));
+        return ResponseEntity.ok(ApiResponse.success("User card visibility updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/admin/users/{userId}/preferences/order")
+    @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
+    @Operation(summary = "Admin: Update card order preferences for a specific user")
+    public ResponseEntity<ApiResponse<Void>> updateCardOrdersForUser(
+            @PathVariable("userId") UUID userId,
+            @Valid @RequestBody CardOrderUpdateRequest request) throws BadRequestException, UnauthorizedException {
+
+        dashboardService.updateCardOrdersForUser(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("User card order preferences updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/admin/users/{userId}/preferences/reset")
+    @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
+    @Operation(summary = "Admin: Reset dashboard card preferences for a specific user")
+    public ResponseEntity<ApiResponse<Void>> resetPreferencesForUser(@PathVariable("userId") UUID userId) throws BadRequestException, UnauthorizedException {
+        dashboardService.resetPreferencesForUser(userId);
+        return ResponseEntity.ok(ApiResponse.success("User dashboard preferences reset successfully", null, HttpStatus.OK.value()));
+    }
+}

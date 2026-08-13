@@ -38,4 +38,7 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
         GROUP BY r.id, r.name, r.description, r.active
     """)
     List<RoleDTO> fetchAllSummary();
+
+    List<Role> findAllByIsDeletedFalse();
+    List<Role> findByActiveTrueAndIsDeletedFalse();
 }

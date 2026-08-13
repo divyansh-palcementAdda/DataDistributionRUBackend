@@ -31,6 +31,7 @@ public class LeadSourceServiceImpl implements ILeadSourceService {
 
     private final LeadSourceRepository leadSourceRepository;
     private final LeadMapper leadMapper;
+    private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "name", "code", "description", "active", "createdAt", "updatedAt"
@@ -47,6 +48,13 @@ public class LeadSourceServiceImpl implements ILeadSourceService {
         leadSource.setCode(code);
         LeadSource saved = leadSourceRepository.save(leadSource);
         log.info("Created lead source: {} with code {}", saved.getName(), saved.getCode());
+
+        try {
+            dashboardCardPermissionService.ensureEntityCardAndPermission("LEAD_SOURCE", saved.getCode(), saved.getName(), "LEAD_SOURCE");
+        } catch (Exception e) {
+            log.warn("Failed to generate dashboard card/permission for new lead source {}", saved.getCode(), e);
+        }
+
         return leadMapper.toDto(saved);
     }
 

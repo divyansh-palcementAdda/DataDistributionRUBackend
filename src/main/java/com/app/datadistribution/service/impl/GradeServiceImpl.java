@@ -31,6 +31,7 @@ public class GradeServiceImpl implements IGradeService {
 
     private final GradeRepository gradeRepository;
     private final LeadMapper leadMapper;
+    private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "name", "code", "description", "active", "displayOrder", "createdAt", "updatedAt"
@@ -53,6 +54,13 @@ public class GradeServiceImpl implements IGradeService {
 
         Grade saved = gradeRepository.save(grade);
         log.info("Created grade: {} with code {}", saved.getName(), saved.getCode());
+
+        try {
+            dashboardCardPermissionService.ensureEntityCardAndPermission("GRADE", saved.getCode(), saved.getName(), "GRADE");
+        } catch (Exception e) {
+            log.warn("Failed to generate dashboard card/permission for new grade {}", saved.getCode(), e);
+        }
+
         return leadMapper.toDto(saved);
     }
 
