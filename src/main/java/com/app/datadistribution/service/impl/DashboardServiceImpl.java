@@ -154,6 +154,14 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
+        User currentUser = getCurrentUserEntity();
+        DataScope scope = resolveDataScope(currentUser);
+        return fetchCourseTypeGroupBreakdown(currentUser, scope, startDate, endDate);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Object> getRecentActivity() throws UnauthorizedException {
         User currentUser = getCurrentUserEntity();
         DataScope scope = resolveDataScope(currentUser);
@@ -528,6 +536,9 @@ public class DashboardServiceImpl implements IDashboardService {
                 case "COURSE_GROUP":
                     card.setGroupData(fetchGroupBreakdown(user, scope, "course", null, null));
                     break;
+                case "COURSE_TYPE_GROUP":
+                    card.setGroupData(fetchCourseTypeGroupBreakdown(user, scope, null, null));
+                    break;
                 case "RECENT_ACTIVITY":
                     try {
                         card.setValue(getRecentActivity());
@@ -705,6 +716,53 @@ public class DashboardServiceImpl implements IDashboardService {
         return spec;
     }
 
+    private List<GroupCountDTO> fetchCourseTypeGroupBreakdown(User user, DataScope scope, LocalDate start, LocalDate end) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Lead> root = query.from(Lead.class);
+
+        Join<Lead, Course> courseJoin = root.join("course", JoinType.INNER);
+        Join<Course, CourseType> courseTypeJoin = courseJoin.join("courseType", JoinType.INNER);
+
+        Predicate spec = cb.and(
+                cb.equal(root.get("isDeleted"), false),
+                cb.equal(courseJoin.get("isDeleted"), false),
+                cb.equal(courseTypeJoin.get("isDeleted"), false)
+        );
+        spec = applyScopePredicate(cb, root, spec, user, scope);
+
+        if (start != null) {
+            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start.atStartOfDay()));
+        }
+        if (end != null) {
+            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end.atTime(LocalTime.MAX)));
+        }
+
+        Path<UUID> idPath = courseTypeJoin.get("id");
+        Path<String> namePath = courseTypeJoin.get("name");
+
+        query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), cb.count(root).alias("count")));
+        query.where(spec);
+        query.groupBy(idPath, namePath);
+
+        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
+        long totalCount = tuples.stream().mapToLong(t -> t.get("count", Long.class)).sum();
+
+        List<GroupCountDTO> result = new ArrayList<>();
+        for (Tuple t : tuples) {
+            long count = t.get("count", Long.class);
+            double pct = totalCount > 0 ? ((double) count / totalCount) * 100.0 : 0.0;
+            result.add(GroupCountDTO.builder()
+                    .id(t.get("id", UUID.class))
+                    .name(t.get("name", String.class))
+                    .code(null)
+                    .count(count)
+                    .percentage(Math.round(pct * 100.0) / 100.0)
+                    .build());
+        }
+        return result;
+    }
+
     private String formatSectionName(String sectionCode) {
         if (sectionCode == null) return "Overview";
         switch (sectionCode.toUpperCase()) {
@@ -714,6 +772,7 @@ public class DashboardServiceImpl implements IDashboardService {
             case "BOARD": return "Board Wise Overview";
             case "GRADE": return "Grade Wise Overview";
             case "COURSE": return "Course Wise Overview";
+            case "COURSE_TYPE": return "Course Type Wise Overview";
             case "ACTIVITY": return "Recent System Activity";
             default: return sectionCode;
         }

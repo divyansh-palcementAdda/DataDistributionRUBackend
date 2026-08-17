@@ -101,6 +101,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().startsWith("FOLLOWUP_")
 						|| p.getName().startsWith("FEEDBACK_")
 						|| p.getName().equals(PermissionType.DASHBOARD_VIEW.name())
+						|| p.getName().equals(PermissionType.DASHBOARD_COURSE_TYPE_VIEW.name())
 						|| p.getName().equals(PermissionType.DASHBOARD_CARD_VIEW.name())
 						|| p.getName().equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
 						|| p.getName().equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name()))
@@ -391,7 +392,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 		createCardIfNotExist("BOARD_GROUP", "Board Wise Overview", "Dynamic lead breakdown by board", "BOARD", "GROUP_CHART", "school", 8, allRoles);
 		createCardIfNotExist("GRADE_GROUP", "Grade Wise Overview", "Dynamic lead breakdown by grade", "GRADE", "GROUP_CHART", "grade", 9, allRoles);
 		createCardIfNotExist("COURSE_GROUP", "Course Wise Overview", "Dynamic lead breakdown by course", "COURSE", "GROUP_CHART", "book", 10, allRoles);
-		createCardIfNotExist("RECENT_ACTIVITY", "Recent System Activity", "Recent status changes and feedback logs", "ACTIVITY", "LIST", "history", 11, allRoles);
+		createCardIfNotExist("COURSE_TYPE_GROUP", "Course Type Wise Overview", "Dynamic lead breakdown by course type", "COURSE_TYPE", "GROUP_CHART", "category", 11, allRoles);
+		createCardIfNotExist("RECENT_ACTIVITY", "Recent System Activity", "Recent status changes and feedback logs", "ACTIVITY", "LIST", "history", 12, allRoles);
 	}
 
 	private void createCardIfNotExist(String code, String name, String description, String section, String cardType, String icon, int displayOrder, Set<com.app.datadistribution.entity.Role> roles) {

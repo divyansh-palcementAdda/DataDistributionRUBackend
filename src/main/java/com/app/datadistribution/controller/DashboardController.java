@@ -100,6 +100,17 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success("Course breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping({"/course-types"})
+    @PreAuthorize("hasAuthority('DASHBOARD_COURSE_TYPE_VIEW')")
+    @Operation(summary = "Get course type breakdown count for current user scope")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getCourseTypeBreakdown(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+
+        List<GroupCountDTO> result = dashboardService.getCourseTypeBreakdown(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success("Course type breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/recent-activity")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get recent lead activity audit feed for current user scope")
