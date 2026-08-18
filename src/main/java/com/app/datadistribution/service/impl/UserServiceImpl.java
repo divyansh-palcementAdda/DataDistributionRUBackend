@@ -6,6 +6,7 @@ import com.app.datadistribution.dto.user.UserPageResponse;
 import com.app.datadistribution.dto.user.UserRequest;
 import com.app.datadistribution.dto.user.UserResponse;
 import com.app.datadistribution.dto.user.UserUpdateRequest;
+import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.ActivityType;
@@ -14,6 +15,7 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.DuplicateResourceException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.mapper.UserMapper;
+import com.app.datadistribution.repository.DepartmentRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
@@ -44,6 +46,7 @@ public class UserServiceImpl implements IUserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final IActivityLogService activityLogService;
@@ -141,6 +144,21 @@ public class UserServiceImpl implements IUserService {
             roles.add(defaultRole);
         }
 
+        boolean isAdmin = roles.stream().anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()));
+
+        Set<Department> departments = new HashSet<>();
+        if (request.getDepartmentIds() != null && !request.getDepartmentIds().isEmpty()) {
+            if (isAdmin) {
+                throw new BadRequestException("Admin and SUPER_ADMIN users cannot be assigned to specific departments as they have system-wide access.");
+            }
+            for (UUID dId : request.getDepartmentIds()) {
+                Department dept = departmentRepository.findById(dId)
+                        .filter(d -> !d.isDeleted())
+                        .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + dId));
+                departments.add(dept);
+            }
+        }
+
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -152,7 +170,9 @@ public class UserServiceImpl implements IUserService {
                 .locked(request.isLocked())
                 .emailVerified(request.isEmailVerified())
                 .profileImage(request.getProfileImage())
+                .hodAccessType(request.getHodAccessType())
                 .roles(roles)
+                .departments(departments)
                 .tokenVersion(1L)
                 .build();
 
@@ -182,19 +202,41 @@ public class UserServiceImpl implements IUserService {
                         .orElseThrow(() -> new ResourcesNotFoundException("Role not found: " + roleName)))
                 .collect(Collectors.toSet());
 
+        boolean isAdmin = roles.stream().anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()));
+
+        if (request.getDepartmentIds() != null) {
+            if (isAdmin && !request.getDepartmentIds().isEmpty()) {
+                throw new BadRequestException("Admin and SUPER_ADMIN users cannot be assigned to specific departments as they have system-wide access.");
+            }
+            Set<Department> newDepartments = new HashSet<>();
+            if (!isAdmin) {
+                for (UUID dId : request.getDepartmentIds()) {
+                    Department dept = departmentRepository.findById(dId)
+                            .filter(d -> !d.isDeleted())
+                            .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + dId));
+                    newDepartments.add(dept);
+                }
+            }
+            user.setDepartments(newDepartments);
+        } else if (isAdmin) {
+            user.setDepartments(new HashSet<>());
+        }
+
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
         user.setUsername(request.getUsername());
-        
+
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
-            // Invalidate current logins since password has changed
             user.setTokenVersion(user.getTokenVersion() + 1);
         }
 
         user.setProfileImage(request.getProfileImage());
+        if (request.getHodAccessType() != null) {
+            user.setHodAccessType(request.getHodAccessType());
+        }
         user.setRoles(roles);
         user.setActive(request.isActive());
         user.setLocked(request.isLocked());
@@ -265,35 +307,31 @@ public class UserServiceImpl implements IUserService {
         return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
     }
 
+    private Specification<User> filterByActiveStatus(String status) {
+        boolean active = status.equalsIgnoreCase("ACTIVE");
+        return (root, query, cb) -> cb.equal(root.get("active"), active);
+    }
+
     private Specification<User> hasRolesIn(List<String> roleNames) {
         return (root, query, cb) -> {
             query.distinct(true);
-            Join<User, Role> rolesJoin = root.join("roles", JoinType.INNER);
+            Join<User, Role> roleJoin = root.join("roles", JoinType.INNER);
             return cb.and(
-                    rolesJoin.get("name").in(roleNames),
-                    cb.equal(rolesJoin.get("isDeleted"), false)
+                    cb.equal(roleJoin.get("isDeleted"), false),
+                    roleJoin.get("name").in(roleNames)
             );
-        };
-    }
-
-    private Specification<User> filterByActiveStatus(String status) {
-        return (root, query, cb) -> {
-            if ("ACTIVE".equalsIgnoreCase(status)) {
-                return cb.equal(root.get("active"), true);
-            }
-            return cb.equal(root.get("active"), false);
         };
     }
 
     private Specification<User> searchUsers(String keyword) {
         return (root, query, cb) -> {
-            String searchPattern = "%" + keyword.toLowerCase() + "%";
+            String pattern = "%" + keyword.toLowerCase() + "%";
             return cb.or(
-                    cb.like(cb.lower(root.get("firstName")), searchPattern),
-                    cb.like(cb.lower(root.get("lastName")), searchPattern),
-                    cb.like(cb.lower(root.get("email")), searchPattern),
-                    cb.like(cb.lower(root.get("username")), searchPattern),
-                    cb.like(cb.lower(root.get("department")), searchPattern)
+                    cb.like(cb.lower(root.get("firstName")), pattern),
+                    cb.like(cb.lower(root.get("lastName")), pattern),
+                    cb.like(cb.lower(root.get("username")), pattern),
+                    cb.like(cb.lower(root.get("email")), pattern),
+                    cb.like(cb.lower(root.get("phone")), pattern)
             );
         };
     }

@@ -1,6 +1,9 @@
 package com.app.datadistribution.dto.user;
 
+import com.app.datadistribution.dto.department.DepartmentSummaryDTO;
+import com.app.datadistribution.enums.HodAccessType;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -28,6 +31,8 @@ public class UserResponse {
     private boolean emailVerified;
     private LocalDateTime lastLogin;
     private String department;
+    private List<DepartmentSummaryDTO> departments;
+    private HodAccessType hodAccessType;
     private Set<String> roles;
     private Set<String> permissions;
     private LocalDateTime createdAt;

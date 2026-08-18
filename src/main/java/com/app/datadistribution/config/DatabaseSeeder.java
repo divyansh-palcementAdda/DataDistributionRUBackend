@@ -1,10 +1,14 @@
 package com.app.datadistribution.config;
 
+import com.app.datadistribution.entity.Board;
+import com.app.datadistribution.entity.Department;
+import com.app.datadistribution.entity.Grade;
 import com.app.datadistribution.entity.Permission;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.PermissionType;
 import com.app.datadistribution.enums.RoleType;
+import com.app.datadistribution.repository.DepartmentRepository;
 import com.app.datadistribution.repository.PermissionRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
@@ -33,6 +37,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final PermissionRepository permissionRepository;
 	private final RoleRepository roleRepository;
 	private final UserRepository userRepository;
+	private final DepartmentRepository departmentRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final LeadStatusSentimentRepository leadStatusSentimentRepository;
 	private final LeadStatusRepository leadStatusRepository;
@@ -50,6 +55,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		log.info("Database seeding started...");
 		seedPermissions();
 		seedRoles();
+		seedDepartments();
 		seedUsers();
 		seedLeadStatuses();
 		seedLeadSources();
@@ -88,10 +94,10 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().startsWith("BOARD_")
 						|| p.getName().startsWith("GRADE_")
 						|| p.getName().startsWith("DASHBOARD_")
-						|| p.getName().equals(PermissionType.COURSE_VIEW.name())
-						|| p.getName().equals(PermissionType.COURSE_TYPE_VIEW.name())
+						|| p.getName().startsWith("COURSE_")
 						|| p.getName().startsWith("FOLLOWUP_")
-						|| p.getName().startsWith("FEEDBACK_"))
+						|| p.getName().startsWith("FEEDBACK_")
+						|| p.getName().startsWith("DEPARTMENT_"))
 				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
@@ -104,9 +110,39 @@ public class DatabaseSeeder implements CommandLineRunner {
 						|| p.getName().equals(PermissionType.DASHBOARD_COURSE_TYPE_VIEW.name())
 						|| p.getName().equals(PermissionType.DASHBOARD_CARD_VIEW.name())
 						|| p.getName().equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
-						|| p.getName().equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name()))
+						|| p.getName().equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name())
+						|| p.getName().equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
+						|| p.getName().equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
+						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_VIEW.name())
+						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND.name())
+						|| p.getName().equals(PermissionType.COURSE_IMAGE_VIEW.name())
+						|| p.getName().equals(PermissionType.COURSE_USP_VIEW.name())
+						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND_EMAIL.name())
+						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND_WHATSAPP.name())
+						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_IMAGE_SELECT.name())
+						|| p.getName().equals(PermissionType.DEPARTMENT_VIEW.name()))
 				.collect(Collectors.toSet());
 		createRoleIfNotExist(RoleType.USER.name(), "Standard User Role", userPermissions);
+	}
+
+	private void seedDepartments() {
+		createDepartmentIfNotExist("Admissions", "ADM", "Student Admissions & Enrollment Department");
+		createDepartmentIfNotExist("Marketing", "MKT", "Lead Generation & Marketing Department");
+		createDepartmentIfNotExist("Academics", "ACA", "Academic Course Guidance Department");
+		createDepartmentIfNotExist("Finance", "FIN", "Fee Processing & Financial Aid Department");
+	}
+
+	private void createDepartmentIfNotExist(String name, String code, String description) {
+		if (!departmentRepository.findByCodeIgnoreCaseAndIsDeletedFalse(code).isPresent()) {
+			Department dept = Department.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.active(true)
+					.build();
+			departmentRepository.save(dept);
+			log.info("Seeded default department: {} ({})", name, code);
+		}
 	}
 
 	private void createRoleIfNotExist(String name, String description, Set<Permission> permissions) {
@@ -209,95 +245,37 @@ public class DatabaseSeeder implements CommandLineRunner {
 				log.debug("Native migration for leads.lead_status_id skipped or completed: {}", e.getMessage());
 			}
 		}
+	}
 
-		if (columnExists("lead_status_histories", "old_status")) {
-			try {
-				entityManager.createNativeQuery(
-					"UPDATE lead_status_histories h " +
-					"JOIN lead_statuses ls ON LOWER(h.old_status) = LOWER(ls.code) " +
-					"SET h.previous_status_id = ls.id " +
-					"WHERE h.previous_status_id IS NULL AND h.old_status IS NOT NULL"
-				).executeUpdate();
-			} catch (Exception e) {
-				log.debug("Native migration for lead_status_histories.previous_status_id skipped or completed: {}", e.getMessage());
-			}
-		}
-
-		if (columnExists("lead_status_histories", "new_status")) {
-			try {
-				entityManager.createNativeQuery(
-					"UPDATE lead_status_histories h " +
-					"JOIN lead_statuses ls ON LOWER(h.new_status) = LOWER(ls.code) " +
-					"SET h.new_status_id = ls.id " +
-					"WHERE h.new_status_id IS NULL AND h.new_status IS NOT NULL"
-				).executeUpdate();
-			} catch (Exception e) {
-				log.debug("Native migration for lead_status_histories.new_status_id skipped or completed: {}", e.getMessage());
-			}
-		}
-
-		if (columnExists("lead_feedbacks", "status_at_time")) {
-			try {
-				entityManager.createNativeQuery(
-					"UPDATE lead_feedbacks f " +
-					"JOIN lead_statuses ls ON LOWER(f.status_at_time) = LOWER(ls.code) " +
-					"SET f.status_at_time_id = ls.id " +
-					"WHERE f.status_at_time_id IS NULL AND f.status_at_time IS NOT NULL"
-				).executeUpdate();
-			} catch (Exception e) {
-				log.debug("Native migration for lead_feedbacks.status_at_time_id skipped or completed: {}", e.getMessage());
-			}
-		}
-
-		// Fallback: Assign default 'RAW' status ID to any remaining null status foreign keys
+	private boolean columnExists(String tableName, String columnName) {
 		try {
-			leadStatusRepository.findByCodeIgnoreCase("RAW").ifPresent(rawStatus -> {
-				UUID defaultId = rawStatus.getId();
-				entityManager.createNativeQuery("UPDATE leads SET lead_status_id = :defaultId WHERE lead_status_id IS NULL")
-						.setParameter("defaultId", defaultId)
-						.executeUpdate();
-				entityManager.createNativeQuery("UPDATE lead_status_histories SET new_status_id = :defaultId WHERE new_status_id IS NULL")
-						.setParameter("defaultId", defaultId)
-						.executeUpdate();
-				entityManager.createNativeQuery("UPDATE lead_feedbacks SET status_at_time_id = :defaultId WHERE status_at_time_id IS NULL")
-						.setParameter("defaultId", defaultId)
-						.executeUpdate();
-			});
+			Object result = entityManager.createNativeQuery(
+				"SELECT COUNT(*) FROM information_schema.columns " +
+				"WHERE table_schema = DATABASE() AND table_name = :tableName AND column_name = :columnName"
+			)
+			.setParameter("tableName", tableName)
+			.setParameter("columnName", columnName)
+			.getSingleResult();
+			return result != null && ((Number) result).longValue() > 0;
 		} catch (Exception e) {
-			log.debug("Fallback migration for default status ID skipped or completed: {}", e.getMessage());
+			log.debug("Column exists check failed for {}.{}: {}", tableName, columnName, e.getMessage());
+			return false;
 		}
 	}
 
 	private void seedLeadSources() {
-		List<com.app.datadistribution.entity.LeadSource> sources = leadSourceRepository.findAll();
-		for (com.app.datadistribution.entity.LeadSource source : sources) {
-			if (source.getCode() == null || source.getCode().isBlank()) {
-				String baseCode = source.getName().replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
-				if (baseCode.length() > 20) baseCode = baseCode.substring(0, 20);
-				if (baseCode.isBlank()) baseCode = "SRC";
-				String candidate = baseCode;
-				if (leadSourceRepository.existsByCodeIgnoreCaseAndIdNot(candidate, source.getId())) {
-					candidate = baseCode + "-" + java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-				}
-				source.setCode(candidate);
-				leadSourceRepository.save(source);
-				log.info("Assigned code {} to lead source {}", candidate, source.getName());
-			}
-		}
+		createSourceIfNotExist("Organic Website", "ORGANIC_WEBSITE", "Direct inbound traffic via company website");
+		createSourceIfNotExist("Google Ads", "GOOGLE_ADS", "Paid search marketing campaigns on Google");
+		createSourceIfNotExist("Meta Ads", "META_ADS", "Facebook and Instagram marketing campaigns");
+		createSourceIfNotExist("LinkedIn", "LINKEDIN", "Professional networking outreach and sponsored content");
+		createSourceIfNotExist("Referral", "REFERRAL", "Word of mouth or existing client referral");
+		createSourceIfNotExist("Cold Call", "COLD_CALL", "Outbound phone sales outreach");
 
-		if (leadSourceRepository.count() == 0) {
-			createSourceIfNotExist("Meta Ads", "META_ADS", "Meta / Facebook / Instagram Advertising");
-			createSourceIfNotExist("Google Search", "GOOGLE_SEARCH", "Google Ads and Organic Search");
-			createSourceIfNotExist("Website Form", "WEBSITE_FORM", "Direct website inquiry forms");
-			createSourceIfNotExist("Referral", "REFERRAL", "Customer and employee referrals");
-			createSourceIfNotExist("Walk In", "WALK_IN", "Direct campus or office walk-in");
-		}
-
-		migrateExistingLeadSourcesJoin();
+		migrateExistingLeadSourceData();
 	}
 
 	private void createSourceIfNotExist(String name, String code, String description) {
-		if (!leadSourceRepository.findByNameIgnoreCase(name).isPresent()) {
+		if (!leadSourceRepository.findByCodeIgnoreCase(code).isPresent()) {
 			com.app.datadistribution.entity.LeadSource source = com.app.datadistribution.entity.LeadSource.builder()
 					.name(name)
 					.code(code)
@@ -309,49 +287,35 @@ public class DatabaseSeeder implements CommandLineRunner {
 		}
 	}
 
-	private void migrateExistingLeadSourcesJoin() {
-		if (columnExists("leads", "source_id")) {
+	private void migrateExistingLeadSourceData() {
+		if (columnExists("leads", "source")) {
 			try {
 				entityManager.createNativeQuery(
 					"INSERT IGNORE INTO lead_lead_sources (lead_id, lead_source_id) " +
-					"SELECT id, source_id FROM leads WHERE source_id IS NOT NULL"
+					"SELECT l.id, ls.id " +
+					"FROM leads l " +
+					"JOIN lead_sources ls ON LOWER(l.source) = LOWER(ls.code) " +
+					"WHERE l.source IS NOT NULL"
 				).executeUpdate();
 			} catch (Exception e) {
-				log.debug("Native migration for lead_lead_sources skipped or completed: {}", e.getMessage());
+				log.debug("Native migration for lead_sources skipped or completed: {}", e.getMessage());
 			}
 		}
 	}
 
-	private boolean columnExists(String tableName, String columnName) {
-		try {
-			Object result = entityManager.createNativeQuery(
-				"SELECT COUNT(*) FROM information_schema.COLUMNS " +
-				"WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tableName AND COLUMN_NAME = :columnName"
-			)
-			.setParameter("tableName", tableName)
-			.setParameter("columnName", columnName)
-			.getSingleResult();
-			return result != null && ((Number) result).longValue() > 0;
-		} catch (Exception e) {
-			return false;
-		}
-	}
-
 	private void seedBoards() {
-		createBoardIfNotExist("CBSE", "CBSE", "Central Board of Secondary Education", 1);
-		createBoardIfNotExist("ICSE", "ICSE", "Indian Certificate of Secondary Education", 2);
-		createBoardIfNotExist("State Board", "STATE_BOARD", "State Board of Education", 3);
-		createBoardIfNotExist("IB", "IB", "International Baccalaureate", 4);
-		createBoardIfNotExist("IGCSE", "IGCSE", "International General Certificate of Secondary Education", 5);
+		createBoardIfNotExist("CBSE", "CBSE", "Central Board of Secondary Education");
+		createBoardIfNotExist("ICSE", "ICSE", "Indian Certificate of Secondary Education");
+		createBoardIfNotExist("State Board", "STATE_BOARD", "Respective State Higher Secondary Education Board");
+		createBoardIfNotExist("IB", "IB", "International Baccalaureate Diploma Program");
 	}
 
-	private void createBoardIfNotExist(String name, String code, String description, int displayOrder) {
+	private void createBoardIfNotExist(String name, String code, String description) {
 		if (!boardRepository.findByCodeIgnoreCase(code).isPresent()) {
-			com.app.datadistribution.entity.Board board = com.app.datadistribution.entity.Board.builder()
+			Board board = Board.builder()
 					.name(name)
 					.code(code)
 					.description(description)
-					.displayOrder(displayOrder)
 					.active(true)
 					.build();
 			boardRepository.save(board);
@@ -360,15 +324,16 @@ public class DatabaseSeeder implements CommandLineRunner {
 	}
 
 	private void seedGrades() {
-		createGradeIfNotExist("Grade A Data", "GRADE_A", "Grade A high-quality lead data", 1);
-		createGradeIfNotExist("Grade B Data", "GRADE_B", "Grade B standard lead data", 2);
-		createGradeIfNotExist("Grade C Data", "GRADE_C", "Grade C average lead data", 3);
-		createGradeIfNotExist("Grade D Data", "GRADE_D", "Grade D low priority lead data", 4);
+		createGradeIfNotExist("Grade 9", "GRADE_9", "9th Grade / High School Freshman", 1);
+		createGradeIfNotExist("Grade 10", "GRADE_10", "10th Grade / Secondary School", 2);
+		createGradeIfNotExist("Grade 11", "GRADE_11", "11th Grade / Higher Secondary 1st Year", 3);
+		createGradeIfNotExist("Grade 12", "GRADE_12", "12th Grade / Higher Secondary Senior", 4);
+		createGradeIfNotExist("Undergraduate", "UG", "Bachelor Degree Aspirant / Student", 5);
 	}
 
 	private void createGradeIfNotExist(String name, String code, String description, int displayOrder) {
 		if (!gradeRepository.findByCodeIgnoreCase(code).isPresent()) {
-			com.app.datadistribution.entity.Grade grade = com.app.datadistribution.entity.Grade.builder()
+			Grade grade = Grade.builder()
 					.name(name)
 					.code(code)
 					.description(description)
@@ -382,17 +347,20 @@ public class DatabaseSeeder implements CommandLineRunner {
 
 	private void seedDashboardCards() {
 		Set<com.app.datadistribution.entity.Role> allRoles = new HashSet<>(roleRepository.findAll());
-		createCardIfNotExist("TOTAL_LEADS", "Total Leads", "Total leads in scope", "SUMMARY", "METRIC", "trending_up", 1, allRoles);
-		createCardIfNotExist("TOTAL_FOLLOWUPS_TODAY", "Follow-Ups Scheduled Today", "Follow-ups scheduled today", "SUMMARY", "METRIC", "calendar_today", 2, allRoles);
-		createCardIfNotExist("TOTAL_COUNSELLORS_LOGGED_TODAY", "Counsellors Logged Today", "Total counsellors logged in today", "SUMMARY", "METRIC", "people", 3, allRoles);
-		createCardIfNotExist("TOTAL_COUNSELLORS_WORKING", "Counsellors Currently Working", "Active counsellors working in last 8 hours", "SUMMARY", "METRIC", "badge", 4, allRoles);
-		createCardIfNotExist("CONVERSATION_RATIO", "Conversation Ratio", "Feedback count to total lead ratio", "SUMMARY", "METRIC", "bar_chart", 5, allRoles);
-		createCardIfNotExist("LEAD_STATUS_GROUP", "Lead Status Distribution", "Dynamic lead breakdown by status", "LEAD_STATUS", "GROUP_CHART", "pie_chart", 6, allRoles);
-		createCardIfNotExist("LEAD_SOURCE_GROUP", "Lead Source Distribution", "Dynamic lead breakdown by source", "LEAD_SOURCE", "GROUP_CHART", "source", 7, allRoles);
-		createCardIfNotExist("BOARD_GROUP", "Board Wise Overview", "Dynamic lead breakdown by board", "BOARD", "GROUP_CHART", "school", 8, allRoles);
-		createCardIfNotExist("GRADE_GROUP", "Grade Wise Overview", "Dynamic lead breakdown by grade", "GRADE", "GROUP_CHART", "grade", 9, allRoles);
-		createCardIfNotExist("COURSE_GROUP", "Course Wise Overview", "Dynamic lead breakdown by course", "COURSE", "GROUP_CHART", "book", 10, allRoles);
-		createCardIfNotExist("COURSE_TYPE_GROUP", "Course Type Wise Overview", "Dynamic lead breakdown by course type", "COURSE_TYPE", "GROUP_CHART", "category", 11, allRoles);
+
+		createCardIfNotExist("TOTAL_LEADS", "Total System Leads", "Summary of total recorded active leads", "OVERVIEW", "STAT_CARD", "users", 1, allRoles);
+		createCardIfNotExist("NEW_LEADS_TODAY", "Today's New Inbound Leads", "Count of leads created today", "OVERVIEW", "STAT_CARD", "user-plus", 2, allRoles);
+		createCardIfNotExist("HOT_LEADS_COUNT", "Hot Leads Count", "Leads with HOT_LEAD status", "OVERVIEW", "STAT_CARD", "flame", 3, allRoles);
+		createCardIfNotExist("CONVERSION_RATE", "Overall Lead Conversion Rate", "Percentage of registered leads against total", "OVERVIEW", "STAT_CARD", "trending-up", 4, allRoles);
+
+		createCardIfNotExist("LEAD_STATUS_DISTRIBUTION", "Lead Status Breakdown", "Distribution of leads by current status", "ANALYTICS", "PIE_CHART", "pie-chart", 5, allRoles);
+		createCardIfNotExist("LEAD_SOURCE_DISTRIBUTION", "Lead Source Breakdown", "Distribution of leads by inbound channel", "ANALYTICS", "BAR_CHART", "bar-chart-2", 6, allRoles);
+		createCardIfNotExist("COURSE_INTEREST_BREAKDOWN", "Course Interest Breakdown", "Leads grouped by interested courses", "ANALYTICS", "DONUT_CHART", "disc", 7, allRoles);
+		createCardIfNotExist("BOARD_GRADE_DISTRIBUTION", "Board & Grade Breakdown", "Leads grouped by education board & grade", "ANALYTICS", "BAR_CHART", "layers", 8, allRoles);
+
+		createCardIfNotExist("PENDING_FOLLOW_UPS", "Pending Follow-Ups", "Actionable pending follow-up schedules", "OPERATIONS", "LIST", "calendar", 9, allRoles);
+		createCardIfNotExist("TODAY_FOLLOW_UPS", "Today's Scheduled Follow-Ups", "Follow-ups due for contact today", "OPERATIONS", "LIST", "clock", 10, allRoles);
+		createCardIfNotExist("OVERDUE_FOLLOW_UPS", "Overdue Follow-Ups Alert", "Follow-ups past their scheduled time", "OPERATIONS", "LIST", "alert-circle", 11, allRoles);
 		createCardIfNotExist("RECENT_ACTIVITY", "Recent System Activity", "Recent status changes and feedback logs", "ACTIVITY", "LIST", "history", 12, allRoles);
 	}
 
@@ -416,4 +384,3 @@ public class DatabaseSeeder implements CommandLineRunner {
 		}
 	}
 }
-

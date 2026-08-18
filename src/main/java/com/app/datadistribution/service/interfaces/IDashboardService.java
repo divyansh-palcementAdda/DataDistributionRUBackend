@@ -8,14 +8,31 @@ import java.util.List;
 import java.util.UUID;
 
 public interface IDashboardService {
-    DashboardSummaryDTO getDashboardSummary(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException;
-    List<GroupCountDTO> getLeadStatusBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<GroupCountDTO> getLeadSourceBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<GroupCountDTO> getBoardBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<GroupCountDTO> getGradeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<GroupCountDTO> getCourseBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
-    List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException;
+    DashboardAnalyticsResponseDTO getAnalytics(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+
+    DashboardSummaryDTO getDashboardSummary(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    DashboardSummaryDTO getDashboardSummary(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getLeadStatusBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getLeadStatusBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getLeadSourceBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getLeadSourceBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getBoardBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getBoardBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getGradeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getGradeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getCourseBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getCourseBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
+    List<GroupCountDTO> getCourseTypeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
     List<Object> getRecentActivity() throws UnauthorizedException;
 
     List<UserDashboardPreferenceDTO> getUserPreferences() throws UnauthorizedException;

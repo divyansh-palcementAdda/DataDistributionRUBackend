@@ -1,0 +1,321 @@
+package com.app.datadistribution.repository;
+
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsResponseDTO;
+import com.app.datadistribution.dto.dashboard.GroupCountDTO;
+import com.app.datadistribution.entity.*;
+import com.app.datadistribution.enums.DashboardGroupBy;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Repository;
+
+@Slf4j
+@Repository
+@RequiredArgsConstructor
+public class DashboardAnalyticsRepository {
+
+    private final EntityManager entityManager;
+    private final IUserDataScopeService dataScopeService;
+
+    public DashboardAnalyticsResponseDTO fetchAnalytics(User user, Object legacyScope, DashboardAnalyticsFilterRequest filter) {
+        UserDataScope dataScope = dataScopeService.getScopeForUser(user);
+        DashboardGroupBy groupBy = filter.getGroupBy() != null ? filter.getGroupBy() : DashboardGroupBy.LEAD_STATUS;
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+
+        // 1. Build Total Count Query for distinct matching leads
+        long totalMatchingLeads = fetchTotalMatchingLeads(dataScope, filter);
+
+        // 2. Build Group By Query
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Lead> root = query.from(Lead.class);
+
+        List<Predicate> predicates = buildFilterPredicates(cb, root, dataScope, filter);
+        query.where(predicates.toArray(new Predicate[0]));
+
+        Path<UUID> idPath = null;
+        Path<String> namePath = null;
+        Path<String> codePath = null;
+        Expression<String> concatNameExpr = null;
+
+        switch (groupBy) {
+            case LEAD_STATUS: {
+                Join<Lead, LeadStatus> join = root.join("currentStatus", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case LEAD_SOURCE: {
+                SetJoin<Lead, LeadSource> join = root.joinSet("leadSources", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case COURSE: {
+                SetJoin<Lead, Course> join = root.joinSet("interestedCourses", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("courseName");
+                codePath = join.get("courseCode");
+                break;
+            }
+            case REGISTERED_COURSE: {
+                Join<Lead, Course> join = root.join("course", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("courseName");
+                codePath = join.get("courseCode");
+                break;
+            }
+            case COURSE_TYPE: {
+                SetJoin<Lead, Course> courseJoin = root.joinSet("interestedCourses", JoinType.INNER);
+                Join<Course, CourseType> courseTypeJoin = courseJoin.join("courseType", JoinType.INNER);
+                predicates.add(cb.equal(courseJoin.get("isDeleted"), false));
+                predicates.add(cb.equal(courseTypeJoin.get("isDeleted"), false));
+                idPath = courseTypeJoin.get("id");
+                namePath = courseTypeJoin.get("name");
+                break;
+            }
+            case BOARD: {
+                Join<Lead, Board> join = root.join("board", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case GRADE: {
+                Join<Lead, Grade> join = root.join("grade", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case DEPARTMENT: {
+                Join<Lead, Department> join = root.join("department", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case ASSIGNED_USER: {
+                Join<Lead, User> join = root.join("assignedTo", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                concatNameExpr = cb.concat(cb.concat(join.get("firstName"), " "), join.get("lastName"));
+                codePath = join.get("username");
+                break;
+            }
+        }
+
+        query.where(predicates.toArray(new Predicate[0]));
+
+        Expression<Long> countExpr = cb.countDistinct(root.get("id"));
+
+        if (concatNameExpr != null) {
+            query.select(cb.tuple(idPath.alias("id"), concatNameExpr.alias("name"), codePath.alias("code"), countExpr.alias("count")));
+            query.groupBy(idPath, concatNameExpr, codePath);
+        } else if (codePath != null) {
+            query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), codePath.alias("code"), countExpr.alias("count")));
+            query.groupBy(idPath, namePath, codePath);
+        } else {
+            query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), countExpr.alias("count")));
+            query.groupBy(idPath, namePath);
+        }
+
+        // Sorting
+        String sortBy = filter.getSortBy() != null ? filter.getSortBy().toUpperCase() : "COUNT";
+        String sortDir = filter.getSortDirection() != null ? filter.getSortDirection().toUpperCase() : ("COUNT".equals(sortBy) ? "DESC" : "ASC");
+        boolean isAsc = "ASC".equals(sortDir);
+
+        if ("NAME".equals(sortBy)) {
+            Expression<String> sortName = concatNameExpr != null ? concatNameExpr : namePath;
+            query.orderBy(isAsc ? cb.asc(sortName) : cb.desc(sortName));
+        } else if ("CODE".equals(sortBy) && codePath != null) {
+            query.orderBy(isAsc ? cb.asc(codePath) : cb.desc(codePath));
+        } else {
+            query.orderBy(isAsc ? cb.asc(countExpr) : cb.desc(countExpr));
+        }
+
+        TypedQuery<Tuple> typedQuery = entityManager.createQuery(query);
+
+        // Pagination
+        Integer page = filter.getPage();
+        Integer pageSize = filter.getEffectivePageSize();
+        if (page != null && page >= 0 && pageSize != null && pageSize > 0) {
+            typedQuery.setFirstResult(page * pageSize);
+            typedQuery.setMaxResults(pageSize);
+        }
+
+        List<Tuple> tuples = typedQuery.getResultList();
+
+        List<GroupCountDTO> groupData = new ArrayList<>();
+        for (Tuple t : tuples) {
+            UUID id = t.get("id", UUID.class);
+            String name = t.get("name", String.class);
+            String code = null;
+            try {
+                code = t.get("code", String.class);
+            } catch (IllegalArgumentException ignored) {}
+
+            long count = t.get("count", Long.class);
+            double pct = totalMatchingLeads > 0 ? ((double) count / totalMatchingLeads) * 100.0 : 0.0;
+
+            groupData.add(GroupCountDTO.builder()
+                    .id(id)
+                    .name(name)
+                    .code(code)
+                    .count(count)
+                    .percentage(Math.round(pct * 100.0) / 100.0)
+                    .build());
+        }
+
+        Integer totalPages = null;
+        if (pageSize != null && pageSize > 0) {
+            totalPages = (int) Math.ceil((double) totalMatchingLeads / pageSize);
+        }
+
+        return DashboardAnalyticsResponseDTO.builder()
+                .groupBy(groupBy.name())
+                .data(groupData)
+                .total(totalMatchingLeads)
+                .page(page)
+                .pageSize(pageSize)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    private long fetchTotalMatchingLeads(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<Lead> root = query.from(Lead.class);
+
+        List<Predicate> predicates = buildFilterPredicates(cb, root, dataScope, filter);
+        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
+
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    private List<Predicate> buildFilterPredicates(CriteriaBuilder cb, Root<Lead> root, UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
+        List<Predicate> predicates = new ArrayList<>();
+
+        // Base soft delete check
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+
+        // Centralized Data Scope predicate
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            predicates.add(cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownDataPredicate = cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            );
+            if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                Predicate deptLeadPredicate = root.get("department").get("id").in(dataScope.getDepartmentIds());
+                Predicate deptUserPredicate = root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds());
+                predicates.add(cb.or(ownDataPredicate, deptLeadPredicate, deptUserPredicate));
+            } else {
+                predicates.add(ownDataPredicate);
+            }
+        }
+
+        // Date Range
+        LocalDate start = filter.getEffectiveStartDate();
+        LocalDate end = filter.getEffectiveEndDate();
+        if (start != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), start.atStartOfDay()));
+        }
+        if (end != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), end.atTime(LocalTime.MAX)));
+        }
+
+        // Department Filter (Intersect requested departmentIds with user data scope)
+        if (filter.getDepartmentIds() != null && !filter.getDepartmentIds().isEmpty()) {
+            Set<UUID> allowedDepts = new HashSet<>(filter.getDepartmentIds());
+            if (!dataScope.isAdmin()) {
+                allowedDepts.retainAll(dataScope.getDepartmentIds() != null ? dataScope.getDepartmentIds() : Collections.emptySet());
+            }
+            if (allowedDepts.isEmpty()) {
+                predicates.add(cb.disjunction());
+            } else {
+                predicates.add(root.get("department").get("id").in(allowedDepts));
+            }
+        }
+
+        // Multi-value Status filter
+        if (filter.getLeadStatusIds() != null && !filter.getLeadStatusIds().isEmpty()) {
+            predicates.add(root.get("currentStatus").get("id").in(filter.getLeadStatusIds()));
+        }
+
+        // Multi-value Board filter
+        if (filter.getBoardIds() != null && !filter.getBoardIds().isEmpty()) {
+            predicates.add(root.get("board").get("id").in(filter.getBoardIds()));
+        }
+
+        // Multi-value Grade filter
+        if (filter.getGradeIds() != null && !filter.getGradeIds().isEmpty()) {
+            predicates.add(root.get("grade").get("id").in(filter.getGradeIds()));
+        }
+
+        // Multi-value Assigned User filter
+        if (filter.getAssignedUserIds() != null && !filter.getAssignedUserIds().isEmpty()) {
+            predicates.add(root.get("assignedTo").get("id").in(filter.getAssignedUserIds()));
+        }
+
+        // Multi-value Created By User filter
+        if (filter.getCreatedByUserIds() != null && !filter.getCreatedByUserIds().isEmpty()) {
+            predicates.add(root.get("createdByUser").get("id").in(filter.getCreatedByUserIds()));
+        }
+
+        // Multi-value Registered Course filter
+        if (filter.getRegisteredCourseIds() != null && !filter.getRegisteredCourseIds().isEmpty()) {
+            predicates.add(root.get("course").get("id").in(filter.getRegisteredCourseIds()));
+        }
+
+        // Multi-value Lead Source filter
+        if (filter.getLeadSourceIds() != null && !filter.getLeadSourceIds().isEmpty()) {
+            SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", JoinType.INNER);
+            predicates.add(cb.equal(sourceJoin.get("isDeleted"), false));
+            predicates.add(sourceJoin.get("id").in(filter.getLeadSourceIds()));
+        }
+
+        // Multi-value Interested Course filter
+        if (filter.getCourseIds() != null && !filter.getCourseIds().isEmpty()) {
+            SetJoin<Lead, Course> courseJoin = root.joinSet("interestedCourses", JoinType.INNER);
+            predicates.add(cb.equal(courseJoin.get("isDeleted"), false));
+            predicates.add(courseJoin.get("id").in(filter.getCourseIds()));
+        }
+
+        // Multi-value Course Type filter
+        if (filter.getCourseTypeIds() != null && !filter.getCourseTypeIds().isEmpty()) {
+            SetJoin<Lead, Course> interestedJoin = root.joinSet("interestedCourses", JoinType.LEFT);
+            Join<Lead, Course> registeredJoin = root.join("course", JoinType.LEFT);
+            predicates.add(cb.or(
+                    interestedJoin.join("courseType", JoinType.LEFT).get("id").in(filter.getCourseTypeIds()),
+                    registeredJoin.join("courseType", JoinType.LEFT).get("id").in(filter.getCourseTypeIds())
+            ));
+        }
+
+        return predicates;
+    }
+}

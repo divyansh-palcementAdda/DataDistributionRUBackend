@@ -1,11 +1,14 @@
 package com.app.datadistribution.dto.user;
 
+import com.app.datadistribution.enums.HodAccessType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,6 +46,9 @@ public class UserUpdateRequest {
     private String password; // optional for updates
     private String profileImage;
     private String department;
+
+    private List<UUID> departmentIds;
+    private HodAccessType hodAccessType;
 
     @NotEmpty(message = "At least one role must be specified")
     private Set<String> roles;

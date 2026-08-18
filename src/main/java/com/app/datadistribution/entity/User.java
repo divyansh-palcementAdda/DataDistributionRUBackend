@@ -1,9 +1,12 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
+import com.app.datadistribution.enums.HodAccessType;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
@@ -67,6 +70,10 @@ public class User extends BaseEntity {
     @Builder.Default
     private Long tokenVersion = 1L;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hod_access_type", length = 50)
+    private HodAccessType hodAccessType;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "user_roles",
@@ -76,4 +83,13 @@ public class User extends BaseEntity {
     @JsonManagedReference
     @Builder.Default
     private Set<Role> roles = new HashSet<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_departments",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "department_id")
+    )
+    @Builder.Default
+    private Set<Department> departments = new HashSet<>();
 }

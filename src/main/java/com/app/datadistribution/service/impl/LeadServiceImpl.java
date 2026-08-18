@@ -3,12 +3,17 @@ package com.app.datadistribution.service.impl;
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.lead.*;
 import com.app.datadistribution.entity.*;
+import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.*;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.ILeadService;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+import jakarta.persistence.Tuple;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,10 +39,12 @@ public class LeadServiceImpl implements ILeadService {
     private final LeadStatusRepository leadStatusRepository;
     private final BoardRepository boardRepository;
     private final GradeRepository gradeRepository;
+    private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
     private final LeadFeedbackRepository leadFeedbackRepository;
     private final CourseRepository courseRepository;
+    private final IUserDataScopeService dataScopeService;
     private final LeadMapper leadMapper;
 
     private static final Set<String> ALLOWED_LEAD_SORT_FIELDS = Set.of(
@@ -51,12 +58,24 @@ public class LeadServiceImpl implements ILeadService {
         User currentUser = getCurrentUserEntity();
         
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
+        Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
 
         User assignedTo = null;
         if (request.getAssignedToUserId() != null) {
             assignedTo = userRepository.findById(request.getAssignedToUserId())
                     .filter(u -> !u.isDeleted())
                     .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + request.getAssignedToUserId()));
+        }
+
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId())
+                    .filter(d -> !d.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Department not found with id: " + request.getDepartmentId()));
+        }
+
+        if (assignedTo != null && department != null) {
+            validateLeadAssignmentDepartment(assignedTo, department);
         }
 
         String leadCode = request.getLeadCode();
@@ -66,11 +85,12 @@ public class LeadServiceImpl implements ILeadService {
             throw new BadRequestException("Lead code already exists: " + leadCode);
         }
 
+        UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
         Course course = null;
-        if (request.getCourseId() != null) {
-            course = courseRepository.findById(request.getCourseId())
+        if (regCourseId != null) {
+            course = courseRepository.findById(regCourseId)
                     .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getCourseId()));
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + regCourseId));
         }
 
         Board board = null;
@@ -92,18 +112,19 @@ public class LeadServiceImpl implements ILeadService {
         Lead lead = leadMapper.toEntity(request);
         lead.setLeadCode(leadCode);
         lead.setLeadSources(sources);
+        lead.setInterestedCourses(interestedCourses);
         lead.setAssignedTo(assignedTo);
         lead.setCreatedByUser(currentUser);
         lead.setCourse(course);
         lead.setBoard(board);
         lead.setGrade(grade);
+        lead.setDepartment(department);
         lead.setCurrentStatus(initialStatus);
         lead.setActive(true);
 
         Lead saved = leadRepository.save(lead);
         log.info("Created lead: {} ({})", saved.getFullName(), saved.getLeadCode());
 
-        // Create initial status history trail
         LeadStatusHistory initialHistory = LeadStatusHistory.builder()
                 .lead(saved)
                 .previousStatus(null)
@@ -125,6 +146,11 @@ public class LeadServiceImpl implements ILeadService {
 
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
 
+        if (request.getInterestedCourseIds() != null) {
+            Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
+            lead.setInterestedCourses(interestedCourses);
+        }
+
         User assignedTo = null;
         if (request.getAssignedToUserId() != null) {
             assignedTo = userRepository.findById(request.getAssignedToUserId())
@@ -132,11 +158,23 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + request.getAssignedToUserId()));
         }
 
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId())
+                    .filter(d -> !d.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Department not found with id: " + request.getDepartmentId()));
+        }
+
+        if (assignedTo != null && department != null) {
+            validateLeadAssignmentDepartment(assignedTo, department);
+        }
+
+        UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
         Course course = null;
-        if (request.getCourseId() != null) {
-            course = courseRepository.findById(request.getCourseId())
+        if (regCourseId != null) {
+            course = courseRepository.findById(regCourseId)
                     .filter(c -> !c.isDeleted())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getCourseId()));
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + regCourseId));
         }
 
         Board board = null;
@@ -175,6 +213,9 @@ public class LeadServiceImpl implements ILeadService {
         lead.setCourse(course);
         lead.setBoard(board);
         lead.setGrade(grade);
+        if (department != null) {
+            lead.setDepartment(department);
+        }
         lead.setActive(request.isActive());
         if (request.getNextFollowUpDate() != null) {
             lead.setNextFollowUpDate(request.getNextFollowUpDate());
@@ -196,7 +237,9 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) {
+    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+
         String sortBy = pageRequest.getSortBy();
         if (sortBy == null || !ALLOWED_LEAD_SORT_FIELDS.contains(sortBy)) {
             sortBy = "createdAt";
@@ -207,11 +250,27 @@ public class LeadServiceImpl implements ILeadService {
         Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, sortBy));
 
         Specification<Lead> spec = Specification.where(isNotDeleted());
+
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            spec = spec.and(filterByAssignedOrCreatedUser(dataScope.getUserId()));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            spec = spec.and(filterByDepartmentScope(dataScope.getDepartmentIds(), dataScope.getDepartmentUserIds(), dataScope.getUserId()));
+        }
+
         if (leadSourceIds != null && !leadSourceIds.isEmpty()) {
             spec = spec.and(filterBySources(leadSourceIds));
         }
         if (courseId != null) {
             spec = spec.and(filterByCourse(courseId));
+        }
+        if (interestedCourseIds != null && !interestedCourseIds.isEmpty()) {
+            spec = spec.and(filterByInterestedCourses(interestedCourseIds));
+        }
+        if (registeredCourseId != null) {
+            spec = spec.and(filterByCourse(registeredCourseId));
+        }
+        if (courseTypeId != null) {
+            spec = spec.and(filterByCourseType(courseTypeId));
         }
         if (Boolean.TRUE.equals(withoutCourse)) {
             spec = spec.and(filterWithoutCourse());
@@ -252,6 +311,62 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
+    public LeadResponse addInterestedCourses(UUID leadId, List<UUID> courseIds) {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        Set<Course> coursesToAdd = resolveCourses(courseIds);
+        if (lead.getInterestedCourses() == null) {
+            lead.setInterestedCourses(new HashSet<>());
+        }
+        lead.getInterestedCourses().addAll(coursesToAdd);
+
+        Lead updated = leadRepository.save(lead);
+        log.info("Added {} interested courses to lead {}", coursesToAdd.size(), lead.getLeadCode());
+        return leadMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse removeInterestedCourse(UUID leadId, UUID courseId) {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        if (lead.getInterestedCourses() != null) {
+            lead.getInterestedCourses().removeIf(c -> c.getId().equals(courseId));
+        }
+
+        Lead updated = leadRepository.save(lead);
+        log.info("Removed interested course {} from lead {}", courseId, lead.getLeadCode());
+        return leadMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse registerCourse(UUID leadId, UUID courseId) {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> !c.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + courseId));
+
+        lead.setCourse(course);
+        if (lead.getInterestedCourses() == null) {
+            lead.setInterestedCourses(new HashSet<>());
+        }
+        lead.getInterestedCourses().add(course);
+
+        Lead updated = leadRepository.save(lead);
+        log.info("Registered lead {} in course {}", lead.getLeadCode(), course.getCourseName());
+        return leadMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
     public void deleteLead(UUID id) {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
@@ -274,48 +389,40 @@ public class LeadServiceImpl implements ILeadService {
 
         LeadStatus newStatus = resolveNewStatus(request);
         User currentUser = getCurrentUserEntity();
+
         LeadStatus oldStatus = lead.getCurrentStatus();
+        lead.setCurrentStatus(newStatus);
+        Lead updated = leadRepository.save(lead);
 
-        if (oldStatus != null && oldStatus.getId().equals(newStatus.getId())) {
-            return leadMapper.toDto(lead);
-        }
-
-        // 1. Save LeadStatusHistory
-        LeadStatusHistory statusHistory = LeadStatusHistory.builder()
-                .lead(lead)
+        LeadStatusHistory history = LeadStatusHistory.builder()
+                .lead(updated)
                 .previousStatus(oldStatus)
                 .newStatus(newStatus)
                 .changedByUser(currentUser)
                 .feedback(request.getFeedback())
                 .build();
-        leadStatusHistoryRepository.save(statusHistory);
+        leadStatusHistoryRepository.save(history);
 
-        // 2. Save LeadFeedback
         LeadFeedback feedback = LeadFeedback.builder()
-                .lead(lead)
+                .lead(updated)
+                .createdByUser(currentUser)
                 .feedback(request.getFeedback())
                 .statusAtTime(newStatus)
-                .createdByUser(currentUser)
                 .build();
         leadFeedbackRepository.save(feedback);
 
-        // 3. Update Lead
-        lead.setCurrentStatus(newStatus);
-        lead.setLastContactedAt(LocalDateTime.now());
-        Lead saved = leadRepository.save(lead);
-
-        log.info("Lead status changed for {}: {} -> {}", lead.getLeadCode(),
-                oldStatus != null ? oldStatus.getName() : "None", newStatus.getName());
-        return leadMapper.toDto(saved);
+        return leadMapper.toDto(updated);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) {
-        if (!leadRepository.existsById(leadId)) {
-            throw new ResourcesNotFoundException("Lead not found with id: " + leadId);
-        }
-        return leadStatusHistoryRepository.findByLeadIdOrderByCreatedAtDesc(leadId).stream()
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        List<LeadStatusHistory> histories = leadStatusHistoryRepository.findByLeadIdOrderByCreatedAtDesc(lead.getId());
+        return histories.stream()
                 .map(leadMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -324,20 +431,17 @@ public class LeadServiceImpl implements ILeadService {
     @Transactional(readOnly = true)
     public List<LeadSourceStatsResponse> getSourceWiseStats() {
         List<Object[]> results = leadRepository.countBySource();
-        long totalLeads = results.stream().mapToLong(r -> (Long) r[1]).sum();
-
         List<LeadSourceStatsResponse> stats = new ArrayList<>();
-        for (Object[] result : results) {
-            LeadSource source = (LeadSource) result[0];
-            long count = (Long) result[1];
-            double percentage = totalLeads > 0 ? (count * 100.0) / totalLeads : 0.0;
-
-            stats.add(LeadSourceStatsResponse.builder()
-                    .sourceId(source != null ? source.getId() : null)
-                    .sourceName(source != null ? source.getName() : "Unknown")
-                    .count(count)
-                    .percentage(percentage)
-                    .build());
+        for (Object[] row : results) {
+            LeadSource source = (LeadSource) row[0];
+            Long count = (Long) row[1];
+            if (source != null) {
+                stats.add(LeadSourceStatsResponse.builder()
+                        .sourceId(source.getId())
+                        .sourceName(source.getName())
+                        .count(count)
+                        .build());
+            }
         }
         return stats;
     }
@@ -347,13 +451,17 @@ public class LeadServiceImpl implements ILeadService {
     public Map<String, Long> getStatusWiseStats() {
         List<Object[]> results = leadRepository.countByStatus();
         Map<String, Long> stats = new HashMap<>();
-        for (Object[] result : results) {
-            LeadStatus status = (LeadStatus) result[0];
-            long count = (Long) result[1];
-            stats.put(status != null ? status.getName() : "Unknown", count);
+        for (Object[] row : results) {
+            LeadStatus status = (LeadStatus) row[0];
+            Long count = (Long) row[1];
+            if (status != null) {
+                stats.put(status.getCode(), count);
+            }
         }
         return stats;
     }
+
+    // --- Helper Methods & Specifications ---
 
     private User getCurrentUserEntity() throws UnauthorizedException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -365,29 +473,95 @@ public class LeadServiceImpl implements ILeadService {
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
     }
 
-    private Set<LeadSource> resolveLeadSources(List<UUID> leadSourceIds) {
-        Set<LeadSource> sources = new HashSet<>();
-        if (leadSourceIds == null || leadSourceIds.isEmpty()) {
-            return sources;
+    private void validateLeadAssignmentDepartment(User user, Department department) {
+        if (user.getRoles() != null && user.getRoles().stream().anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()))) {
+            return;
         }
-        for (UUID sourceId : leadSourceIds) {
-            if (sourceId == null) continue;
-            LeadSource source = leadSourceRepository.findById(sourceId)
+        if (user.getDepartments() != null && !user.getDepartments().isEmpty()) {
+            boolean matches = user.getDepartments().stream().anyMatch(d -> d.getId().equals(department.getId()));
+            if (!matches) {
+                log.warn("Assigned user {} is not mapped to lead department {}", user.getUsername(), department.getName());
+            }
+        }
+    }
+
+    private Set<LeadSource> resolveLeadSources(List<UUID> leadSourceIds) {
+        if (leadSourceIds == null || leadSourceIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<LeadSource> sources = new HashSet<>();
+        for (UUID id : leadSourceIds) {
+            LeadSource source = leadSourceRepository.findById(id)
                     .filter(s -> !s.isDeleted())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Lead source not found with id: " + sourceId));
+                    .orElseThrow(() -> new ResourcesNotFoundException("Lead source not found with id: " + id));
             sources.add(source);
         }
         return sources;
+    }
+
+    private Set<Course> resolveCourses(List<UUID> courseIds) {
+        if (courseIds == null || courseIds.isEmpty()) {
+            return new HashSet<>();
+        }
+        Set<Course> courses = new HashSet<>();
+        for (UUID id : courseIds) {
+            Course course = courseRepository.findById(id)
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + id));
+            courses.add(course);
+        }
+        return courses;
     }
 
     private Specification<Lead> isNotDeleted() {
         return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
     }
 
-    private Specification<Lead> filterBySources(List<UUID> sourceIds) {
+    private Specification<Lead> filterByAssignedOrCreatedUser(UUID userId) {
+        return (root, query, cb) -> cb.or(
+                cb.equal(root.get("assignedTo").get("id"), userId),
+                cb.equal(root.get("createdByUser").get("id"), userId)
+        );
+    }
+
+    private Specification<Lead> filterByDepartmentScope(Set<UUID> departmentIds, Set<UUID> departmentUserIds, UUID currentUserId) {
+        return (root, query, cb) -> {
+            jakarta.persistence.criteria.Predicate ownData = cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), currentUserId),
+                    cb.equal(root.get("createdByUser").get("id"), currentUserId)
+            );
+            if (departmentIds == null || departmentIds.isEmpty()) {
+                return ownData;
+            }
+            jakarta.persistence.criteria.Predicate deptLead = root.get("department").get("id").in(departmentIds);
+            jakarta.persistence.criteria.Predicate deptUser = root.get("assignedTo").get("id").in(departmentUserIds);
+            return cb.or(ownData, deptLead, deptUser);
+        };
+    }
+
+    private Specification<Lead> filterBySources(List<UUID> leadSourceIds) {
         return (root, query, cb) -> {
             query.distinct(true);
-            return root.join("leadSources").get("id").in(sourceIds);
+            return root.join("leadSources", jakarta.persistence.criteria.JoinType.INNER).get("id").in(leadSourceIds);
+        };
+    }
+
+    private Specification<Lead> filterByInterestedCourses(List<UUID> interestedCourseIds) {
+        return (root, query, cb) -> {
+            query.distinct(true);
+            return root.join("interestedCourses", jakarta.persistence.criteria.JoinType.INNER).get("id").in(interestedCourseIds);
+        };
+    }
+
+    private Specification<Lead> filterByCourseType(UUID courseTypeId) {
+        return (root, query, cb) -> {
+            query.distinct(true);
+            jakarta.persistence.criteria.Join<Object, Object> interestedJoin = root.join("interestedCourses", jakarta.persistence.criteria.JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Object, Object> registeredJoin = root.join("course", jakarta.persistence.criteria.JoinType.LEFT);
+            return cb.or(
+                    cb.equal(interestedJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id"), courseTypeId),
+                    cb.equal(registeredJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id"), courseTypeId)
+            );
         };
     }
 

@@ -18,4 +18,5 @@ public class CourseSummaryDTO {
     private String courseName;
     private String courseCode;
     private Status status;
+    private CourseTypeResponseDTO courseType;
 }

@@ -28,6 +28,7 @@ public class LeadController {
     private final ILeadFeedbackService leadFeedbackService;
     private final ILeadFollowUpService leadFollowUpService;
     private final ILeadAssignmentService leadAssignmentService;
+    private final ICourseTemplateService courseTemplateService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('LEAD_CREATE')")
@@ -58,7 +59,7 @@ public class LeadController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('LEAD_READ')")
-    @Operation(summary = "Get list of leads with pagination, sorting, search, source, status, and course filtering")
+    @Operation(summary = "Get list of leads with pagination, sorting, search, source, status, course, interested courses, and course type filtering")
     public ResponseEntity<ApiResponse<LeadPageResponse>> getAllLeads(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
@@ -68,13 +69,16 @@ public class LeadController {
             @RequestParam(value = "sourceId", required = false) UUID sourceId,
             @RequestParam(value = "leadSourceIds", required = false) List<UUID> leadSourceIds,
             @RequestParam(value = "courseId", required = false) UUID courseId,
+            @RequestParam(value = "interestedCourseIds", required = false) List<UUID> interestedCourseIds,
+            @RequestParam(value = "registeredCourseId", required = false) UUID registeredCourseId,
+            @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
             @RequestParam(value = "withoutCourse", required = false) Boolean withoutCourse,
             @RequestParam(value = "statusId", required = false) UUID statusId,
             @RequestParam(value = "statusIds", required = false) List<UUID> statusIds,
             @RequestParam(value = "boardId", required = false) UUID boardId,
             @RequestParam(value = "boardIds", required = false) List<UUID> boardIds,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
-            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) {
+            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) throws UnauthorizedException {
 
         List<UUID> sourceIdsToFilter = leadSourceIds;
         if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
@@ -89,7 +93,7 @@ public class LeadController {
                 .search(search)
                 .build();
 
-        LeadPageResponse response = leadService.getAllLeads(pageRequest, sourceIdsToFilter, courseId, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds);
+        LeadPageResponse response = leadService.getAllLeads(pageRequest, sourceIdsToFilter, courseId, interestedCourseIds, registeredCourseId, courseTypeId, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds);
         return ResponseEntity.ok(ApiResponse.success("Leads retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -197,5 +201,54 @@ public class LeadController {
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStatusWiseStats() {
         Map<String, Long> response = leadService.getStatusWiseStats();
         return ResponseEntity.ok(ApiResponse.success("Status-wise lead statistics retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/interested-courses")
+    @PreAuthorize("hasAuthority('LEAD_INTERESTED_COURSE_UPDATE') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Add interested courses to a lead")
+    public ResponseEntity<ApiResponse<LeadResponse>> addInterestedCourses(
+            @PathVariable("id") UUID id,
+            @RequestBody Map<String, List<UUID>> requestBody) {
+        List<UUID> courseIds = requestBody != null ? requestBody.get("courseIds") : null;
+        LeadResponse response = leadService.addInterestedCourses(id, courseIds);
+        return ResponseEntity.ok(ApiResponse.success("Interested courses added to lead successfully", response, HttpStatus.OK.value()));
+    }
+
+    @DeleteMapping("/{id}/interested-courses/{courseId}")
+    @PreAuthorize("hasAuthority('LEAD_INTERESTED_COURSE_UPDATE') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Remove an interested course from a lead")
+    public ResponseEntity<ApiResponse<LeadResponse>> removeInterestedCourse(
+            @PathVariable("id") UUID id,
+            @PathVariable("courseId") UUID courseId) {
+        LeadResponse response = leadService.removeInterestedCourse(id, courseId);
+        return ResponseEntity.ok(ApiResponse.success("Interested course removed from lead successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/register-course/{courseId}")
+    @PreAuthorize("hasAuthority('LEAD_REGISTERED_COURSE_UPDATE') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Register lead in a specific course")
+    public ResponseEntity<ApiResponse<LeadResponse>> registerCourse(
+            @PathVariable("id") UUID id,
+            @PathVariable("courseId") UUID courseId) {
+        LeadResponse response = leadService.registerCourse(id, courseId);
+        return ResponseEntity.ok(ApiResponse.success("Lead registered in course successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/{id}/course-templates")
+    @PreAuthorize("hasAuthority('COURSE_TEMPLATE_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get course templates applicable for a lead")
+    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO>>> getCourseTemplatesForLead(@PathVariable("id") UUID id) {
+        List<com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO> response = courseTemplateService.getTemplatesForLead(id);
+        return ResponseEntity.ok(ApiResponse.success("Applicable course templates retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/send-template/{templateId}")
+    @PreAuthorize("hasAuthority('COURSE_TEMPLATE_SEND') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Send a course template to a lead")
+    public ResponseEntity<ApiResponse<Void>> sendTemplateToLead(
+            @PathVariable("id") UUID id,
+            @PathVariable("templateId") UUID templateId) throws UnauthorizedException {
+        courseTemplateService.sendTemplateToLead(id, templateId);
+        return ResponseEntity.ok(ApiResponse.success("Course template sent to lead successfully", null, HttpStatus.OK.value()));
     }
 }

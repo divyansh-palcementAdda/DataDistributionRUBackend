@@ -2,6 +2,7 @@ package com.app.datadistribution.service.impl;
 
 import com.app.datadistribution.dto.dashboard.*;
 import com.app.datadistribution.entity.*;
+import com.app.datadistribution.enums.DashboardGroupBy;
 import com.app.datadistribution.enums.PermissionType;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.BadRequestException;
@@ -10,7 +11,6 @@ import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.*;
 import com.app.datadistribution.service.interfaces.IDashboardService;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,15 +32,7 @@ public class DashboardServiceImpl implements IDashboardService {
     private final DashboardCardRepository dashboardCardRepository;
     private final UserDashboardCardPreferenceRepository userPreferenceRepository;
     private final UserRepository userRepository;
-    private final LeadRepository leadRepository;
-    private final LeadStatusRepository leadStatusRepository;
-    private final LeadSourceRepository leadSourceRepository;
-    private final BoardRepository boardRepository;
-    private final GradeRepository gradeRepository;
-    private final CourseRepository courseRepository;
-    private final LeadFollowUpRepository leadFollowUpRepository;
-    private final LeadFeedbackRepository leadFeedbackRepository;
-    private final LeadStatusHistoryRepository leadStatusHistoryRepository;
+    private final DashboardAnalyticsRepository dashboardAnalyticsRepository;
     private final com.app.datadistribution.mapper.RoleMapper roleMapper;
     private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
     private final EntityManager entityManager;
@@ -53,10 +45,27 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public DashboardSummaryDTO getDashboardSummary(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
+    public DashboardAnalyticsResponseDTO getAnalytics(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        User currentUser = getCurrentUserEntity();
+        DataScope scope = resolveDataScope(currentUser);
+        if (filterRequest == null) {
+            filterRequest = new DashboardAnalyticsFilterRequest();
+        }
+        return dashboardAnalyticsRepository.fetchAnalytics(currentUser, scope, filterRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardSummaryDTO getDashboardSummary(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
         User currentUser = getCurrentUserEntity();
         DataScope scope = resolveDataScope(currentUser);
 
+        if (filterRequest == null) {
+            filterRequest = new DashboardAnalyticsFilterRequest();
+        }
+
+        LocalDate startDate = filterRequest.getEffectiveStartDate();
+        LocalDate endDate = filterRequest.getEffectiveEndDate();
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
 
@@ -72,7 +81,7 @@ public class DashboardServiceImpl implements IDashboardService {
         double conversationRatio = totalLeads > 0 ? (double) feedbackCount / totalLeads : 0.0;
 
         List<DashboardCardDTO> resolvedCards = getResolvedCardsForUser(currentUser);
-        populateCardValues(resolvedCards, currentUser, scope, startDateTime, endDateTime);
+        populateCardValues(resolvedCards, currentUser, scope, filterRequest);
 
         Map<String, List<DashboardCardDTO>> groupedBySection = resolvedCards.stream()
                 .filter(DashboardCardDTO::isVisible)
@@ -104,60 +113,136 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException {
+    public DashboardSummaryDTO getDashboardSummary(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest filterRequest = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .build();
+        return getDashboardSummary(filterRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException, BadRequestException {
         User currentUser = getCurrentUserEntity();
         DataScope scope = resolveDataScope(currentUser);
         List<DashboardCardDTO> cards = getResolvedCardsForUser(currentUser);
-        populateCardValues(cards, currentUser, scope, null, null);
+        populateCardValues(cards, currentUser, scope, new DashboardAnalyticsFilterRequest());
         return cards;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getLeadStatusBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchGroupBreakdown(currentUser, scope, "currentStatus", startDate, endDate);
+    public List<GroupCountDTO> getLeadStatusBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.LEAD_STATUS);
+        return getAnalytics(filterRequest).getData();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getLeadSourceBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchManyToManyGroupBreakdown(currentUser, scope, "leadSources", startDate, endDate);
+    public List<GroupCountDTO> getLeadStatusBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.LEAD_STATUS)
+                .build();
+        return getLeadStatusBreakdown(req);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getBoardBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchGroupBreakdown(currentUser, scope, "board", startDate, endDate);
+    public List<GroupCountDTO> getLeadSourceBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.LEAD_SOURCE);
+        return getAnalytics(filterRequest).getData();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getGradeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchGroupBreakdown(currentUser, scope, "grade", startDate, endDate);
+    public List<GroupCountDTO> getLeadSourceBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.LEAD_SOURCE)
+                .build();
+        return getLeadSourceBreakdown(req);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getCourseBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchGroupBreakdown(currentUser, scope, "course", startDate, endDate);
+    public List<GroupCountDTO> getBoardBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.BOARD);
+        return getAnalytics(filterRequest).getData();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return fetchCourseTypeGroupBreakdown(currentUser, scope, startDate, endDate);
+    public List<GroupCountDTO> getBoardBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.BOARD)
+                .build();
+        return getBoardBreakdown(req);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getGradeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.GRADE);
+        return getAnalytics(filterRequest).getData();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getGradeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.GRADE)
+                .build();
+        return getGradeBreakdown(req);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getCourseBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.COURSE);
+        return getAnalytics(filterRequest).getData();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getCourseBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.COURSE)
+                .build();
+        return getCourseBreakdown(req);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getCourseTypeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.COURSE_TYPE);
+        return getAnalytics(filterRequest).getData();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.COURSE_TYPE)
+                .build();
+        return getCourseTypeBreakdown(req);
     }
 
     @Override
@@ -496,7 +581,12 @@ public class DashboardServiceImpl implements IDashboardService {
         return dtos;
     }
 
-    private void populateCardValues(List<DashboardCardDTO> cards, User user, DataScope scope, LocalDateTime start, LocalDateTime end) {
+    private void populateCardValues(List<DashboardCardDTO> cards, User user, DataScope scope, DashboardAnalyticsFilterRequest filter) throws UnauthorizedException, BadRequestException {
+        LocalDate startDate = filter != null ? filter.getEffectiveStartDate() : null;
+        LocalDate endDate = filter != null ? filter.getEffectiveEndDate() : null;
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+
         for (DashboardCardDTO card : cards) {
             if (!card.isVisible()) continue;
             switch (card.getCode()) {
@@ -522,22 +612,22 @@ public class DashboardServiceImpl implements IDashboardService {
                     card.setValue(Math.round(ratio * 100.0) / 100.0);
                     break;
                 case "LEAD_STATUS_GROUP":
-                    card.setGroupData(fetchGroupBreakdown(user, scope, "currentStatus", null, null));
+                    card.setGroupData(getLeadStatusBreakdown(filter));
                     break;
                 case "LEAD_SOURCE_GROUP":
-                    card.setGroupData(fetchManyToManyGroupBreakdown(user, scope, "leadSources", null, null));
+                    card.setGroupData(getLeadSourceBreakdown(filter));
                     break;
                 case "BOARD_GROUP":
-                    card.setGroupData(fetchGroupBreakdown(user, scope, "board", null, null));
+                    card.setGroupData(getBoardBreakdown(filter));
                     break;
                 case "GRADE_GROUP":
-                    card.setGroupData(fetchGroupBreakdown(user, scope, "grade", null, null));
+                    card.setGroupData(getGradeBreakdown(filter));
                     break;
                 case "COURSE_GROUP":
-                    card.setGroupData(fetchGroupBreakdown(user, scope, "course", null, null));
+                    card.setGroupData(getCourseBreakdown(filter));
                     break;
                 case "COURSE_TYPE_GROUP":
-                    card.setGroupData(fetchCourseTypeGroupBreakdown(user, scope, null, null));
+                    card.setGroupData(getCourseTypeBreakdown(filter));
                     break;
                 case "RECENT_ACTIVITY":
                     try {
@@ -611,101 +701,6 @@ public class DashboardServiceImpl implements IDashboardService {
         return entityManager.createQuery(query).getSingleResult();
     }
 
-    private List<GroupCountDTO> fetchGroupBreakdown(User user, DataScope scope, String joinField, LocalDate start, LocalDate end) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Tuple> query = cb.createTupleQuery();
-        Root<Lead> root = query.from(Lead.class);
-
-        Join<Object, Object> join = root.join(joinField, JoinType.INNER);
-
-        Predicate spec = cb.and(
-                cb.equal(root.get("isDeleted"), false),
-                cb.equal(join.get("isDeleted"), false)
-        );
-        spec = applyScopePredicate(cb, root, spec, user, scope);
-
-        if (start != null) {
-            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start.atStartOfDay()));
-        }
-        if (end != null) {
-            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end.atTime(LocalTime.MAX)));
-        }
-
-        String nameAttr = "course".equals(joinField) ? "courseName" : "name";
-        String codeAttr = "course".equals(joinField) ? "courseCode" : "code";
-
-        Path<UUID> idPath = join.get("id");
-        Path<String> namePath = join.get(nameAttr);
-        Path<String> codePath = join.get(codeAttr);
-
-        query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), codePath.alias("code"), cb.count(root).alias("count")));
-        query.where(spec);
-        query.groupBy(idPath, namePath, codePath);
-
-        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
-        long totalCount = tuples.stream().mapToLong(t -> t.get("count", Long.class)).sum();
-
-        List<GroupCountDTO> result = new ArrayList<>();
-        for (Tuple t : tuples) {
-            long count = t.get("count", Long.class);
-            double pct = totalCount > 0 ? ((double) count / totalCount) * 100.0 : 0.0;
-            result.add(GroupCountDTO.builder()
-                    .id(t.get("id", UUID.class))
-                    .name(t.get("name", String.class))
-                    .code(t.get("code", String.class))
-                    .count(count)
-                    .percentage(Math.round(pct * 100.0) / 100.0)
-                    .build());
-        }
-        return result;
-    }
-
-    private List<GroupCountDTO> fetchManyToManyGroupBreakdown(User user, DataScope scope, String joinField, LocalDate start, LocalDate end) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Tuple> query = cb.createTupleQuery();
-        Root<Lead> root = query.from(Lead.class);
-
-        SetJoin<Object, Object> join = root.joinSet(joinField, JoinType.INNER);
-
-        Predicate spec = cb.and(
-                cb.equal(root.get("isDeleted"), false),
-                cb.equal(join.get("isDeleted"), false)
-        );
-        spec = applyScopePredicate(cb, root, spec, user, scope);
-
-        if (start != null) {
-            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start.atStartOfDay()));
-        }
-        if (end != null) {
-            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end.atTime(LocalTime.MAX)));
-        }
-
-        Path<UUID> idPath = join.get("id");
-        Path<String> namePath = join.get("name");
-        Path<String> codePath = join.get("code");
-
-        query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), codePath.alias("code"), cb.count(root).alias("count")));
-        query.where(spec);
-        query.groupBy(idPath, namePath, codePath);
-
-        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
-        long totalCount = tuples.stream().mapToLong(t -> t.get("count", Long.class)).sum();
-
-        List<GroupCountDTO> result = new ArrayList<>();
-        for (Tuple t : tuples) {
-            long count = t.get("count", Long.class);
-            double pct = totalCount > 0 ? ((double) count / totalCount) * 100.0 : 0.0;
-            result.add(GroupCountDTO.builder()
-                    .id(t.get("id", UUID.class))
-                    .name(t.get("name", String.class))
-                    .code(t.get("code", String.class))
-                    .count(count)
-                    .percentage(Math.round(pct * 100.0) / 100.0)
-                    .build());
-        }
-        return result;
-    }
-
     private Predicate applyScopePredicate(CriteriaBuilder cb, Root<Lead> root, Predicate spec, User user, DataScope scope) {
         if (scope == DataScope.SELF) {
             return cb.and(spec, cb.or(
@@ -714,53 +709,6 @@ public class DashboardServiceImpl implements IDashboardService {
             ));
         }
         return spec;
-    }
-
-    private List<GroupCountDTO> fetchCourseTypeGroupBreakdown(User user, DataScope scope, LocalDate start, LocalDate end) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Tuple> query = cb.createTupleQuery();
-        Root<Lead> root = query.from(Lead.class);
-
-        Join<Lead, Course> courseJoin = root.join("course", JoinType.INNER);
-        Join<Course, CourseType> courseTypeJoin = courseJoin.join("courseType", JoinType.INNER);
-
-        Predicate spec = cb.and(
-                cb.equal(root.get("isDeleted"), false),
-                cb.equal(courseJoin.get("isDeleted"), false),
-                cb.equal(courseTypeJoin.get("isDeleted"), false)
-        );
-        spec = applyScopePredicate(cb, root, spec, user, scope);
-
-        if (start != null) {
-            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start.atStartOfDay()));
-        }
-        if (end != null) {
-            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end.atTime(LocalTime.MAX)));
-        }
-
-        Path<UUID> idPath = courseTypeJoin.get("id");
-        Path<String> namePath = courseTypeJoin.get("name");
-
-        query.select(cb.tuple(idPath.alias("id"), namePath.alias("name"), cb.count(root).alias("count")));
-        query.where(spec);
-        query.groupBy(idPath, namePath);
-
-        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
-        long totalCount = tuples.stream().mapToLong(t -> t.get("count", Long.class)).sum();
-
-        List<GroupCountDTO> result = new ArrayList<>();
-        for (Tuple t : tuples) {
-            long count = t.get("count", Long.class);
-            double pct = totalCount > 0 ? ((double) count / totalCount) * 100.0 : 0.0;
-            result.add(GroupCountDTO.builder()
-                    .id(t.get("id", UUID.class))
-                    .name(t.get("name", String.class))
-                    .code(null)
-                    .count(count)
-                    .percentage(Math.round(pct * 100.0) / 100.0)
-                    .build());
-        }
-        return result;
     }
 
     private String formatSectionName(String sectionCode) {

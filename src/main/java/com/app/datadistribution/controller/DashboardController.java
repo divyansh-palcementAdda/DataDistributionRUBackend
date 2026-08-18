@@ -8,11 +8,9 @@ import com.app.datadistribution.service.interfaces.IDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,93 +19,106 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
-@Tag(name = "Dashboard Management", description = "Centralized endpoints for dynamic, role-aware CRM dashboard")
+@Tag(name = "Dashboard Management", description = "Centralized endpoints for dynamic, filterable, role-aware CRM dashboard & analytics")
 public class DashboardController {
 
     private final IDashboardService dashboardService;
+
+    @GetMapping("/analytics")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get generic, filterable analytics breakdown by any groupBy dimension")
+    public ResponseEntity<ApiResponse<DashboardAnalyticsResponseDTO>> getAnalyticsGet(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+
+        DashboardAnalyticsResponseDTO result = dashboardService.getAnalytics(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/analytics")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get generic, filterable analytics breakdown by any groupBy dimension (POST payload)")
+    public ResponseEntity<ApiResponse<DashboardAnalyticsResponseDTO>> getAnalyticsPost(
+            @Valid @RequestBody DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+
+        DashboardAnalyticsResponseDTO result = dashboardService.getAnalytics(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
+    }
 
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get scope-aware dashboard summary with dynamic sections and metrics")
     public ResponseEntity<ApiResponse<DashboardSummaryDTO>> getDashboardSummary(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        DashboardSummaryDTO summary = dashboardService.getDashboardSummary(startDate, endDate);
+        DashboardSummaryDTO summary = dashboardService.getDashboardSummary(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Dashboard summary retrieved successfully", summary, HttpStatus.OK.value()));
     }
 
     @GetMapping("/cards")
     @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
     @Operation(summary = "Get resolved dashboard cards with role permissions and user preferences applied")
-    public ResponseEntity<ApiResponse<List<DashboardCardDTO>>> getResolvedCards() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<List<DashboardCardDTO>>> getResolvedCards() throws UnauthorizedException, BadRequestException {
         List<DashboardCardDTO> cards = dashboardService.getResolvedCards();
         return ResponseEntity.ok(ApiResponse.success("Resolved dashboard cards retrieved successfully", cards, HttpStatus.OK.value()));
     }
 
     @GetMapping("/lead-status")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Get lead status breakdown count for current user scope")
+    @Operation(summary = "Get lead status breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getLeadStatusBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getLeadStatusBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getLeadStatusBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Lead status breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/lead-source")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Get lead source breakdown count for current user scope")
+    @Operation(summary = "Get lead source breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getLeadSourceBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getLeadSourceBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getLeadSourceBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Lead source breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/board")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Get board breakdown count for current user scope")
+    @Operation(summary = "Get board breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getBoardBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getBoardBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getBoardBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Board breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/grade")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Get grade breakdown count for current user scope")
+    @Operation(summary = "Get grade breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getGradeBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getGradeBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getGradeBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Grade breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/course")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
-    @Operation(summary = "Get course breakdown count for current user scope")
+    @Operation(summary = "Get course breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getCourseBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getCourseBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getCourseBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Course breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping({"/course-types"})
     @PreAuthorize("hasAuthority('DASHBOARD_COURSE_TYPE_VIEW')")
-    @Operation(summary = "Get course type breakdown count for current user scope")
+    @Operation(summary = "Get course type breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getCourseTypeBreakdown(
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException {
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
-        List<GroupCountDTO> result = dashboardService.getCourseTypeBreakdown(startDate, endDate);
+        List<GroupCountDTO> result = dashboardService.getCourseTypeBreakdown(filterRequest);
         return ResponseEntity.ok(ApiResponse.success("Course type breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 

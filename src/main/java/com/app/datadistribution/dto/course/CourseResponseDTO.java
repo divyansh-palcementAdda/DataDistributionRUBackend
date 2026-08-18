@@ -24,6 +24,9 @@ public class CourseResponseDTO {
     private Double fees;
     private CourseTypeResponseDTO courseType;
     private Status status;
+    private java.util.List<com.app.datadistribution.dto.courseimage.CourseImageDTO> images;
+    private java.util.List<com.app.datadistribution.dto.courseusp.CourseUSPDTO> usps;
+    private com.app.datadistribution.dto.communication.CourseCommunicationConfigDTO communicationConfig;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String createdBy;

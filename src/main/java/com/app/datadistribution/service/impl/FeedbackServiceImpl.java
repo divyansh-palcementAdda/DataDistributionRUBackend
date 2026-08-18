@@ -7,8 +7,6 @@ import com.app.datadistribution.dto.feedback.FeedbackSummaryDTO;
 import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusSentiment;
-import com.app.datadistribution.entity.User;
-import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.enums.SentimentCategory;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
@@ -18,7 +16,9 @@ import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.LeadStatusSentimentRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.repository.specification.FeedbackSpecification;
+import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.FeedbackService;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,8 +29,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,12 +41,13 @@ public class FeedbackServiceImpl implements FeedbackService {
     private final UserRepository userRepository;
     private final LeadStatusSentimentRepository leadStatusSentimentRepository;
     private final LeadStatusRepository leadStatusRepository;
+    private final IUserDataScopeService dataScopeService;
     private final LeadMapper leadMapper;
 
     @Override
     @Transactional(readOnly = true)
     public FeedbackPagedResponseDTO getAllFeedbacks(PageRequestDTO pageRequest, UUID userId, UUID leadId) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
         Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, pageRequest.getSortBy()));
@@ -56,13 +55,25 @@ public class FeedbackServiceImpl implements FeedbackService {
         Specification<LeadFeedback> spec = Specification.where(FeedbackSpecification.isNotDeleted())
                 .and(FeedbackSpecification.leadIsNotDeleted());
 
-        if (isAdmin(currentUser)) {
+        if (dataScope.isAdmin()) {
             if (userId != null) {
                 spec = spec.and(FeedbackSpecification.hasCreatedByUserId(userId));
             }
+        } else if (dataScope.isHod()) {
+            spec = spec.and((root, query, cb) -> {
+                jakarta.persistence.criteria.Predicate ownFeedback = cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId());
+                if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                    jakarta.persistence.criteria.Predicate deptLead = root.get("lead").get("department").get("id").in(dataScope.getDepartmentIds());
+                    jakarta.persistence.criteria.Predicate deptUser = root.get("lead").get("assignedTo").get("id").in(dataScope.getDepartmentUserIds());
+                    return cb.or(ownFeedback, deptLead, deptUser);
+                }
+                return ownFeedback;
+            });
         } else {
-            // Enforce visibility check: feedback.lead.assignedTo == currentUser
-            spec = spec.and(FeedbackSpecification.leadAssignedTo(currentUser));
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            ));
         }
 
         if (leadId != null) {
@@ -90,9 +101,9 @@ public class FeedbackServiceImpl implements FeedbackService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackPagedResponseDTO getFeedbacksByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
-        if (!isAdmin(currentUser) && !currentUser.getId().equals(userId)) {
+        if (!dataScope.isAdmin() && !dataScope.getUserId().equals(userId) && !dataScope.getDepartmentUserIds().contains(userId)) {
             throw new UnauthorizedException("You do not have permission to view other users' feedbacks");
         }
 
@@ -102,52 +113,42 @@ public class FeedbackServiceImpl implements FeedbackService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackSummaryDTO getDashboardStats() throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Specification<LeadFeedback> baseSpec = Specification.where(FeedbackSpecification.isNotDeleted())
                 .and(FeedbackSpecification.leadIsNotDeleted());
 
-        if (!isAdmin(currentUser)) {
-            baseSpec = baseSpec.and(FeedbackSpecification.leadAssignedTo(currentUser));
+        if (dataScope.getScopeType() == UserDataScope.ScopeType.SELF) {
+            baseSpec = baseSpec.and((root, query, cb) -> cb.or(
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == UserDataScope.ScopeType.DEPARTMENT) {
+            baseSpec = baseSpec.and((root, query, cb) -> {
+                jakarta.persistence.criteria.Predicate own = cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId());
+                if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                    return cb.or(own, root.get("lead").get("department").get("id").in(dataScope.getDepartmentIds()));
+                }
+                return own;
+            });
         }
 
-        // Fetch dynamic status lists mapped to POSITIVE and NEGATIVE sentiments from Database
-        List<LeadStatus> positiveStatuses = leadStatusRepository.findBySentimentCategory(SentimentCategory.POSITIVE);
-        List<LeadStatus> negativeStatuses = leadStatusRepository.findBySentimentCategory(SentimentCategory.NEGATIVE);
+        long total = leadFeedbackRepository.count(baseSpec);
+        long today = leadFeedbackRepository.count(baseSpec.and(FeedbackSpecification.createdToday()));
 
-        Specification<LeadFeedback> todaySpec = baseSpec.and(FeedbackSpecification.createdToday());
-        Specification<LeadFeedback> positiveSpec = baseSpec.and(FeedbackSpecification.hasStatusAtTimeIn(positiveStatuses));
-        Specification<LeadFeedback> negativeSpec = baseSpec.and(FeedbackSpecification.hasStatusAtTimeIn(negativeStatuses));
+        List<LeadStatusSentiment> positiveSentiments = leadStatusSentimentRepository.findBySentimentCategory(SentimentCategory.POSITIVE);
+        List<LeadStatus> positiveStatuses = positiveSentiments.stream().map(LeadStatusSentiment::getLeadStatus).collect(Collectors.toList());
+        long positiveCount = leadFeedbackRepository.count(baseSpec.and(FeedbackSpecification.hasStatusAtTimeIn(positiveStatuses)));
 
-        long totalCount = leadFeedbackRepository.count(baseSpec);
-        long todayCount = leadFeedbackRepository.count(todaySpec);
-        long positiveCount = leadFeedbackRepository.count(positiveSpec);
-        long negativeCount = leadFeedbackRepository.count(negativeSpec);
+        List<LeadStatusSentiment> negativeSentiments = leadStatusSentimentRepository.findBySentimentCategory(SentimentCategory.NEGATIVE);
+        List<LeadStatus> negativeStatuses = negativeSentiments.stream().map(LeadStatusSentiment::getLeadStatus).collect(Collectors.toList());
+        long negativeCount = leadFeedbackRepository.count(baseSpec.and(FeedbackSpecification.hasStatusAtTimeIn(negativeStatuses)));
 
         return FeedbackSummaryDTO.builder()
-                .totalFeedbacks(totalCount)
-                .todayFeedbacks(todayCount)
+                .totalFeedbacks(total)
+                .todayFeedbacks(today)
                 .positiveFeedbacks(positiveCount)
                 .negativeFeedbacks(negativeCount)
                 .build();
-    }
-
-    private User getCurrentUserEntity() throws UnauthorizedException {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            throw new UnauthorizedException("User is not authenticated");
-        }
-        String username = auth.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
-    }
-
-    private boolean isAdmin(User user) {
-        if (user.getRoles() == null) {
-            return false;
-        }
-        return user.getRoles().stream()
-                .anyMatch(role -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(role.getName())
-                        || RoleType.ADMIN.name().equalsIgnoreCase(role.getName()));
     }
 }

@@ -4,8 +4,6 @@ import com.app.datadistribution.common.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -72,9 +70,26 @@ public class Lead extends BaseEntity {
     @Column(name = "course_interested", length = 150)
     private String courseInterested;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "lead_interested_courses",
+        joinColumns = @JoinColumn(name = "lead_id"),
+        inverseJoinColumns = @JoinColumn(name = "course_id")
+    )
+    @Builder.Default
+    private Set<Course> interestedCourses = new HashSet<>();
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
     private Course course;
+
+    public Course getRegisteredCourse() {
+        return this.course;
+    }
+
+    public void setRegisteredCourse(Course registeredCourse) {
+        this.course = registeredCourse;
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "board_id")
@@ -83,6 +98,10 @@ public class Lead extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grade_id")
     private Grade grade;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @Column(columnDefinition = "TEXT")
     private String remarks;

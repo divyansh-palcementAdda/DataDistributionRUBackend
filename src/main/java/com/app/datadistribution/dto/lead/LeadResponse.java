@@ -1,6 +1,7 @@
 package com.app.datadistribution.dto.lead;
 
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
+import com.app.datadistribution.dto.department.DepartmentSummaryDTO;
 import com.app.datadistribution.dto.user.UserResponse;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,9 +30,13 @@ public class LeadResponse {
     private List<LeadSourceResponse> leadSources;
     private String sourceDetails;
     private String courseInterested;
+    private List<CourseSummaryDTO> interestedCourses;
+    private List<com.app.datadistribution.dto.course.CourseTypeResponseDTO> interestedCourseTypes;
     private CourseSummaryDTO course;
+    private CourseSummaryDTO registeredCourse;
     private BoardResponse board;
     private GradeResponse grade;
+    private DepartmentSummaryDTO department;
     private String remarks;
     private LeadStatusResponse currentStatus;
     private UserResponse assignedTo;

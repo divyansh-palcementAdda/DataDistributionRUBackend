@@ -34,6 +34,9 @@ public class CourseServiceImpl implements ICourseService {
     private final CourseRepository courseRepository;
     private final CourseTypeRepository courseTypeRepository;
     private final CourseMapper courseMapper;
+    private final com.app.datadistribution.service.interfaces.ICourseImageService courseImageService;
+    private final com.app.datadistribution.service.interfaces.ICourseUSPService courseUSPService;
+    private final com.app.datadistribution.service.interfaces.ICourseCommunicationService courseCommunicationService;
 
     @Override
     @Transactional
@@ -54,7 +57,7 @@ public class CourseServiceImpl implements ICourseService {
         
         Course saved = courseRepository.save(course);
         log.info("Created course: {} ({})", saved.getCourseName(), saved.getCourseCode());
-        return courseMapper.toDto(saved);
+        return enrichCourseResponse(courseMapper.toDto(saved), saved.getId());
     }
 
     @Override
@@ -86,7 +89,7 @@ public class CourseServiceImpl implements ICourseService {
 
         Course updated = courseRepository.save(course);
         log.info("Updated course: {}", updated.getCourseCode());
-        return courseMapper.toDto(updated);
+        return enrichCourseResponse(courseMapper.toDto(updated), updated.getId());
     }
 
     @Override
@@ -95,7 +98,19 @@ public class CourseServiceImpl implements ICourseService {
         Course course = courseRepository.findById(id)
                 .filter(c -> !c.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + id));
-        return courseMapper.toDto(course);
+        return enrichCourseResponse(courseMapper.toDto(course), course.getId());
+    }
+
+    private CourseResponseDTO enrichCourseResponse(CourseResponseDTO dto, UUID courseId) {
+        if (dto == null) return null;
+        try {
+            dto.setImages(courseImageService.getImagesByCourseId(courseId, true));
+            dto.setUsps(courseUSPService.getUSPsByCourseId(courseId, true));
+            dto.setCommunicationConfig(courseCommunicationService.getCommunicationConfig(courseId));
+        } catch (Exception e) {
+            log.warn("Could not enrich course response for course {}: {}", courseId, e.getMessage());
+        }
+        return dto;
     }
 
     @Override
