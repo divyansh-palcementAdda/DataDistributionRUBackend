@@ -1,0 +1,31 @@
+package com.app.datadistribution.dto.reassign;
+
+import java.util.List;
+import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FollowUpReassignResponse {
+    private String message;
+    private UUID sourceUserId;
+    private String sourceUserName;
+    private int totalRequested;
+    private int totalReassigned;
+    private List<UserFollowUpDistributionSummary> assignments;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UserFollowUpDistributionSummary {
+        private UUID targetUserId;
+        private String targetUserName;
+        private int count;
+    }
+}

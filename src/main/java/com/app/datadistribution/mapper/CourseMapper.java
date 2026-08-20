@@ -1,9 +1,15 @@
 package com.app.datadistribution.mapper;
 
-import com.app.datadistribution.dto.course.*;
-import com.app.datadistribution.entity.*;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+
+import com.app.datadistribution.dto.course.CourseRequestDTO;
+import com.app.datadistribution.dto.course.CourseResponseDTO;
+import com.app.datadistribution.dto.course.CourseSummaryDTO;
+import com.app.datadistribution.dto.course.CourseTypeRequestDTO;
+import com.app.datadistribution.dto.course.CourseTypeResponseDTO;
+import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.CourseType;
 
 @Mapper(componentModel = "spring", builder = @org.mapstruct.Builder(disableBuilder = true))
 public interface CourseMapper {

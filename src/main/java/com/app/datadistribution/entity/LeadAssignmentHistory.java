@@ -1,6 +1,7 @@
 package com.app.datadistribution.entity;
 
 import com.app.datadistribution.common.BaseEntity;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

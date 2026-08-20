@@ -1,11 +1,11 @@
 package com.app.datadistribution.service.impl;
 
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,12 +14,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
 import com.app.datadistribution.dto.auth.LoginRequest;
 import com.app.datadistribution.dto.auth.LoginResponse;
 import com.app.datadistribution.dto.auth.RegisterRequest;
 import com.app.datadistribution.dto.auth.TokenResponse;
 import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.entity.Permission;
 import com.app.datadistribution.entity.RefreshToken;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
@@ -37,6 +37,7 @@ import com.app.datadistribution.security.JwtService;
 import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
 import com.app.datadistribution.service.interfaces.IAuthService;
+
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,6 +107,9 @@ public class AuthServiceImpl implements IAuthService {
 
         RefreshToken refreshTokenEntity = refreshTokenService.createRefreshToken(
                 user, accessToken, clientIp, deviceInfo);
+
+        user.setLastLogin(LocalDateTime.now());
+        userRepository.save(user);
 
         log.info("LOGIN SUCCESS | User: {} | ID: {} | IP: {}", user.getEmail(), user.getId(), clientIp);
 

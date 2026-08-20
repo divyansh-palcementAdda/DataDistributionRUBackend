@@ -1,9 +1,11 @@
 package com.app.datadistribution.dto.followup;
 
-import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.enums.FollowUpStatus;
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.enums.FollowUpStatus;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -1,12 +1,21 @@
 package com.app.datadistribution.service.impl;
 
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.dto.communication.CourseCommunicationConfigDTO;
 import com.app.datadistribution.dto.communication.InfoPanelResponseDTO;
 import com.app.datadistribution.dto.communication.SendCommunicationRequestDTO;
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.courseimage.CourseImageDTO;
-import com.app.datadistribution.dto.courseusp.CourseUSPDTO;
 import com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO;
+import com.app.datadistribution.dto.courseusp.CourseUSPDTO;
 import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.CourseCommunicationConfig;
 import com.app.datadistribution.entity.CourseImage;
@@ -30,15 +39,9 @@ import com.app.datadistribution.service.PlaceholderRenderService;
 import com.app.datadistribution.service.interfaces.ICourseCommunicationService;
 import com.app.datadistribution.service.interfaces.ICourseImageService;
 import com.app.datadistribution.service.interfaces.ICourseUSPService;
-import java.util.List;
-import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service

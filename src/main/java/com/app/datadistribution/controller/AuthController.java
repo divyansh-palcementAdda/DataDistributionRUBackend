@@ -1,11 +1,23 @@
 package com.app.datadistribution.controller;
 
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.app.datadistribution.common.ApiResponse;
 import com.app.datadistribution.dto.auth.LoginRequest;
 import com.app.datadistribution.dto.auth.LoginResponse;
 import com.app.datadistribution.dto.auth.RegisterRequest;
 import com.app.datadistribution.dto.auth.TokenResponse;
-import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.dto.auth.UserProfileResponse;
 import com.app.datadistribution.dto.user.PermissionDTO;
 import com.app.datadistribution.dto.user.UserResponse;
@@ -17,25 +29,16 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.service.interfaces.IAuthService;
 import com.app.datadistribution.service.interfaces.IRoleService;
 import com.app.datadistribution.service.interfaces.IUserService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")

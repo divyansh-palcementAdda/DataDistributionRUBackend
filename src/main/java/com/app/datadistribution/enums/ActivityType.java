@@ -33,7 +33,9 @@ public enum ActivityType {
     PERMISSION_DELETED("🗑️", "#fee2e2", "Permission Deleted"),
     PERMISSION_ASSIGNED("🔗", "#e0f2fe", "Permission Assigned To Role"),
     PERMISSION_REMOVED("❌", "#fee2e2", "Permission Removed From Role"),
-    USER_ROLE_CHANGED("🔄", "#e0f2fe", "User Role Changed");
+    USER_ROLE_CHANGED("🔄", "#e0f2fe", "User Role Changed"),
+    LEAD_REASSIGNED("🔄", "#e0f2fe", "Lead Reassigned"),
+    FOLLOWUP_REASSIGNED("🔄", "#e0f2fe", "Follow-up Reassigned");
 
     private final String icon;
     private final String iconBg;

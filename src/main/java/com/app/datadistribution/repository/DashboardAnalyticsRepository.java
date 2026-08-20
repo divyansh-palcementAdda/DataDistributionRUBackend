@@ -1,24 +1,47 @@
 package com.app.datadistribution.repository;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import org.springframework.stereotype.Repository;
+
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsResponseDTO;
 import com.app.datadistribution.dto.dashboard.GroupCountDTO;
-import com.app.datadistribution.entity.*;
+import com.app.datadistribution.entity.Board;
+import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.CourseType;
+import com.app.datadistribution.entity.Department;
+import com.app.datadistribution.entity.Grade;
+import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.LeadSource;
+import com.app.datadistribution.entity.LeadStatus;
+import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.DashboardGroupBy;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
-import jakarta.persistence.criteria.*;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.*;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.SetJoin;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Repository;
 
 @Slf4j
 @Repository

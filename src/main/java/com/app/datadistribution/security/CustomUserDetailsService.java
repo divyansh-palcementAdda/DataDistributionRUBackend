@@ -1,13 +1,9 @@
 package com.app.datadistribution.security;
 
-import com.app.datadistribution.dto.user.PermissionDTO;
-import com.app.datadistribution.entity.Permission;
-import com.app.datadistribution.entity.Role;
-import com.app.datadistribution.entity.User;
-import com.app.datadistribution.repository.UserRepository;
-import com.app.datadistribution.service.interfaces.IRoleService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,10 +12,14 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
+import com.app.datadistribution.entity.Permission;
+import com.app.datadistribution.entity.Role;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.IRoleService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service

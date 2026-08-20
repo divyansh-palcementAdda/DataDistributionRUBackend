@@ -1,5 +1,18 @@
 package com.app.datadistribution.service.impl;
 
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.lead.BoardPageResponse;
 import com.app.datadistribution.dto.lead.BoardRequest;
@@ -10,19 +23,9 @@ import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.BoardRepository;
 import com.app.datadistribution.service.interfaces.IBoardService;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service

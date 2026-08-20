@@ -48,4 +48,13 @@ public interface IDashboardService {
 
     List<com.app.datadistribution.dto.user.RoleDTO> getCardRoles(UUID cardId) throws BadRequestException;
     void updateCardRolePermissions(UUID cardId, List<UUID> roleIds) throws BadRequestException;
+
+    long countLowDataUsers() throws UnauthorizedException, BadRequestException;
+    com.app.datadistribution.dto.dashboard.LowDataUserPageResponseDTO getLowDataUsers(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
+
+    long countUsersNotLoggedInToday() throws UnauthorizedException, BadRequestException;
+    com.app.datadistribution.dto.dashboard.UserNotLoggedInPageResponseDTO getUsersNotLoggedInToday(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
+
+    long countFollowUpUsersNotLoggedInBy11Am() throws UnauthorizedException, BadRequestException;
+    com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInPageResponseDTO getFollowUpUsersNotLoggedInBy11Am(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
 }

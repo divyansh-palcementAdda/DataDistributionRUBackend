@@ -1,22 +1,57 @@
 package com.app.datadistribution.controller;
 
-import com.app.datadistribution.common.ApiResponse;
-import com.app.datadistribution.common.PageRequestDTO;
-import com.app.datadistribution.dto.lead.*;
-import com.app.datadistribution.exception.BadRequestException;
-import com.app.datadistribution.exception.UnauthorizedException;
-import com.app.datadistribution.service.interfaces.*;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
+import com.app.datadistribution.dto.lead.LeadAssignmentHistoryResponse;
+import com.app.datadistribution.dto.lead.LeadAssignmentRequest;
+import com.app.datadistribution.dto.lead.LeadDistributionRequest;
+import com.app.datadistribution.dto.lead.LeadDistributionResponse;
+import com.app.datadistribution.dto.lead.LeadFeedbackRequest;
+import com.app.datadistribution.dto.lead.LeadFeedbackResponse;
+import com.app.datadistribution.dto.lead.LeadFollowUpRequest;
+import com.app.datadistribution.dto.lead.LeadFollowUpResponse;
+import com.app.datadistribution.dto.lead.LeadPageResponse;
+import com.app.datadistribution.dto.lead.LeadRequest;
+import com.app.datadistribution.dto.lead.LeadResponse;
+import com.app.datadistribution.dto.lead.LeadSourceStatsResponse;
+import com.app.datadistribution.dto.lead.LeadStatusChangeRequest;
+import com.app.datadistribution.dto.lead.LeadStatusHistoryPageResponse;
+import com.app.datadistribution.dto.lead.LeadStatusHistoryResponse;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.service.interfaces.ICourseTemplateService;
+import com.app.datadistribution.service.interfaces.ILeadAssignmentService;
+import com.app.datadistribution.service.interfaces.ILeadBulkUploadService;
+import com.app.datadistribution.service.interfaces.ILeadDistributionService;
+import com.app.datadistribution.service.interfaces.ILeadFeedbackService;
+import com.app.datadistribution.service.interfaces.ILeadFollowUpService;
+import com.app.datadistribution.service.interfaces.ILeadService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/leads")
@@ -28,7 +63,9 @@ public class LeadController {
     private final ILeadFeedbackService leadFeedbackService;
     private final ILeadFollowUpService leadFollowUpService;
     private final ILeadAssignmentService leadAssignmentService;
+    private final ILeadDistributionService leadDistributionService;
     private final ICourseTemplateService courseTemplateService;
+    private final ILeadBulkUploadService leadBulkUploadService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('LEAD_CREATE')")
@@ -179,10 +216,43 @@ public class LeadController {
         return ResponseEntity.ok(ApiResponse.success("Lead assignment history fetched successfully", response, HttpStatus.OK.value()));
     }
 
+    @PostMapping("/distribute/preview")
+    @PreAuthorize("hasAuthority('LEAD_DISTRIBUTE') or hasAuthority('LEAD_DISTRIBUTION_PREVIEW') or hasAuthority('LEAD_ASSIGN')")
+    @Operation(summary = "Preview manual lead distribution calculation and user capacity limits")
+    public ResponseEntity<ApiResponse<LeadDistributionResponse>> previewLeadDistribution(
+            @Valid @RequestBody LeadDistributionRequest request) throws BadRequestException, UnauthorizedException {
+        LeadDistributionResponse response = leadDistributionService.previewDistribution(request);
+        return ResponseEntity.ok(ApiResponse.success("Lead distribution preview calculated successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/distribute")
+    @PreAuthorize("hasAuthority('LEAD_DISTRIBUTE') or hasAuthority('LEAD_ASSIGN')")
+    @Operation(summary = "Execute manual rule-based lead distribution among selected users")
+    public ResponseEntity<ApiResponse<LeadDistributionResponse>> distributeLeads(
+            @Valid @RequestBody LeadDistributionRequest request) throws BadRequestException, UnauthorizedException {
+        LeadDistributionResponse response = leadDistributionService.distributeLeads(request);
+        return ResponseEntity.ok(ApiResponse.success("Leads distributed successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/{id}/status-history")
-    @PreAuthorize("hasAuthority('LEAD_STATUS_HISTORY_VIEW') or hasAuthority('LEAD_HISTORY_READ')")
-    @Operation(summary = "Get status history for a lead")
-    public ResponseEntity<ApiResponse<List<LeadStatusHistoryResponse>>> getStatusHistory(@PathVariable("id") UUID id) {
+    @PreAuthorize("hasAuthority('LEAD_STATUS_HISTORY_VIEW') or hasAuthority('LEAD_HISTORY_READ') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get status history for a lead with optional pagination and sorting")
+    public ResponseEntity<?> getStatusHistory(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection) throws UnauthorizedException {
+        if (page != null && size != null) {
+            PageRequestDTO pageRequest = PageRequestDTO.builder()
+                    .page(page)
+                    .size(size)
+                    .sortBy(sortBy)
+                    .sortDirection(sortDirection)
+                    .build();
+            LeadStatusHistoryPageResponse response = leadService.getStatusHistoryByLeadId(id, pageRequest);
+            return ResponseEntity.ok(ApiResponse.success("Lead status history fetched successfully", response, HttpStatus.OK.value()));
+        }
         List<LeadStatusHistoryResponse> response = leadService.getStatusHistoryByLeadId(id);
         return ResponseEntity.ok(ApiResponse.success("Lead status history fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -250,5 +320,37 @@ public class LeadController {
             @PathVariable("templateId") UUID templateId) throws UnauthorizedException {
         courseTemplateService.sendTemplateToLead(id, templateId);
         return ResponseEntity.ok(ApiResponse.success("Course template sent to lead successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('LEAD_BULK_UPLOAD') or hasAuthority('LEAD_CREATE')")
+    @Operation(summary = "Bulk upload leads from an Excel file with selected master-data mappings")
+    public ResponseEntity<ApiResponse<BulkLeadUploadResponse>> bulkUpload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
+            @RequestParam(value = "gradeId", required = false) UUID gradeId,
+            @RequestParam(value = "boardId", required = false) UUID boardId,
+            @RequestParam(value = "leadSourceId", required = false) UUID leadSourceId,
+            @RequestParam(value = "leadSourceIds", required = false) List<UUID> leadSourceIds,
+            @RequestParam(value = "statusId", required = false) UUID statusId,
+            @RequestParam(value = "departmentId", required = false) UUID departmentId,
+            @RequestParam(value = "assignedToUserId", required = false) UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
+
+        BulkLeadUploadResponse response = leadBulkUploadService.bulkUploadLeads(
+                file, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
+        );
+        return ResponseEntity.ok(ApiResponse.success("Lead bulk upload processed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/bulk-upload/template")
+    @PreAuthorize("hasAuthority('LEAD_BULK_UPLOAD') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Download standard Excel template for bulk lead upload")
+    public ResponseEntity<byte[]> downloadBulkUploadTemplate() {
+        byte[] templateBytes = leadBulkUploadService.downloadTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDispositionFormData("attachment", "lead_bulk_upload_template.xlsx");
+        headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+        return new ResponseEntity<>(templateBytes, headers, HttpStatus.OK);
     }
 }

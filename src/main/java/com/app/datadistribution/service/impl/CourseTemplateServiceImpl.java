@@ -1,5 +1,17 @@
 package com.app.datadistribution.service.impl;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.course.CourseTypeResponseDTO;
 import com.app.datadistribution.dto.coursetemplate.CourseTemplateRequestDTO;
@@ -18,18 +30,9 @@ import com.app.datadistribution.repository.LeadFeedbackRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.ICourseTemplateService;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service

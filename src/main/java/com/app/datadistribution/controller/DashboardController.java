@@ -130,6 +130,72 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success("Recent activity retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping("/low-data-users")
+    @PreAuthorize("hasAuthority('DASHBOARD_LOW_DATA_USERS_VIEW') or hasAuthority('DASHBOARD_LOW_DATA_USERS_READ') or hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get paginated list of low data users for authorized scope")
+    public ResponseEntity<ApiResponse<LowDataUserPageResponseDTO>> getLowDataUsers(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sortBy", defaultValue = "remainingDataCount") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
+            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+                .page(page)
+                .size(size)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .search(search)
+                .build();
+
+        LowDataUserPageResponseDTO result = dashboardService.getLowDataUsers(pageRequest);
+        return ResponseEntity.ok(ApiResponse.success("Low data users list retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/users-not-logged-in")
+    @PreAuthorize("hasAuthority('DASHBOARD_USERS_NOT_LOGGED_IN_VIEW') or hasAuthority('DASHBOARD_USERS_NOT_LOGGED_IN_READ') or hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get paginated list of users who have not logged in today")
+    public ResponseEntity<ApiResponse<UserNotLoggedInPageResponseDTO>> getUsersNotLoggedInToday(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sortBy", defaultValue = "name") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
+            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+                .page(page)
+                .size(size)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .search(search)
+                .build();
+
+        UserNotLoggedInPageResponseDTO result = dashboardService.getUsersNotLoggedInToday(pageRequest);
+        return ResponseEntity.ok(ApiResponse.success("Users not logged in today retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/followup-users-not-logged-in-11am")
+    @PreAuthorize("hasAuthority('DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_VIEW') or hasAuthority('DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_READ') or hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get paginated list of users with follow-ups today who did not log in by 11 AM IST")
+    public ResponseEntity<ApiResponse<FollowUpUserNotLoggedInPageResponseDTO>> getFollowUpUsersNotLoggedInBy11Am(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "sortBy", defaultValue = "todayFollowUpCount") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection,
+            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+                .page(page)
+                .size(size)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .search(search)
+                .build();
+
+        FollowUpUserNotLoggedInPageResponseDTO result = dashboardService.getFollowUpUsersNotLoggedInBy11Am(pageRequest);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up users not logged in by 11 AM IST retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/preferences")
     @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
     @Operation(summary = "Get current authenticated user's card preferences")

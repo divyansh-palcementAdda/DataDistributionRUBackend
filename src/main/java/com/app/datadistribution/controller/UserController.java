@@ -1,23 +1,11 @@
 package com.app.datadistribution.controller;
 
-import com.app.datadistribution.common.ApiResponse;
-import com.app.datadistribution.common.PageRequestDTO;
-import com.app.datadistribution.dto.user.UserPageResponse;
-import com.app.datadistribution.dto.user.UserRequest;
-import com.app.datadistribution.dto.user.UserResponse;
-import com.app.datadistribution.dto.user.UserUpdateRequest;
-import com.app.datadistribution.exception.BadRequestException;
-import com.app.datadistribution.exception.ResourcesNotFoundException;
-import com.app.datadistribution.service.interfaces.IUserService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +19,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.user.UserPageResponse;
+import com.app.datadistribution.dto.user.UserRequest;
+import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserUpdateRequest;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.ResourcesNotFoundException;
+import com.app.datadistribution.service.interfaces.IUserService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/users")

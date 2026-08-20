@@ -191,8 +191,10 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("Grade not found with id: " + request.getGradeId()));
         }
 
+        LeadStatus oldStatus = lead.getCurrentStatus();
+        LeadStatus newStatus = null;
         if (request.getStatusId() != null) {
-            LeadStatus newStatus = leadStatusRepository.findById(request.getStatusId())
+            newStatus = leadStatusRepository.findById(request.getStatusId())
                     .filter(s -> !s.isDeleted())
                     .orElseThrow(() -> new ResourcesNotFoundException("Lead status not found with id: " + request.getStatusId()));
             lead.setCurrentStatus(newStatus);
@@ -223,6 +225,31 @@ public class LeadServiceImpl implements ILeadService {
 
         Lead updated = leadRepository.save(lead);
         log.info("Updated lead: {}", updated.getLeadCode());
+
+        // Automatic Status Change Detection & History Logging
+        if (newStatus != null && (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()))) {
+            User currentUser = null;
+            try {
+                currentUser = getCurrentUserEntity();
+            } catch (Exception e) {
+                log.warn("Could not resolve authenticated user for lead update status audit");
+            }
+            String remark = request.getRemarks() != null && !request.getRemarks().isBlank()
+                    ? request.getRemarks()
+                    : "Lead status updated via general lead update.";
+
+            LeadStatusHistory history = LeadStatusHistory.builder()
+                    .lead(updated)
+                    .previousStatus(oldStatus)
+                    .newStatus(newStatus)
+                    .changedByUser(currentUser)
+                    .feedback(remark)
+                    .build();
+            leadStatusHistoryRepository.save(history);
+            log.info("Recorded status change history for lead {}: {} -> {}", updated.getLeadCode(),
+                    oldStatus != null ? oldStatus.getName() : "null", newStatus.getName());
+        }
+
         return leadMapper.toDto(updated);
     }
 
@@ -391,17 +418,23 @@ public class LeadServiceImpl implements ILeadService {
         User currentUser = getCurrentUserEntity();
 
         LeadStatus oldStatus = lead.getCurrentStatus();
+        boolean statusChanged = (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()));
+
         lead.setCurrentStatus(newStatus);
         Lead updated = leadRepository.save(lead);
 
-        LeadStatusHistory history = LeadStatusHistory.builder()
-                .lead(updated)
-                .previousStatus(oldStatus)
-                .newStatus(newStatus)
-                .changedByUser(currentUser)
-                .feedback(request.getFeedback())
-                .build();
-        leadStatusHistoryRepository.save(history);
+        if (statusChanged) {
+            LeadStatusHistory history = LeadStatusHistory.builder()
+                    .lead(updated)
+                    .previousStatus(oldStatus)
+                    .newStatus(newStatus)
+                    .changedByUser(currentUser)
+                    .feedback(request.getFeedback())
+                    .build();
+            leadStatusHistoryRepository.save(history);
+            log.info("Recorded status change history for lead {}: {} -> {}", updated.getLeadCode(),
+                    oldStatus != null ? oldStatus.getName() : "null", newStatus.getName());
+        }
 
         LeadFeedback feedback = LeadFeedback.builder()
                 .lead(updated)
@@ -416,15 +449,72 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) {
+    public List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) throws UnauthorizedException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        validateLeadDataScopeAccess(lead);
 
         List<LeadStatusHistory> histories = leadStatusHistoryRepository.findByLeadIdOrderByCreatedAtDesc(lead.getId());
         return histories.stream()
                 .map(leadMapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeadStatusHistoryPageResponse getStatusHistoryByLeadId(UUID leadId, PageRequestDTO pageRequest) throws UnauthorizedException {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        validateLeadDataScopeAccess(lead);
+
+        String sortBy = pageRequest.getSortBy();
+        if (sortBy == null || sortBy.isBlank()) {
+            sortBy = "createdAt";
+        }
+        Sort.Direction direction = Sort.Direction.fromString(
+                pageRequest.getSortDirection() != null ? pageRequest.getSortDirection() : "DESC"
+        );
+        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, sortBy));
+
+        Page<LeadStatusHistory> page = leadStatusHistoryRepository.findByLeadId(lead.getId(), pageable);
+        List<LeadStatusHistoryResponse> content = page.getContent().stream()
+                .map(leadMapper::toDto)
+                .collect(Collectors.toList());
+
+        return LeadStatusHistoryPageResponse.builder()
+                .content(content)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
+    }
+
+    private void validateLeadDataScopeAccess(Lead lead) throws UnauthorizedException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        if (dataScope.getScopeType() == ScopeType.SYSTEM) {
+            return;
+        }
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            boolean isAssigned = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(dataScope.getUserId());
+            boolean isCreator = lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(dataScope.getUserId());
+            if (!isAssigned && !isCreator) {
+                throw new UnauthorizedException("You do not have permission to view status history for this lead.");
+            }
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            boolean isOwn = (lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(dataScope.getUserId()))
+                    || (lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(dataScope.getUserId()));
+            boolean isDeptLead = lead.getDepartment() != null && dataScope.getDepartmentIds() != null && dataScope.getDepartmentIds().contains(lead.getDepartment().getId());
+            boolean isDeptUser = lead.getAssignedTo() != null && dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(lead.getAssignedTo().getId());
+            if (!isOwn && !isDeptLead && !isDeptUser) {
+                throw new UnauthorizedException("You do not have permission to view status history for this lead outside your department scope.");
+            }
+        }
     }
 
     @Override

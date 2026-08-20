@@ -362,6 +362,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 		createCardIfNotExist("TODAY_FOLLOW_UPS", "Today's Scheduled Follow-Ups", "Follow-ups due for contact today", "OPERATIONS", "LIST", "clock", 10, allRoles);
 		createCardIfNotExist("OVERDUE_FOLLOW_UPS", "Overdue Follow-Ups Alert", "Follow-ups past their scheduled time", "OPERATIONS", "LIST", "alert-circle", 11, allRoles);
 		createCardIfNotExist("RECENT_ACTIVITY", "Recent System Activity", "Recent status changes and feedback logs", "ACTIVITY", "LIST", "history", 12, allRoles);
+		createCardIfNotExist("LOW_DATA_USERS", "Low Data Users Alert", "Count of users with unavailed leads below threshold", "OPERATIONS", "STAT_CARD", "user-minus", 13, allRoles);
+		createCardIfNotExist("USERS_NOT_LOGGED_IN", "Users Not Logged In Today", "Count of eligible users who have not logged in today", "OPERATIONS", "STAT_CARD", "user-x", 14, allRoles);
+		createCardIfNotExist("FOLLOWUP_USERS_NOT_LOGGED_IN_11AM", "Follow-up Users Not Logged In by 11 AM", "Count of users with scheduled follow-ups today who did not log in by 11 AM IST", "OPERATIONS", "STAT_CARD", "clock-alert", 15, allRoles);
 	}
 
 	private void createCardIfNotExist(String code, String name, String description, String section, String cardType, String icon, int displayOrder, Set<com.app.datadistribution.entity.Role> roles) {

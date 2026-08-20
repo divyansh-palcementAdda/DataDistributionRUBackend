@@ -1,11 +1,13 @@
 package com.app.datadistribution.service;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
 import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.CourseUSP;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.User;
-import java.util.List;
-import org.springframework.stereotype.Service;
 
 @Service
 public class PlaceholderRenderService {

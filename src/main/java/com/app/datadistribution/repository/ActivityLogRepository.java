@@ -37,4 +37,14 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, UUID> 
         WHERE a.createdAt < :cutoffDate
     """)
     int deleteOldActivities(@Param("cutoffDate") LocalDateTime cutoffDate);
+
+    @Query("""
+        SELECT LOWER(a.performedBy), MIN(a.createdAt), MAX(a.createdAt)
+        FROM ActivityLog a
+        WHERE a.activityType = com.app.datadistribution.enums.ActivityType.LOGIN
+          AND a.createdAt >= :startOfDay
+          AND a.createdAt <= :endOfDay
+        GROUP BY LOWER(a.performedBy)
+    """)
+    List<Object[]> findDailyLoginStatsGroupedByPerformedBy(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 }
