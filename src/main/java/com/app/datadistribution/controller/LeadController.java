@@ -343,13 +343,23 @@ public class LeadController {
     }
 
     @GetMapping("/bulk-upload/template")
-    @PreAuthorize("hasAuthority('LEAD_BULK_UPLOAD') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_READ')")
-    @Operation(summary = "Download standard Excel template for bulk lead upload")
+    @PreAuthorize("hasAuthority('LEAD_BULK_UPLOAD_TEMPLATE_DOWNLOAD') or hasAuthority('LEAD_BULK_UPLOAD') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_READ')")
+    @Operation(
+            summary = "Download standard Excel template for bulk lead upload",
+            description = "Generates and downloads the official 2-sheet Lead Bulk Upload Excel (.xlsx) template. "
+                    + "Sheet 1 ('Lead Upload') contains styled, frozen column headers. Sheet 2 ('Instructions') contains column definitions, "
+                    + "field requirement rules, validation formats, duplicate detection policies, and UI-selected master data guidance."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "Excel template generated successfully",
+            content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    )
     public ResponseEntity<byte[]> downloadBulkUploadTemplate() {
         byte[] templateBytes = leadBulkUploadService.downloadTemplate();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-        headers.setContentDispositionFormData("attachment", "lead_bulk_upload_template.xlsx");
+        headers.setContentDispositionFormData("attachment", "lead-bulk-upload-template.xlsx");
         headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
         return new ResponseEntity<>(templateBytes, headers, HttpStatus.OK);
     }

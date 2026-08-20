@@ -285,7 +285,9 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            Sheet sheet = workbook.createSheet("Lead Bulk Upload Template");
+            // --- Sheet 1: Lead Upload ---
+            Sheet uploadSheet = workbook.createSheet("Lead Upload");
+            uploadSheet.createFreezePane(0, 1);
 
             // Header Style
             CellStyle headerStyle = workbook.createCellStyle();
@@ -296,47 +298,140 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
             headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-            String[] headers = {
-                    "Full Name *", "Phone Number *", "Alternate Phone Number", "Email",
-                    "City", "State", "Country", "Source Details", "Course Interested", "Remarks"
-            };
+            List<com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition> columns =
+                    com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.getAllColumns();
 
-            Row headerRow = sheet.createRow(0);
-            for (int i = 0; i < headers.length; i++) {
+            Row headerRow = uploadSheet.createRow(0);
+            headerRow.setHeightInPoints(25);
+
+            for (int i = 0; i < columns.size(); i++) {
                 Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers[i]);
+                cell.setCellValue(columns.get(i).getHeaderName());
                 cell.setCellStyle(headerStyle);
             }
 
-            // Sample Row 1
-            Row sampleRow1 = sheet.createRow(1);
-            sampleRow1.createCell(0).setCellValue("John Doe");
-            sampleRow1.createCell(1).setCellValue("+919876543210");
-            sampleRow1.createCell(2).setCellValue("+919876543211");
-            sampleRow1.createCell(3).setCellValue("john.doe@example.com");
-            sampleRow1.createCell(4).setCellValue("Mumbai");
-            sampleRow1.createCell(5).setCellValue("Maharashtra");
-            sampleRow1.createCell(6).setCellValue("India");
-            sampleRow1.createCell(7).setCellValue("Education Expo 2026");
-            sampleRow1.createCell(8).setCellValue("Computer Science Engineering");
-            sampleRow1.createCell(9).setCellValue("High intent lead, requested callback");
+            // Auto-fit columns with safety width padding
+            for (int i = 0; i < columns.size(); i++) {
+                uploadSheet.autoSizeColumn(i);
+                int currentWidth = uploadSheet.getColumnWidth(i);
+                uploadSheet.setColumnWidth(i, Math.max(currentWidth + 1200, 5000));
+            }
 
-            // Sample Row 2
-            Row sampleRow2 = sheet.createRow(2);
-            sampleRow2.createCell(0).setCellValue("Jane Smith");
-            sampleRow2.createCell(1).setCellValue("9812345678");
-            sampleRow2.createCell(2).setCellValue("");
-            sampleRow2.createCell(3).setCellValue("jane.smith@example.com");
-            sampleRow2.createCell(4).setCellValue("Delhi");
-            sampleRow2.createCell(5).setCellValue("Delhi");
-            sampleRow2.createCell(6).setCellValue("India");
-            sampleRow2.createCell(7).setCellValue("Organic Inquiry");
-            sampleRow2.createCell(8).setCellValue("Business Administration");
-            sampleRow2.createCell(9).setCellValue("Inquired about scholarship options");
+            // --- Sheet 2: Instructions ---
+            Sheet instructionSheet = workbook.createSheet("Instructions");
 
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
+            // Header Style for Instructions
+            CellStyle instHeaderStyle = workbook.createCellStyle();
+            Font instHeaderFont = workbook.createFont();
+            instHeaderFont.setBold(true);
+            instHeaderFont.setColor(IndexedColors.WHITE.getIndex());
+            instHeaderStyle.setFont(instHeaderFont);
+            instHeaderStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
+            instHeaderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            instHeaderStyle.setAlignment(HorizontalAlignment.LEFT);
+
+            // Data Cell Style
+            CellStyle cellStyle = workbook.createCellStyle();
+            cellStyle.setWrapText(true);
+            cellStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
+            // Bold Cell Style
+            CellStyle boldStyle = workbook.createCellStyle();
+            Font boldFont = workbook.createFont();
+            boldFont.setBold(true);
+            boldStyle.setFont(boldFont);
+
+            int rowIdx = 0;
+
+            // Title
+            Row titleRow = instructionSheet.createRow(rowIdx++);
+            Cell titleCell = titleRow.createCell(0);
+            titleCell.setCellValue("LEAD BULK UPLOAD INSTRUCTIONS & COLUMN GUIDE");
+            titleCell.setCellStyle(instHeaderStyle);
+
+            rowIdx++; // Empty spacing row
+
+            // Section 1: UI Selected Common Master Data
+            Row sec1Title = instructionSheet.createRow(rowIdx++);
+            Cell sec1Cell = sec1Title.createCell(0);
+            sec1Cell.setCellValue("1. MASTER DATA SELECTED FROM WEB UI (DO NOT INCLUDE IN EXCEL)");
+            sec1Cell.setCellStyle(boldStyle);
+
+            String[] uiFields = {
+                    "• Course Type: Selected from Web UI during upload dialog.",
+                    "• Grade: Selected from Web UI during upload dialog.",
+                    "• Board: Selected from Web UI during upload dialog.",
+                    "• Lead Source(s): Selected from Web UI during upload dialog.",
+                    "• Lead Status: Selected from Web UI during upload dialog (Defaults to 'RAW').",
+                    "• Department: Selected from Web UI during upload dialog.",
+                    "• Assigned User: Selected from Web UI during upload dialog."
+            };
+
+            for (String uiField : uiFields) {
+                Row r = instructionSheet.createRow(rowIdx++);
+                r.createCell(0).setCellValue(uiField);
+            }
+
+            rowIdx++; // Spacing
+
+            // Section 2: Excel Column Guidelines Table
+            Row sec2Title = instructionSheet.createRow(rowIdx++);
+            Cell sec2Cell = sec2Title.createCell(0);
+            sec2Cell.setCellValue("2. EXCEL SHEET COLUMN FORMAT & VALIDATION RULES");
+            sec2Cell.setCellStyle(boldStyle);
+
+            Row tableHeader = instructionSheet.createRow(rowIdx++);
+            tableHeader.setHeightInPoints(22);
+            String[] instTableHeaders = {"Column Header", "Field Key", "Required?", "Data Format", "Sample Value", "Validation / Rule Description"};
+            for (int i = 0; i < instTableHeaders.length; i++) {
+                Cell c = tableHeader.createCell(i);
+                c.setCellValue(instTableHeaders[i]);
+                c.setCellStyle(instHeaderStyle);
+            }
+
+            for (com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition colDef : columns) {
+                Row r = instructionSheet.createRow(rowIdx++);
+                r.createCell(0).setCellValue(colDef.getHeaderName());
+                r.createCell(1).setCellValue(colDef.getFieldKey());
+                r.createCell(2).setCellValue(colDef.isRequired() ? "REQUIRED *" : "Optional");
+                r.createCell(3).setCellValue(colDef.getDataType());
+                r.createCell(4).setCellValue(colDef.getSampleValue());
+                r.createCell(5).setCellValue(colDef.getDescription());
+
+                for (int i = 0; i < 6; i++) {
+                    r.getCell(i).setCellStyle(cellStyle);
+                }
+            }
+
+            rowIdx++; // Spacing
+
+            // Section 3: General Upload Guidelines
+            Row sec3Title = instructionSheet.createRow(rowIdx++);
+            Cell sec3Cell = sec3Title.createCell(0);
+            sec3Cell.setCellValue("3. SYSTEM LIMITS & DUPLICATE HANDLING RULES");
+            sec3Cell.setCellStyle(boldStyle);
+
+            String[] generalRules = {
+                    "• Supported File Formats: .xlsx or .xls",
+                    "• Maximum File Size: 10 MB per file.",
+                    "• Recommended Maximum Records: 10,000 rows per batch upload.",
+                    "• Duplicate Phone Numbers: System checks active phone numbers in database and batch rows. Duplicate phone numbers will be skipped and logged in error summary.",
+                    "• Phone Number Format: 7 to 20 digits, optionally starting with '+' or containing spaces/dashes.",
+                    "• Email Validation: Must be a valid email address format (max 100 characters).",
+                    "• Required Fields: Rows missing Full Name or Phone Number will be marked as failed rows."
+            };
+
+            for (String rule : generalRules) {
+                Row r = instructionSheet.createRow(rowIdx++);
+                r.createCell(0).setCellValue(rule);
+            }
+
+            for (int i = 0; i < 6; i++) {
+                instructionSheet.autoSizeColumn(i);
+                int currentWidth = instructionSheet.getColumnWidth(i);
+                instructionSheet.setColumnWidth(i, Math.max(currentWidth + 1000, 4500));
             }
 
             workbook.write(out);
@@ -491,38 +586,53 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         Map<String, Integer> map = new HashMap<>();
         DataFormatter formatter = new DataFormatter();
 
+        List<com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition> definitions =
+                com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.getAllColumns();
+
         for (int c = 0; c < headerRow.getLastCellNum(); c++) {
             Cell cell = headerRow.getCell(c);
             if (cell != null) {
                 String headerText = formatter.formatCellValue(cell).trim().toLowerCase().replaceAll("[_*\\s]+", "");
-                if (headerText.contains("fullname") || headerText.equals("name") || headerText.contains("candidatename") || headerText.contains("studentname")) {
-                    map.put("fullName", c);
-                } else if (headerText.contains("phonenumber") || headerText.contains("phone") || headerText.contains("mobilenumber") || headerText.contains("mobile") || headerText.contains("contactno")) {
-                    map.put("phoneNumber", c);
-                } else if (headerText.contains("alternatephone") || headerText.contains("altphone") || headerText.contains("alternatemobile") || headerText.contains("altmobile")) {
-                    map.put("alternatePhoneNumber", c);
-                } else if (headerText.contains("email")) {
-                    map.put("email", c);
-                } else if (headerText.equals("city") || headerText.equals("town")) {
-                    map.put("city", c);
-                } else if (headerText.equals("state") || headerText.equals("province")) {
-                    map.put("state", c);
-                } else if (headerText.equals("country")) {
-                    map.put("country", c);
-                } else if (headerText.contains("sourcedetail") || headerText.contains("sourcenote")) {
-                    map.put("sourceDetails", c);
-                } else if (headerText.contains("courseinterested") || headerText.contains("interestedcourse")) {
-                    map.put("courseInterested", c);
-                } else if (headerText.contains("remark") || headerText.contains("note") || headerText.contains("comment")) {
-                    map.put("remarks", c);
+
+                for (com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition def : definitions) {
+                    String canonicalHeader = def.getHeaderName().trim().toLowerCase().replaceAll("[_*\\s]+", "");
+                    if (headerText.equals(canonicalHeader) || headerText.equals(def.getFieldKey().toLowerCase())) {
+                        map.put(def.getFieldKey(), c);
+                        break;
+                    }
+                }
+
+                // Fallback alias mappings for existing user variations
+                if (!map.containsValue(c)) {
+                    if (headerText.contains("fullname") || headerText.equals("name") || headerText.contains("candidatename") || headerText.contains("studentname")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.FULL_NAME.getFieldKey(), c);
+                    } else if (headerText.contains("phonenumber") || headerText.contains("phone") || headerText.contains("mobilenumber") || headerText.contains("mobile") || headerText.contains("contactno")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.PHONE_NUMBER.getFieldKey(), c);
+                    } else if (headerText.contains("alternatephone") || headerText.contains("altphone") || headerText.contains("alternatemobile") || headerText.contains("altmobile")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.ALTERNATE_PHONE_NUMBER.getFieldKey(), c);
+                    } else if (headerText.contains("email")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.EMAIL.getFieldKey(), c);
+                    } else if (headerText.equals("city") || headerText.equals("town")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.CITY.getFieldKey(), c);
+                    } else if (headerText.equals("state") || headerText.equals("province")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.STATE.getFieldKey(), c);
+                    } else if (headerText.equals("country")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.COUNTRY.getFieldKey(), c);
+                    } else if (headerText.contains("sourcedetail") || headerText.contains("sourcenote")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.SOURCE_DETAILS.getFieldKey(), c);
+                    } else if (headerText.contains("courseinterested") || headerText.contains("interestedcourse")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.COURSE_INTERESTED.getFieldKey(), c);
+                    } else if (headerText.contains("remark") || headerText.contains("note") || headerText.contains("comment")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.REMARKS.getFieldKey(), c);
+                    }
                 }
             }
         }
 
-        if (!map.containsKey("fullName")) {
+        if (!map.containsKey(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.FULL_NAME.getFieldKey())) {
             throw new BadRequestException("Missing required Excel header: 'Full Name' (or 'Name')");
         }
-        if (!map.containsKey("phoneNumber")) {
+        if (!map.containsKey(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.PHONE_NUMBER.getFieldKey())) {
             throw new BadRequestException("Missing required Excel header: 'Phone Number' (or 'Mobile')");
         }
 
