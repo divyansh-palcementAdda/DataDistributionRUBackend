@@ -33,6 +33,33 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class DatabaseSeeder implements CommandLineRunner {
+	
+	
+//	RAW
+//	├── CONNECTED
+//	│   ├── INTERESTED
+//	│   │   ├── FORM_FOLLOW_UP
+//	│   │   │   ├── REGISTERED
+//	│   │   │   ├── FORM_NOT_INTERESTED
+//	│   │   │   └── CONTINUOUS_FORM_FOLLOW_UP
+//	│   │   │
+//	│   │   └── COUNSELING_FOLLOW_UP
+//	│   │       └── CONTINUOUS_FOLLOW_UP
+//	│   │           ├── INTERESTED_FOLLOW_UP
+//	│   │           │   └── GO_TO_FORM_FOLLOW_UP
+//	│   │           └── COUNSELING_NOT_INTERESTED
+//	│   │
+//	│   ├── BAD
+//	│   └── NOT_INTERESTED
+//	│
+//	└── NOT_CONNECTED
+//	    ├── NOT_CONNECTED_1
+//	    ├── NOT_CONNECTED_2
+//	    ├── NOT_CONNECTED_3
+//	    └── FINALLY_NOT_CONNECTED
+//	
+//	
+//	
 
 	private final PermissionRepository permissionRepository;
 	private final RoleRepository roleRepository;
@@ -60,7 +87,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedLeadStatuses();
 		seedLeadSources();
 		seedBoards();
-		seedGrades();
+//		seedGrades();
 		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
@@ -127,9 +154,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 
 	private void seedDepartments() {
 		createDepartmentIfNotExist("Admissions", "ADM", "Student Admissions & Enrollment Department");
-		createDepartmentIfNotExist("Marketing", "MKT", "Lead Generation & Marketing Department");
-		createDepartmentIfNotExist("Academics", "ACA", "Academic Course Guidance Department");
-		createDepartmentIfNotExist("Finance", "FIN", "Fee Processing & Financial Aid Department");
+//		createDepartmentIfNotExist("Marketing", "MKT", "Lead Generation & Marketing Department");
+//		createDepartmentIfNotExist("Academics", "ACA", "Academic Course Guidance Department");
+//		createDepartmentIfNotExist("Finance", "FIN", "Fee Processing & Financial Aid Department");
 	}
 
 	private void createDepartmentIfNotExist(String name, String code, String description) {
@@ -204,17 +231,181 @@ public class DatabaseSeeder implements CommandLineRunner {
 	}
 
 	private void seedLeadStatuses() {
-		createStatusIfNotExist("Raw", "RAW", "Newly received unverified lead", 1, SentimentCategory.NEUTRAL);
-		createStatusIfNotExist("Connected", "CONNECTED", "Contact established with lead", 2, SentimentCategory.POSITIVE);
-		createStatusIfNotExist("Not Connected", "NOT_CONNECTED", "Unable to establish contact", 3, SentimentCategory.NEGATIVE);
-		createStatusIfNotExist("Hot Lead", "HOT_LEAD", "High intent lead ready for conversion", 4, SentimentCategory.POSITIVE);
-		createStatusIfNotExist("Cold Lead", "COLD_LEAD", "Low engagement or inactive lead", 5, SentimentCategory.NEGATIVE);
-		createStatusIfNotExist("Bad Lead", "BAD_LEAD", "Invalid contact or unreachable lead", 6, SentimentCategory.NEGATIVE);
-		createStatusIfNotExist("Interested Lead", "INTERESTED_LEAD", "Expressing interest in course/service", 7, SentimentCategory.POSITIVE);
-		createStatusIfNotExist("Not Interested", "NOT_INTERESTED", "Lead explicitly declined offer", 8, SentimentCategory.NEGATIVE);
-		createStatusIfNotExist("Not Registered Yet", "NOT_REGISTERED_YET", "Pending registration details", 9, SentimentCategory.NEUTRAL);
 
-		migrateExistingLeadStatusData();
+	    // =========================
+	    // ROOT STATUS
+	    // =========================
+	    createStatusIfNotExist(
+	            "Raw",
+	            "RAW",
+	            "New lead received. Define the lead type as Inbound or Outbound.",
+	            1,
+	            SentimentCategory.NEUTRAL
+	    );
+
+	    // =========================
+	    // PRIMARY OUTCOMES
+	    // =========================
+	    createStatusIfNotExist(
+	            "Connected",
+	            "CONNECTED",
+	            "Contact successfully established with the lead.",
+	            2,
+	            SentimentCategory.POSITIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Not Connected",
+	            "NOT_CONNECTED",
+	            "Unable to establish contact with the lead.",
+	            3,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    // =========================
+	    // CONNECTED FLOW
+	    // =========================
+	    createStatusIfNotExist(
+	            "Interested",
+	            "INTERESTED",
+	            "Lead has shown interest in the course or service.",
+	            4,
+	            SentimentCategory.POSITIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Bad",
+	            "BAD",
+	            "Invalid, incorrect, duplicate, or unusable lead.",
+	            5,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Not Interested",
+	            "NOT_INTERESTED",
+	            "Lead is currently not interested.",
+	            6,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    // =========================
+	    // INTERESTED -> FOLLOW-UP FLOW
+	    // =========================
+	    createStatusIfNotExist(
+	            "Form Follow-Up",
+	            "FORM_FOLLOW_UP",
+	            "Lead is interested and requires follow-up regarding form submission.",
+	            7,
+	            SentimentCategory.NEUTRAL
+	    );
+
+	    createStatusIfNotExist(
+	            "Counseling Follow-Up",
+	            "COUNSELING_FOLLOW_UP",
+	            "Lead requires counseling and further follow-up.",
+	            8,
+	            SentimentCategory.NEUTRAL
+	    );
+
+	    // =========================
+	    // FORM FOLLOW-UP OUTCOMES
+	    // =========================
+	    createStatusIfNotExist(
+	            "Registered",
+	            "REGISTERED",
+	            "Lead has successfully completed registration.",
+	            9,
+	            SentimentCategory.POSITIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Form Not Interested",
+	            "FORM_NOT_INTERESTED",
+	            "Lead is not interested in completing the registration form.",
+	            10,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Continuous Form Follow-Up",
+	            "CONTINUOUS_FORM_FOLLOW_UP",
+	            "Lead requires continuous follow-up for form completion.",
+	            11,
+	            SentimentCategory.NEUTRAL
+	    );
+
+	    // =========================
+	    // COUNSELING FOLLOW-UP FLOW
+	    // =========================
+	    createStatusIfNotExist(
+	            "Continuous Follow-Up",
+	            "CONTINUOUS_FOLLOW_UP",
+	            "Lead requires continuous counseling follow-up.",
+	            12,
+	            SentimentCategory.NEUTRAL
+	    );
+
+	    createStatusIfNotExist(
+	            "Interested Follow-Up",
+	            "INTERESTED_FOLLOW_UP",
+	            "Interested lead requires additional follow-up.",
+	            13,
+	            SentimentCategory.POSITIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Go To Form Follow-Up",
+	            "GO_TO_FORM_FOLLOW_UP",
+	            "Move the interested lead to the form follow-up process.",
+	            14,
+	            SentimentCategory.POSITIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Counseling Not Interested",
+	            "COUNSELING_NOT_INTERESTED",
+	            "Lead became not interested after counseling follow-up.",
+	            15,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    // =========================
+	    // NOT CONNECTED FOLLOW-UP FLOW
+	    // =========================
+	    createStatusIfNotExist(
+	            "Not Connected - 1",
+	            "NOT_CONNECTED_1",
+	            "First unsuccessful contact attempt.",
+	            16,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Not Connected - 2",
+	            "NOT_CONNECTED_2",
+	            "Second unsuccessful contact attempt.",
+	            17,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Not Connected - 3",
+	            "NOT_CONNECTED_3",
+	            "Third unsuccessful contact attempt.",
+	            18,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    createStatusIfNotExist(
+	            "Finally Not Connected",
+	            "FINALLY_NOT_CONNECTED",
+	            "All contact attempts have failed and the lead is marked as finally not connected.",
+	            19,
+	            SentimentCategory.NEGATIVE
+	    );
+
+	    migrateExistingLeadStatusData();
 	}
 
 	private void createStatusIfNotExist(String name, String code, String description, int displayOrder, SentimentCategory sentimentCategory) {
@@ -323,13 +514,13 @@ public class DatabaseSeeder implements CommandLineRunner {
 		}
 	}
 
-	private void seedGrades() {
-		createGradeIfNotExist("Grade 9", "GRADE_9", "9th Grade / High School Freshman", 1);
-		createGradeIfNotExist("Grade 10", "GRADE_10", "10th Grade / Secondary School", 2);
-		createGradeIfNotExist("Grade 11", "GRADE_11", "11th Grade / Higher Secondary 1st Year", 3);
-		createGradeIfNotExist("Grade 12", "GRADE_12", "12th Grade / Higher Secondary Senior", 4);
-		createGradeIfNotExist("Undergraduate", "UG", "Bachelor Degree Aspirant / Student", 5);
-	}
+//	private void seedGrades() {
+//		createGradeIfNotExist("Grade 9", "GRADE_9", "9th Grade / High School Freshman", 1);
+//		createGradeIfNotExist("Grade 10", "GRADE_10", "10th Grade / Secondary School", 2);
+//		createGradeIfNotExist("Grade 11", "GRADE_11", "11th Grade / Higher Secondary 1st Year", 3);
+//		createGradeIfNotExist("Grade 12", "GRADE_12", "12th Grade / Higher Secondary Senior", 4);
+//		createGradeIfNotExist("Undergraduate", "UG", "Bachelor Degree Aspirant / Student", 5);
+//	}
 
 	private void createGradeIfNotExist(String name, String code, String description, int displayOrder) {
 		if (!gradeRepository.findByCodeIgnoreCase(code).isPresent()) {
