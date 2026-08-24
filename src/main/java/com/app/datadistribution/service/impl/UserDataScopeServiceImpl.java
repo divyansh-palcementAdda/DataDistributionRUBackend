@@ -192,22 +192,27 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
                 .anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName())
-                        || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()))
-                || hasPermission(user, PermissionType.DASHBOARD_VIEW_ALL.name());
+                        || RoleType.ADMIN.name().equalsIgnoreCase(r.getName())
+                        || "ROLE_SUPER_ADMIN".equalsIgnoreCase(r.getName())
+                        || "ROLE_ADMIN".equalsIgnoreCase(r.getName())
+                        || "SUPER_ADMIN".equalsIgnoreCase(r.getName())
+                        || "ADMIN".equalsIgnoreCase(r.getName()));
     }
 
     private boolean isHOD(User user) {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
                 .anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName())
+                        || "ROLE_HOD".equalsIgnoreCase(r.getName())
+                        || "HOD".equalsIgnoreCase(r.getName())
                         || r.getName().toUpperCase().contains("HOD")
-                        || r.getName().toUpperCase().contains("HEAD"))
-                || hasPermission(user, PermissionType.DASHBOARD_VIEW_DEPARTMENT.name());
+                        || r.getName().toUpperCase().contains("HEAD"));
     }
 
     private boolean hasPermission(User user, String permName) {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
+                .filter(r -> r.getPermissions() != null)
                 .flatMap(r -> r.getPermissions().stream())
                 .anyMatch(p -> p.getName().equalsIgnoreCase(permName));
     }

@@ -262,23 +262,23 @@ public class DashboardAnalyticsRepository {
 
         // Centralized Data Scope predicate
         if (dataScope.getScopeType() == ScopeType.SELF) {
-            predicates.add(cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            predicates.add(cb.and(
+                    cb.isNotNull(root.get("assignedTo")),
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId())
             ));
         } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            Predicate ownDataPredicate = cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            Predicate selfAssigned = cb.and(
+                    cb.isNotNull(root.get("assignedTo")),
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId())
             );
             if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
                 Predicate deptLeadPredicate = root.get("department").get("id").in(dataScope.getDepartmentIds());
                 Predicate deptUserPredicate = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
                         ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
                         : cb.disjunction();
-                predicates.add(cb.or(ownDataPredicate, deptLeadPredicate, deptUserPredicate));
+                predicates.add(cb.or(selfAssigned, deptLeadPredicate, deptUserPredicate));
             } else {
-                predicates.add(ownDataPredicate);
+                predicates.add(selfAssigned);
             }
         }
 

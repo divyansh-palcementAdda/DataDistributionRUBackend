@@ -40,25 +40,24 @@ public class LeadDataScopeServiceImpl implements ILeadDataScopeService {
         if (lead == null || lead.isDeleted()) {
             return false;
         }
-        if (scope.getScopeType() == ScopeType.SYSTEM) {
+        if (scope == null || scope.getScopeType() == ScopeType.SYSTEM) {
             return true;
         }
-        boolean isAssigned = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId());
-        boolean isCreator = lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(scope.getUserId());
-        boolean isOwn = isAssigned || isCreator;
 
         if (scope.getScopeType() == ScopeType.SELF) {
-            return isOwn;
+            // COUNSELOR -> STRICTLY lead.assignedTo == currentUser
+            return lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId());
         }
 
         if (scope.getScopeType() == ScopeType.DEPARTMENT) {
+            boolean isAssignedToHod = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId());
             boolean isDeptLead = lead.getDepartment() != null
                     && scope.getDepartmentIds() != null
                     && scope.getDepartmentIds().contains(lead.getDepartment().getId());
             boolean isDeptUser = lead.getAssignedTo() != null
                     && scope.getDepartmentUserIds() != null
                     && scope.getDepartmentUserIds().contains(lead.getAssignedTo().getId());
-            return isOwn || isDeptLead || isDeptUser;
+            return isAssignedToHod || isDeptLead || isDeptUser;
         }
 
         return false;
@@ -75,9 +74,8 @@ public class LeadDataScopeServiceImpl implements ILeadDataScopeService {
     public void validateLeadWriteAccess(Lead lead, UserDataScope scope) throws UnauthorizedException, BadRequestException {
         validateLeadReadAccess(lead, scope);
         if (scope.isHod() && !scope.canModifyDepartmentData()) {
-            boolean isOwn = (lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId()))
-                    || (lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(scope.getUserId()));
-            if (!isOwn) {
+            boolean isSelfAssigned = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId());
+            if (!isSelfAssigned) {
                 throw new UnauthorizedException("HOD with VIEW_ONLY access cannot modify department leads.");
             }
         }
@@ -91,24 +89,29 @@ public class LeadDataScopeServiceImpl implements ILeadDataScopeService {
             return notDeleted;
         }
 
-        Predicate ownData = cb.or(
-                cb.equal(root.get("assignedTo").get("id"), scope.getUserId()),
-                cb.equal(root.get("createdByUser").get("id"), scope.getUserId())
-        );
-
         if (scope.getScopeType() == ScopeType.SELF) {
-            return cb.and(notDeleted, ownData);
+            // COUNSELOR -> STRICTLY assignedTo.id == currentUserId
+            // Must NOT see unassigned/not-allotted leads or other counselors' leads
+            return cb.and(
+                    notDeleted,
+                    cb.isNotNull(root.get("assignedTo")),
+                    cb.equal(root.get("assignedTo").get("id"), scope.getUserId())
+            );
         }
 
         if (scope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate selfAssigned = cb.and(
+                    cb.isNotNull(root.get("assignedTo")),
+                    cb.equal(root.get("assignedTo").get("id"), scope.getUserId())
+            );
             if (scope.getDepartmentIds() != null && !scope.getDepartmentIds().isEmpty()) {
                 Predicate deptLead = root.get("department").get("id").in(scope.getDepartmentIds());
                 Predicate deptUser = (scope.getDepartmentUserIds() != null && !scope.getDepartmentUserIds().isEmpty())
                         ? root.get("assignedTo").get("id").in(scope.getDepartmentUserIds())
                         : cb.disjunction();
-                return cb.and(notDeleted, cb.or(ownData, deptLead, deptUser));
+                return cb.and(notDeleted, cb.or(selfAssigned, deptLead, deptUser));
             } else {
-                return cb.and(notDeleted, ownData);
+                return cb.and(notDeleted, selfAssigned);
             }
         }
 

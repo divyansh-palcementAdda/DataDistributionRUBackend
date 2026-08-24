@@ -230,7 +230,7 @@ class LeadDataScopeServiceTest {
     }
 
     @Test
-    void testCounselor_OnlySelfAssignedOrCreatedLeads() throws Exception {
+    void testCounselor_OnlySelfAssignedLeads() throws Exception {
         UserDataScope counselorScope = UserDataScope.builder()
                 .userId(counselor1Id)
                 .scopeType(ScopeType.SELF)
@@ -243,8 +243,10 @@ class LeadDataScopeServiceTest {
         assertDoesNotThrow(() -> leadDataScopeService.validateLeadReadAccess(leadDept1Counselor1, counselorScope));
         assertDoesNotThrow(() -> leadDataScopeService.validateLeadWriteAccess(leadDept1Counselor1, counselorScope));
 
-        // Own created lead -> accessible
-        assertTrue(leadDataScopeService.isLeadAccessible(leadCreatedByCounselor1, counselorScope));
+        // Unassigned lead (even if created by counselor1) -> NOT accessible
+        assertFalse(leadDataScopeService.isLeadAccessible(leadCreatedByCounselor1, counselorScope));
+        assertThrows(UnauthorizedException.class,
+                () -> leadDataScopeService.validateLeadReadAccess(leadCreatedByCounselor1, counselorScope));
 
         // Other counselor's lead in SAME department -> NOT accessible
         assertFalse(leadDataScopeService.isLeadAccessible(leadDept1Counselor2, counselorScope));

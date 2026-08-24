@@ -128,6 +128,7 @@ public class UserServiceImpl implements IUserService {
     @Override
     @Transactional
     public UserResponse createUser(UserRequest request) throws BadRequestException {
+    	System.err.println("User create api showing userRequest :- "+ request);
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
         }

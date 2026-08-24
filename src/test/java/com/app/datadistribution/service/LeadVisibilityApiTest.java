@@ -286,4 +286,28 @@ class LeadVisibilityApiTest {
         UnauthorizedException ex = assertThrows(UnauthorizedException.class, () -> leadService.deleteLead(leadId));
         assertTrue(ex.getMessage().contains("assigned role and data scope"));
     }
+
+    @Test
+    void testGetAllLeads_CounselorZeroAssignedLeads_ReturnsEmptyPage() throws Exception {
+        UserDataScope scope = UserDataScope.builder()
+                .userId(counselor1.getId())
+                .scopeType(ScopeType.SELF)
+                .build();
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+
+        Specification<Lead> mockSpec = mock(Specification.class);
+        when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(mockSpec);
+
+        Page<Lead> emptyPage = new PageImpl<>(Collections.emptyList());
+        when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
+
+        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+        LeadPageResponse response = leadService.getAllLeads(
+                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null
+        );
+
+        assertNotNull(response);
+        assertEquals(0, response.getTotalElements());
+        assertTrue(response.getContent().isEmpty());
+    }
 }
