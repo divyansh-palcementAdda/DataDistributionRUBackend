@@ -6,6 +6,7 @@ import com.app.datadistribution.dto.followup.FollowUpResponseDTO;
 import com.app.datadistribution.dto.followup.FollowUpSummaryDTO;
 import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.enums.FollowUpStatus;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.LeadFollowUpRepository;
@@ -80,7 +81,7 @@ public class FollowUpServiceImpl implements FollowUpService {
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getAllFollowUps(PageRequestDTO pageRequest, LocalDate date, FollowUpStatus status, UUID userId, UUID leadId) throws UnauthorizedException {
+    public FollowUpPagedResponseDTO getAllFollowUps(PageRequestDTO pageRequest, LocalDate date, FollowUpStatus status, UUID userId, UUID leadId) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         Pageable pageable = createSafePageable(pageRequest);
 
@@ -138,7 +139,7 @@ public class FollowUpServiceImpl implements FollowUpService {
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getFollowUpsByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException {
+    public FollowUpPagedResponseDTO getFollowUpsByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         if (!dataScope.isAdmin() && !dataScope.getUserId().equals(userId) && !dataScope.getDepartmentUserIds().contains(userId)) {
             throw new UnauthorizedException("You do not have permission to view this user's follow-ups");
@@ -148,25 +149,25 @@ public class FollowUpServiceImpl implements FollowUpService {
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getTodayFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException {
+    public FollowUpPagedResponseDTO getTodayFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         return getAllFollowUps(pageRequest, LocalDate.now(), null, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getPendingFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException {
+    public FollowUpPagedResponseDTO getPendingFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         return getAllFollowUps(pageRequest, null, FollowUpStatus.PENDING, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getCompletedFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException {
+    public FollowUpPagedResponseDTO getCompletedFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         return getAllFollowUps(pageRequest, null, FollowUpStatus.COMPLETED, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpSummaryDTO getDashboardStats() throws UnauthorizedException {
+    public FollowUpSummaryDTO getDashboardStats() throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Specification<LeadFollowUp> baseSpec = Specification.where(FollowUpSpecification.isNotDeleted())

@@ -39,6 +39,21 @@ public class UserDataScope {
     private boolean isHod;
     private boolean isCounsellor;
 
+    private ScopeType requestedScopeType;
+    private boolean isSelfScopeOnly;
+
+    public boolean isSystemScope() {
+        return scopeType == ScopeType.SYSTEM;
+    }
+
+    public boolean isDepartmentScope() {
+        return scopeType == ScopeType.DEPARTMENT;
+    }
+
+    public boolean isSelfScope() {
+        return scopeType == ScopeType.SELF;
+    }
+
     public boolean canModifyDepartmentData() {
         if (isAdmin) return true;
         if (isHod) return hodAccessType != HodAccessType.VIEW_ONLY;

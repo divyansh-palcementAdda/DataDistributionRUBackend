@@ -51,6 +51,8 @@ class UserLoginDashboardCardsTest {
     private ActivityLogRepository activityLogRepository;
     @Mock
     private LeadFollowUpRepository leadFollowUpRepository;
+    @Mock
+    private com.app.datadistribution.service.interfaces.IUserDataScopeService dataScopeService;
 
     @InjectMocks
     private DashboardServiceImpl dashboardService;
@@ -64,7 +66,7 @@ class UserLoginDashboardCardsTest {
     private User userNotLoggedInNoFollowUp;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         ReflectionTestUtils.setField(dashboardService, "cutoffTimeStr", "11:00");
 
         Role adminRole = Role.builder().name(RoleType.SUPER_ADMIN.name()).build();
@@ -82,6 +84,16 @@ class UserLoginDashboardCardsTest {
 
         userNotLoggedInNoFollowUp = User.builder().username("nologin_nofu").firstName("NoLogin").lastName("NoFollowUp").email("nologin_nofu@test.com").active(true).build();
         userNotLoggedInNoFollowUp.setId(UUID.randomUUID());
+
+        com.app.datadistribution.service.dto.UserDataScope systemScope = com.app.datadistribution.service.dto.UserDataScope.builder()
+                .scopeType(com.app.datadistribution.service.dto.UserDataScope.ScopeType.SYSTEM)
+                .isAdmin(true)
+                .userId(adminUser.getId())
+                .currentUser(adminUser)
+                .build();
+        lenient().when(dataScopeService.getScopeForCurrentUser()).thenReturn(systemScope);
+        lenient().when(dataScopeService.getScopeForCurrentUser((String) any())).thenReturn(systemScope);
+        lenient().when(dataScopeService.getScopeForCurrentUser(any(com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest.class))).thenReturn(systemScope);
 
         SecurityContext securityContext = mock(SecurityContext.class);
         Authentication authentication = mock(Authentication.class);

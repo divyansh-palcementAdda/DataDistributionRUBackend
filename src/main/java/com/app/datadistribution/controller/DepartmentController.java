@@ -69,7 +69,7 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<DepartmentResponse>> getDepartmentById(
             @Parameter(description = "UUID of the department to fetch", required = true)
             @PathVariable UUID id)
-            throws ResourcesNotFoundException, UnauthorizedException {
+            throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         DepartmentResponse response = departmentService.getDepartmentById(id);
         return ResponseEntity.ok(ApiResponse.success("Department fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -92,7 +92,7 @@ public class DepartmentController {
             @Parameter(description = "Filter by active status (true/false)")
             @RequestParam(required = false) Boolean active,
             @Parameter(description = "Search keyword (matches name, code, or description)")
-            @RequestParam(required = false) String search) throws UnauthorizedException {
+            @RequestParam(required = false) String search) throws UnauthorizedException, BadRequestException {
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
                 .size(size)
@@ -110,7 +110,7 @@ public class DepartmentController {
         summary = "Get all active departments",
         description = "Retrieves an unpaginated list of all active departments accessible within the current user's data scope."
     )
-    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getAllActiveDepartments() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getAllActiveDepartments() throws UnauthorizedException, BadRequestException {
         List<DepartmentResponse> list = departmentService.getAllActiveDepartments();
         return ResponseEntity.ok(ApiResponse.success("Active departments retrieved successfully", list, HttpStatus.OK.value()));
     }
@@ -138,7 +138,7 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentUsers(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
-            throws ResourcesNotFoundException, UnauthorizedException {
+            throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> users = departmentService.getDepartmentUsers(id);
         return ResponseEntity.ok(ApiResponse.success("Department users retrieved successfully", users, HttpStatus.OK.value()));
     }
@@ -152,7 +152,7 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentHods(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
-            throws ResourcesNotFoundException, UnauthorizedException {
+            throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> hods = departmentService.getDepartmentHods(id);
         return ResponseEntity.ok(ApiResponse.success("Department HODs retrieved successfully", hods, HttpStatus.OK.value()));
     }
@@ -166,7 +166,7 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentCounsellors(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
-            throws ResourcesNotFoundException, UnauthorizedException {
+            throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> counsellors = departmentService.getDepartmentCounsellors(id);
         return ResponseEntity.ok(ApiResponse.success("Department counsellors retrieved successfully", counsellors, HttpStatus.OK.value()));
     }

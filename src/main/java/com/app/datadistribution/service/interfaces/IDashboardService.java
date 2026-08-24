@@ -33,7 +33,7 @@ public interface IDashboardService {
     List<GroupCountDTO> getCourseTypeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
     List<GroupCountDTO> getCourseTypeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
 
-    List<Object> getRecentActivity() throws UnauthorizedException;
+    List<Object> getRecentActivity() throws UnauthorizedException, BadRequestException;
 
     List<UserDashboardPreferenceDTO> getUserPreferences() throws UnauthorizedException;
     void updateCardVisibility(UUID cardId, boolean visible) throws BadRequestException, UnauthorizedException;

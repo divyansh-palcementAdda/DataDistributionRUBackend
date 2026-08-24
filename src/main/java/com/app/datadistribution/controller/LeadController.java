@@ -115,7 +115,7 @@ public class LeadController {
             @RequestParam(value = "boardId", required = false) UUID boardId,
             @RequestParam(value = "boardIds", required = false) List<UUID> boardIds,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
-            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) throws UnauthorizedException {
+            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
 
         List<UUID> sourceIdsToFilter = leadSourceIds;
         if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
@@ -242,7 +242,7 @@ public class LeadController {
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "size", required = false) Integer size,
             @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
-            @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection) throws UnauthorizedException {
+            @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection) throws UnauthorizedException, BadRequestException {
         if (page != null && size != null) {
             PageRequestDTO pageRequest = PageRequestDTO.builder()
                     .page(page)
@@ -260,7 +260,7 @@ public class LeadController {
     @GetMapping("/stats/source-wise")
     @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get lead stats source-wise")
-    public ResponseEntity<ApiResponse<List<LeadSourceStatsResponse>>> getSourceWiseStats() {
+    public ResponseEntity<ApiResponse<List<LeadSourceStatsResponse>>> getSourceWiseStats() throws UnauthorizedException, BadRequestException {
         List<LeadSourceStatsResponse> response = leadService.getSourceWiseStats();
         return ResponseEntity.ok(ApiResponse.success("Source-wise lead statistics retrieved successfully", response, HttpStatus.OK.value()));
     }
@@ -268,7 +268,7 @@ public class LeadController {
     @GetMapping("/stats/status-wise")
     @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get lead stats status-wise")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> getStatusWiseStats() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getStatusWiseStats() throws UnauthorizedException, BadRequestException {
         Map<String, Long> response = leadService.getStatusWiseStats();
         return ResponseEntity.ok(ApiResponse.success("Status-wise lead statistics retrieved successfully", response, HttpStatus.OK.value()));
     }

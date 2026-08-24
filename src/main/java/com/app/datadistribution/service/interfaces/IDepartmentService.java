@@ -14,9 +14,9 @@ import java.util.UUID;
 public interface IDepartmentService {
     DepartmentResponse createDepartment(DepartmentRequest request) throws BadRequestException, UnauthorizedException;
     DepartmentResponse updateDepartment(UUID id, DepartmentRequest request) throws BadRequestException, ResourcesNotFoundException, UnauthorizedException;
-    DepartmentResponse getDepartmentById(UUID id) throws ResourcesNotFoundException, UnauthorizedException;
-    Page<DepartmentResponse> getAllDepartments(PageRequestDTO pageRequest, Boolean active, String search) throws UnauthorizedException;
-    List<DepartmentResponse> getAllActiveDepartments() throws UnauthorizedException;
+    DepartmentResponse getDepartmentById(UUID id) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    Page<DepartmentResponse> getAllDepartments(PageRequestDTO pageRequest, Boolean active, String search) throws UnauthorizedException, BadRequestException;
+    List<DepartmentResponse> getAllActiveDepartments() throws UnauthorizedException, BadRequestException;
     void deleteDepartment(UUID id) throws BadRequestException, ResourcesNotFoundException, UnauthorizedException;
 
     // User department mapping
@@ -26,7 +26,7 @@ public interface IDepartmentService {
     void removeDepartmentFromUser(UUID userId, UUID departmentId) throws BadRequestException, ResourcesNotFoundException, UnauthorizedException;
 
     // Department Users / HODs / Counsellors
-    List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException;
-    List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException;
-    List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException;
+    List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
 }

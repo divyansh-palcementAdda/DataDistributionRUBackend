@@ -4,6 +4,7 @@ import com.app.datadistribution.common.ApiResponse;
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.feedback.FeedbackPagedResponseDTO;
 import com.app.datadistribution.dto.feedback.FeedbackSummaryDTO;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.service.interfaces.FeedbackService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,7 +38,7 @@ public class FeedbackController {
             @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "userId", required = false) UUID userId,
-            @RequestParam(value = "leadId", required = false) UUID leadId) throws UnauthorizedException {
+            @RequestParam(value = "leadId", required = false) UUID leadId) throws UnauthorizedException, BadRequestException {
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -60,7 +61,7 @@ public class FeedbackController {
             @RequestParam(value = "size", defaultValue = "10") int size,
             @RequestParam(value = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException {
+            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -77,7 +78,7 @@ public class FeedbackController {
     @GetMapping("/dashboard")
     @PreAuthorize("hasAuthority('FEEDBACK_VIEW')")
     @Operation(summary = "Get feedback dashboard statistics")
-    public ResponseEntity<ApiResponse<FeedbackSummaryDTO>> getFeedbackDashboardStats() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<FeedbackSummaryDTO>> getFeedbackDashboardStats() throws UnauthorizedException, BadRequestException {
         FeedbackSummaryDTO response = feedbackService.getDashboardStats();
         return ResponseEntity.ok(ApiResponse.success("Feedback dashboard statistics retrieved successfully", response, HttpStatus.OK.value()));
     }

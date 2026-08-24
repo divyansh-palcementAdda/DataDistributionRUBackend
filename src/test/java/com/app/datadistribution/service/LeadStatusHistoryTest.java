@@ -13,6 +13,7 @@ import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.*;
@@ -139,7 +140,7 @@ class LeadStatusHistoryTest {
     }
 
     @Test
-    void testGetStatusHistoryByLeadId_Paginated_Success() throws UnauthorizedException {
+    void testGetStatusHistoryByLeadId_Paginated_Success() throws UnauthorizedException, BadRequestException {
         when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead));
 
         UserDataScope scope = UserDataScope.builder()

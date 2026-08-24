@@ -14,6 +14,10 @@ import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.ILeadService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -46,6 +50,7 @@ public class LeadServiceImpl implements ILeadService {
     private final CourseRepository courseRepository;
     private final IUserDataScopeService dataScopeService;
     private final LeadMapper leadMapper;
+    private final jakarta.persistence.EntityManager entityManager;
 
     private static final Set<String> ALLOWED_LEAD_SORT_FIELDS = Set.of(
             "id", "leadCode", "fullName", "phoneNumber", "email", "city", "state", "country",
@@ -264,7 +269,7 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException {
+    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         String sortBy = pageRequest.getSortBy();
@@ -449,7 +454,7 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) throws UnauthorizedException {
+    public List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
@@ -464,7 +469,7 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public LeadStatusHistoryPageResponse getStatusHistoryByLeadId(UUID leadId, PageRequestDTO pageRequest) throws UnauthorizedException {
+    public LeadStatusHistoryPageResponse getStatusHistoryByLeadId(UUID leadId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
@@ -495,7 +500,7 @@ public class LeadServiceImpl implements ILeadService {
                 .build();
     }
 
-    private void validateLeadDataScopeAccess(Lead lead) throws UnauthorizedException {
+    private void validateLeadDataScopeAccess(Lead lead) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         if (dataScope.getScopeType() == ScopeType.SYSTEM) {
             return;
@@ -519,33 +524,102 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeadSourceStatsResponse> getSourceWiseStats() {
-        List<Object[]> results = leadRepository.countBySource();
-        List<LeadSourceStatsResponse> stats = new ArrayList<>();
-        for (Object[] row : results) {
-            LeadSource source = (LeadSource) row[0];
-            Long count = (Long) row[1];
-            if (source != null) {
-                stats.add(LeadSourceStatsResponse.builder()
-                        .sourceId(source.getId())
-                        .sourceName(source.getName())
-                        .count(count)
-                        .build());
+    public List<LeadSourceStatsResponse> getSourceWiseStats() throws UnauthorizedException, BadRequestException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Lead> root = query.from(Lead.class);
+        jakarta.persistence.criteria.SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", jakarta.persistence.criteria.JoinType.INNER);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.equal(sourceJoin.get("isDeleted"), false));
+
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            predicates.add(cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownData = cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            );
+            if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                Predicate deptLead = root.get("department").get("id").in(dataScope.getDepartmentIds());
+                Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                        ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                        : cb.disjunction();
+                predicates.add(cb.or(ownData, deptLead, deptUser));
+            } else {
+                predicates.add(ownData);
             }
+        }
+
+        query.select(cb.tuple(sourceJoin.get("id").alias("id"), sourceJoin.get("name").alias("name"), cb.countDistinct(root.get("id")).alias("count")));
+        query.where(predicates.toArray(new Predicate[0]));
+        query.groupBy(sourceJoin.get("id"), sourceJoin.get("name"));
+
+        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
+        List<LeadSourceStatsResponse> stats = new ArrayList<>();
+        for (Tuple t : tuples) {
+            UUID sourceId = t.get("id", UUID.class);
+            String sourceName = t.get("name", String.class);
+            Long count = t.get("count", Long.class);
+            stats.add(LeadSourceStatsResponse.builder()
+                    .sourceId(sourceId)
+                    .sourceName(sourceName)
+                    .count(count)
+                    .build());
         }
         return stats;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Map<String, Long> getStatusWiseStats() {
-        List<Object[]> results = leadRepository.countByStatus();
+    public Map<String, Long> getStatusWiseStats() throws UnauthorizedException, BadRequestException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Lead> root = query.from(Lead.class);
+        jakarta.persistence.criteria.Join<Lead, LeadStatus> statusJoin = root.join("currentStatus", jakarta.persistence.criteria.JoinType.INNER);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.equal(statusJoin.get("isDeleted"), false));
+
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            predicates.add(cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownData = cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            );
+            if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                Predicate deptLead = root.get("department").get("id").in(dataScope.getDepartmentIds());
+                Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                        ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                        : cb.disjunction();
+                predicates.add(cb.or(ownData, deptLead, deptUser));
+            } else {
+                predicates.add(ownData);
+            }
+        }
+
+        query.select(cb.tuple(statusJoin.get("code").alias("code"), cb.countDistinct(root.get("id")).alias("count")));
+        query.where(predicates.toArray(new Predicate[0]));
+        query.groupBy(statusJoin.get("code"));
+
+        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
         Map<String, Long> stats = new HashMap<>();
-        for (Object[] row : results) {
-            LeadStatus status = (LeadStatus) row[0];
-            Long count = (Long) row[1];
-            if (status != null) {
-                stats.put(status.getCode(), count);
+        for (Tuple t : tuples) {
+            String code = t.get("code", String.class);
+            Long count = t.get("count", Long.class);
+            if (code != null) {
+                stats.put(code, count);
             }
         }
         return stats;

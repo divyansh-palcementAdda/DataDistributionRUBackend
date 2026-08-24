@@ -8,6 +8,7 @@ import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusSentiment;
 import com.app.datadistribution.enums.SentimentCategory;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
@@ -46,7 +47,7 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     @Override
     @Transactional(readOnly = true)
-    public FeedbackPagedResponseDTO getAllFeedbacks(PageRequestDTO pageRequest, UUID userId, UUID leadId) throws UnauthorizedException {
+    public FeedbackPagedResponseDTO getAllFeedbacks(PageRequestDTO pageRequest, UUID userId, UUID leadId) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
@@ -100,7 +101,7 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     @Override
     @Transactional(readOnly = true)
-    public FeedbackPagedResponseDTO getFeedbacksByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException {
+    public FeedbackPagedResponseDTO getFeedbacksByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         if (!dataScope.isAdmin() && !dataScope.getUserId().equals(userId) && !dataScope.getDepartmentUserIds().contains(userId)) {
@@ -112,7 +113,7 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     @Override
     @Transactional(readOnly = true)
-    public FeedbackSummaryDTO getDashboardStats() throws UnauthorizedException {
+    public FeedbackSummaryDTO getDashboardStats() throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Specification<LeadFeedback> baseSpec = Specification.where(FeedbackSpecification.isNotDeleted())

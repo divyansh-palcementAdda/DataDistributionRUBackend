@@ -125,7 +125,7 @@ public class DashboardController {
     @GetMapping("/recent-activity")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get recent lead activity audit feed for current user scope")
-    public ResponseEntity<ApiResponse<List<Object>>> getRecentActivity() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<List<Object>>> getRecentActivity() throws UnauthorizedException, BadRequestException {
         List<Object> result = dashboardService.getRecentActivity();
         return ResponseEntity.ok(ApiResponse.success("Recent activity retrieved successfully", result, HttpStatus.OK.value()));
     }

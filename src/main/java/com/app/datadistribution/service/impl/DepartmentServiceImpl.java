@@ -90,7 +90,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public DepartmentResponse getDepartmentById(UUID id) throws ResourcesNotFoundException, UnauthorizedException {
+    public DepartmentResponse getDepartmentById(UUID id) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         Department department = departmentRepository.findById(id)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + id));
@@ -101,7 +101,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DepartmentResponse> getAllDepartments(PageRequestDTO pageRequest, Boolean active, String search) throws UnauthorizedException {
+    public Page<DepartmentResponse> getAllDepartments(PageRequestDTO pageRequest, Boolean active, String search) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Sort.Direction direction = Sort.Direction.fromString(
@@ -135,7 +135,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DepartmentResponse> getAllActiveDepartments() throws UnauthorizedException {
+    public List<DepartmentResponse> getAllActiveDepartments() throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         List<Department> list = departmentRepository.findByActiveTrueAndIsDeletedFalse();
 
@@ -247,7 +247,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException {
+    public List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         Department dept = departmentRepository.findById(departmentId)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + departmentId));
@@ -263,7 +263,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException {
+    public List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> allUsers = getDepartmentUsers(departmentId);
         return allUsers.stream()
                 .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD")))
@@ -272,7 +272,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException {
+    public List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> allUsers = getDepartmentUsers(departmentId);
         return allUsers.stream()
                 .filter(u -> u.getRoles() == null || u.getRoles().stream().noneMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r) || RoleType.ADMIN.name().equalsIgnoreCase(r)))
@@ -321,7 +321,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
                 .anyMatch(r -> r.getName().toUpperCase().contains("HOD") || r.getName().toUpperCase().contains("HEAD"));
     }
 
-    private void validateUserAccessToDepartment(UUID departmentId) throws UnauthorizedException {
+    private void validateUserAccessToDepartment(UUID departmentId) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         if (!dataScope.isAdmin() && (dataScope.getDepartmentIds() == null || !dataScope.getDepartmentIds().contains(departmentId))) {
             throw new UnauthorizedException("You are not authorized to access department: " + departmentId);

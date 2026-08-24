@@ -27,6 +27,8 @@ import com.app.datadistribution.enums.DashboardGroupBy;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -51,8 +53,24 @@ public class DashboardAnalyticsRepository {
     private final EntityManager entityManager;
     private final IUserDataScopeService dataScopeService;
 
+    public DashboardAnalyticsResponseDTO fetchAnalytics(User user, DashboardAnalyticsFilterRequest filter) throws UnauthorizedException, BadRequestException {
+        if (filter == null) {
+            filter = new DashboardAnalyticsFilterRequest();
+        }
+        UserDataScope dataScope = dataScopeService.getScopeForUser(user, filter);
+        return fetchAnalyticsWithScope(dataScope, filter);
+    }
+
     public DashboardAnalyticsResponseDTO fetchAnalytics(User user, Object legacyScope, DashboardAnalyticsFilterRequest filter) {
-        UserDataScope dataScope = dataScopeService.getScopeForUser(user);
+        try {
+            return fetchAnalytics(user, filter);
+        } catch (Exception e) {
+            log.error("Error in fetchAnalytics for user {}", user.getUsername(), e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public DashboardAnalyticsResponseDTO fetchAnalyticsWithScope(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
         DashboardGroupBy groupBy = filter.getGroupBy() != null ? filter.getGroupBy() : DashboardGroupBy.LEAD_STATUS;
 
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
@@ -225,7 +243,7 @@ public class DashboardAnalyticsRepository {
                 .build();
     }
 
-    private long fetchTotalMatchingLeads(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
+    public long fetchTotalMatchingLeads(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> query = cb.createQuery(Long.class);
         Root<Lead> root = query.from(Lead.class);
@@ -236,7 +254,7 @@ public class DashboardAnalyticsRepository {
         return entityManager.createQuery(query).getSingleResult();
     }
 
-    private List<Predicate> buildFilterPredicates(CriteriaBuilder cb, Root<Lead> root, UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
+    public List<Predicate> buildFilterPredicates(CriteriaBuilder cb, Root<Lead> root, UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
         List<Predicate> predicates = new ArrayList<>();
 
         // Base soft delete check
@@ -255,11 +273,17 @@ public class DashboardAnalyticsRepository {
             );
             if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
                 Predicate deptLeadPredicate = root.get("department").get("id").in(dataScope.getDepartmentIds());
-                Predicate deptUserPredicate = root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds());
+                Predicate deptUserPredicate = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                        ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                        : cb.disjunction();
                 predicates.add(cb.or(ownDataPredicate, deptLeadPredicate, deptUserPredicate));
             } else {
                 predicates.add(ownDataPredicate);
             }
+        }
+
+        if (filter == null) {
+            return predicates;
         }
 
         // Date Range
@@ -300,9 +324,25 @@ public class DashboardAnalyticsRepository {
             predicates.add(root.get("grade").get("id").in(filter.getGradeIds()));
         }
 
-        // Multi-value Assigned User filter
+        // Multi-value Assigned User filter (Intersect with data scope)
         if (filter.getAssignedUserIds() != null && !filter.getAssignedUserIds().isEmpty()) {
-            predicates.add(root.get("assignedTo").get("id").in(filter.getAssignedUserIds()));
+            Set<UUID> allowedUsers = new HashSet<>(filter.getAssignedUserIds());
+            if (dataScope.getScopeType() == ScopeType.SELF) {
+                if (allowedUsers.contains(dataScope.getUserId())) {
+                    predicates.add(cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()));
+                } else {
+                    predicates.add(cb.disjunction());
+                }
+            } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+                allowedUsers.retainAll(dataScope.getDepartmentUserIds() != null ? dataScope.getDepartmentUserIds() : Collections.emptySet());
+                if (allowedUsers.isEmpty()) {
+                    predicates.add(cb.disjunction());
+                } else {
+                    predicates.add(root.get("assignedTo").get("id").in(allowedUsers));
+                }
+            } else {
+                predicates.add(root.get("assignedTo").get("id").in(allowedUsers));
+            }
         }
 
         // Multi-value Created By User filter

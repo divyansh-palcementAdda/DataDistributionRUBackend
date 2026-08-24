@@ -50,6 +50,9 @@ public class DashboardAnalyticsFilterRequest {
     private Integer pageSize;
     private Integer size;
 
+    private String scope;         // DEFAULT, SYSTEM, DEPARTMENT, SELF
+    private Boolean selfOnly;     // true to force self-scope data
+
     public LocalDate getEffectiveStartDate() {
         return startDate != null ? startDate : fromDate;
     }
@@ -60,5 +63,15 @@ public class DashboardAnalyticsFilterRequest {
 
     public Integer getEffectivePageSize() {
         return pageSize != null ? pageSize : size;
+    }
+
+    public String getEffectiveScope() {
+        if (Boolean.TRUE.equals(selfOnly)) {
+            return "SELF";
+        }
+        if (scope != null && !scope.isBlank()) {
+            return scope.trim().toUpperCase();
+        }
+        return null;
     }
 }

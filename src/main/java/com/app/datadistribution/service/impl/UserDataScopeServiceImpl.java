@@ -4,6 +4,7 @@ import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.PermissionType;
 import com.app.datadistribution.enums.RoleType;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.DepartmentRepository;
@@ -33,7 +34,13 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserDataScope getScopeForCurrentUser() throws UnauthorizedException {
+    public UserDataScope getScopeForCurrentUser() throws UnauthorizedException, BadRequestException {
+        return getScopeForCurrentUser((String) null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserDataScope getScopeForCurrentUser(String requestedScope) throws UnauthorizedException, BadRequestException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
             throw new UnauthorizedException("User is not authenticated");
@@ -42,16 +49,79 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
         User currentUser = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
 
-        return getScopeForUser(currentUser);
+        return getScopeForUser(currentUser, requestedScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserDataScope getScopeForCurrentUser(com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        String requestedScope = filterRequest != null ? filterRequest.getEffectiveScope() : null;
+        return getScopeForCurrentUser(requestedScope);
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserDataScope getScopeForUser(User user) {
+        try {
+            return getScopeForUser(user, (String) null);
+        } catch (BadRequestException | UnauthorizedException e) {
+            // Default fallback if no requested scope
+            log.error("Error resolving default scope for user {}", user.getUsername(), e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserDataScope getScopeForUser(User user, com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest filterRequest) throws BadRequestException, UnauthorizedException {
+        String requestedScope = filterRequest != null ? filterRequest.getEffectiveScope() : null;
+        return getScopeForUser(user, requestedScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserDataScope getScopeForUser(User user, String requestedScope) throws BadRequestException, UnauthorizedException {
         boolean admin = isAdmin(user);
         boolean hod = isHOD(user);
 
-        if (admin) {
+        ScopeType targetScopeType = null;
+        if (requestedScope != null && !requestedScope.isBlank()) {
+            String norm = requestedScope.trim().toUpperCase();
+            if (!norm.equals("DEFAULT")) {
+                try {
+                    targetScopeType = ScopeType.valueOf(norm);
+                } catch (IllegalArgumentException e) {
+                    throw new BadRequestException("Invalid data scope requested: " + requestedScope);
+                }
+            }
+        }
+
+        // Validate scope authorization
+        if (targetScopeType != null) {
+            if (targetScopeType == ScopeType.SYSTEM && !admin) {
+                throw new UnauthorizedException("You do not have access to data outside your permitted scope.");
+            }
+            if (targetScopeType == ScopeType.DEPARTMENT && !admin && !hod) {
+                throw new UnauthorizedException("You do not have access to data outside your permitted scope.");
+            }
+        }
+
+        // Determine default scope if not explicitly overridden
+        if (targetScopeType == null) {
+            if (admin) {
+                targetScopeType = ScopeType.SYSTEM;
+            } else if (hod) {
+                targetScopeType = ScopeType.DEPARTMENT;
+            } else {
+                targetScopeType = ScopeType.SELF;
+            }
+        }
+
+        Set<UUID> userDeptIds = user.getDepartments() != null ?
+                user.getDepartments().stream().filter(d -> d.isActive() && !d.isDeleted()).map(Department::getId).collect(Collectors.toSet())
+                : new HashSet<>();
+
+        if (targetScopeType == ScopeType.SYSTEM) {
             List<Department> allDepts = departmentRepository.findByActiveTrueAndIsDeletedFalse();
             Set<UUID> allDeptIds = allDepts.stream().map(Department::getId).collect(Collectors.toSet());
             Set<UUID> allUserIds = userRepository.findAll().stream()
@@ -61,6 +131,8 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
 
             return UserDataScope.builder()
                     .scopeType(ScopeType.SYSTEM)
+                    .requestedScopeType(targetScopeType)
+                    .isSelfScopeOnly(false)
                     .userId(user.getId())
                     .currentUser(user)
                     .departmentIds(allDeptIds)
@@ -72,11 +144,7 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
                     .build();
         }
 
-        Set<UUID> userDeptIds = user.getDepartments() != null ?
-                user.getDepartments().stream().filter(d -> d.isActive() && !d.isDeleted()).map(Department::getId).collect(Collectors.toSet())
-                : new HashSet<>();
-
-        if (hod) {
+        if (targetScopeType == ScopeType.DEPARTMENT) {
             Set<UUID> memberUserIds = new HashSet<>();
             if (!userDeptIds.isEmpty()) {
                 List<User> deptUsers = userRepository.findAll().stream()
@@ -88,31 +156,35 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
 
             return UserDataScope.builder()
                     .scopeType(ScopeType.DEPARTMENT)
+                    .requestedScopeType(targetScopeType)
+                    .isSelfScopeOnly(false)
                     .userId(user.getId())
                     .currentUser(user)
                     .departmentIds(userDeptIds)
                     .departmentUserIds(memberUserIds)
                     .hodAccessType(user.getHodAccessType())
-                    .isAdmin(false)
+                    .isAdmin(admin)
                     .isHod(true)
                     .isCounsellor(false)
                     .build();
         }
 
-        // Counsellor / Standard User Scope
+        // Target Scope is SELF
         Set<UUID> selfUserId = new HashSet<>();
         selfUserId.add(user.getId());
 
         return UserDataScope.builder()
                 .scopeType(ScopeType.SELF)
+                .requestedScopeType(targetScopeType)
+                .isSelfScopeOnly(true)
                 .userId(user.getId())
                 .currentUser(user)
                 .departmentIds(userDeptIds)
                 .departmentUserIds(selfUserId)
                 .hodAccessType(user.getHodAccessType())
-                .isAdmin(false)
-                .isHod(false)
-                .isCounsellor(true)
+                .isAdmin(admin)
+                .isHod(hod)
+                .isCounsellor(!admin && !hod)
                 .build();
     }
 

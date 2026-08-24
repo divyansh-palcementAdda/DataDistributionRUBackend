@@ -49,7 +49,10 @@ import com.app.datadistribution.repository.DashboardAnalyticsRepository;
 import com.app.datadistribution.repository.DashboardCardRepository;
 import com.app.datadistribution.repository.UserDashboardCardPreferenceRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.IDashboardService;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -73,6 +76,7 @@ public class DashboardServiceImpl implements IDashboardService {
     private final com.app.datadistribution.repository.LeadRepository leadRepository;
     private final com.app.datadistribution.repository.ActivityLogRepository activityLogRepository;
     private final com.app.datadistribution.repository.LeadFollowUpRepository leadFollowUpRepository;
+    private final IUserDataScopeService dataScopeService;
     private final EntityManager entityManager;
 
     @org.springframework.beans.factory.annotation.Value("${app.dashboard.low-data-user-threshold:10}")
@@ -83,51 +87,35 @@ public class DashboardServiceImpl implements IDashboardService {
 
     private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
 
-    public enum DataScope {
-        SYSTEM,
-        DEPARTMENT,
-        SELF
-    }
-
     @Override
     @Transactional(readOnly = true)
     public DashboardAnalyticsResponseDTO getAnalytics(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
         User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
         if (filterRequest == null) {
             filterRequest = new DashboardAnalyticsFilterRequest();
         }
-        return dashboardAnalyticsRepository.fetchAnalytics(currentUser, scope, filterRequest);
+        return dashboardAnalyticsRepository.fetchAnalytics(currentUser, filterRequest);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DashboardSummaryDTO getDashboardSummary(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
         User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-
         if (filterRequest == null) {
             filterRequest = new DashboardAnalyticsFilterRequest();
         }
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
 
-        LocalDate startDate = filterRequest.getEffectiveStartDate();
-        LocalDate endDate = filterRequest.getEffectiveEndDate();
-        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
-        LocalDateTime endDateTime = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+        long totalLeads = countLeadsInScope(dataScope, filterRequest);
+        long totalFollowUpsToday = countFollowUpsTodayInScope(dataScope, filterRequest);
+        long loggedToday = countCounsellorsLoggedTodayInScope(dataScope);
+        long currentlyWorking = countCounsellorsWorkingInScope(dataScope);
 
-        long totalLeads = countLeadsInScope(currentUser, scope, startDateTime, endDateTime);
-        long totalFollowUpsToday = countFollowUpsTodayInScope(currentUser, scope);
-        long loggedToday = userRepository.count((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("lastLogin"), LocalDate.now().atStartOfDay()));
-        long currentlyWorking = userRepository.count((root, query, cb) -> cb.and(
-                cb.equal(root.get("active"), true),
-                cb.greaterThanOrEqualTo(root.get("lastLogin"), LocalDateTime.now().minusHours(8))
-        ));
-
-        long feedbackCount = countFeedbacksInScope(currentUser, scope, startDateTime, endDateTime);
+        long feedbackCount = countFeedbacksInScope(dataScope, filterRequest);
         double conversationRatio = totalLeads > 0 ? (double) feedbackCount / totalLeads : 0.0;
 
         List<DashboardCardDTO> resolvedCards = getResolvedCardsForUser(currentUser);
-        populateCardValues(resolvedCards, currentUser, scope, filterRequest);
+        populateCardValues(resolvedCards, currentUser, dataScope, filterRequest);
 
         Map<String, List<DashboardCardDTO>> groupedBySection = resolvedCards.stream()
                 .filter(DashboardCardDTO::isVisible)
@@ -147,7 +135,7 @@ public class DashboardServiceImpl implements IDashboardService {
         }
 
         return DashboardSummaryDTO.builder()
-                .scope(scope.name())
+                .scope(dataScope.getScopeType().name())
                 .totalLeads(totalLeads)
                 .totalFollowUpsToday(totalFollowUpsToday)
                 .counsellorsLoggedToday(loggedToday)
@@ -171,9 +159,9 @@ public class DashboardServiceImpl implements IDashboardService {
     @Transactional(readOnly = true)
     public List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException, BadRequestException {
         User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         List<DashboardCardDTO> cards = getResolvedCardsForUser(currentUser);
-        populateCardValues(cards, currentUser, scope, new DashboardAnalyticsFilterRequest());
+        populateCardValues(cards, currentUser, dataScope, new DashboardAnalyticsFilterRequest());
         return cards;
     }
 
@@ -293,17 +281,37 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Object> getRecentActivity() throws UnauthorizedException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
+    public List<Object> getRecentActivity() throws UnauthorizedException, BadRequestException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return getRecentActivity(dataScope);
+    }
 
+    public List<Object> getRecentActivity(UserDataScope dataScope) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<LeadStatusHistory> query = cb.createQuery(LeadStatusHistory.class);
         Root<LeadStatusHistory> root = query.from(LeadStatusHistory.class);
 
         Predicate spec = cb.conjunction();
-        if (scope == DataScope.SELF) {
-            spec = cb.and(spec, cb.equal(root.get("changedByUser").get("id"), currentUser.getId()));
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            spec = cb.or(
+                    cb.equal(root.get("changedByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            );
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownActivity = cb.or(
+                    cb.equal(root.get("changedByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            );
+            Predicate deptLead = (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty())
+                    ? root.get("lead").get("department").get("id").in(dataScope.getDepartmentIds())
+                    : cb.disjunction();
+            Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                    ? cb.or(
+                            root.get("changedByUser").get("id").in(dataScope.getDepartmentUserIds()),
+                            root.get("lead").get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                    )
+                    : cb.disjunction();
+            spec = cb.or(ownActivity, deptLead, deptUser);
         }
 
         query.where(spec);
@@ -542,16 +550,6 @@ public class DashboardServiceImpl implements IDashboardService {
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
     }
 
-    private DataScope resolveDataScope(User user) {
-        if (hasPermission(user, PermissionType.DASHBOARD_VIEW_ALL.name()) || isAdmin(user)) {
-            return DataScope.SYSTEM;
-        }
-        if (hasPermission(user, PermissionType.DASHBOARD_VIEW_DEPARTMENT.name()) || isHOD(user)) {
-            return DataScope.DEPARTMENT;
-        }
-        return DataScope.SELF;
-    }
-
     private boolean isAdmin(User user) {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
@@ -627,33 +625,25 @@ public class DashboardServiceImpl implements IDashboardService {
         return dtos;
     }
 
-    private void populateCardValues(List<DashboardCardDTO> cards, User user, DataScope scope, DashboardAnalyticsFilterRequest filter) throws UnauthorizedException, BadRequestException {
-        LocalDate startDate = filter != null ? filter.getEffectiveStartDate() : null;
-        LocalDate endDate = filter != null ? filter.getEffectiveEndDate() : null;
-        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
-        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
-
+    private void populateCardValues(List<DashboardCardDTO> cards, User user, UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) throws UnauthorizedException, BadRequestException {
         for (DashboardCardDTO card : cards) {
             if (!card.isVisible()) continue;
             switch (card.getCode()) {
                 case "TOTAL_LEADS":
-                    card.setValue(countLeadsInScope(user, scope, start, end));
+                    card.setValue(countLeadsInScope(dataScope, filter));
                     break;
                 case "TOTAL_FOLLOWUPS_TODAY":
-                    card.setValue(countFollowUpsTodayInScope(user, scope));
+                    card.setValue(countFollowUpsTodayInScope(dataScope, filter));
                     break;
                 case "TOTAL_COUNSELLORS_LOGGED_TODAY":
-                    card.setValue(userRepository.count((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("lastLogin"), LocalDate.now().atStartOfDay())));
+                    card.setValue(countCounsellorsLoggedTodayInScope(dataScope));
                     break;
                 case "TOTAL_COUNSELLORS_WORKING":
-                    card.setValue(userRepository.count((root, query, cb) -> cb.and(
-                            cb.equal(root.get("active"), true),
-                            cb.greaterThanOrEqualTo(root.get("lastLogin"), LocalDateTime.now().minusHours(8))
-                    )));
+                    card.setValue(countCounsellorsWorkingInScope(dataScope));
                     break;
                 case "CONVERSATION_RATIO":
-                    long totalLeads = countLeadsInScope(user, scope, start, end);
-                    long feedbackCount = countFeedbacksInScope(user, scope, start, end);
+                    long totalLeads = countLeadsInScope(dataScope, filter);
+                    long feedbackCount = countFeedbacksInScope(dataScope, filter);
                     double ratio = totalLeads > 0 ? (double) feedbackCount / totalLeads : 0.0;
                     card.setValue(Math.round(ratio * 100.0) / 100.0);
                     break;
@@ -677,14 +667,14 @@ public class DashboardServiceImpl implements IDashboardService {
                     break;
                 case "RECENT_ACTIVITY":
                     try {
-                        card.setValue(getRecentActivity());
+                        card.setValue(getRecentActivity(dataScope));
                     } catch (Exception e) {
                         log.error("Failed to load recent activity for dashboard card", e);
                     }
                     break;
                 case "LOW_DATA_USERS":
                     try {
-                        card.setValue(countLowDataUsers());
+                        card.setValue(findLowDataUserSummaries(dataScope).size());
                     } catch (Exception e) {
                         log.error("Failed to load low data users count for dashboard card", e);
                         card.setValue(0);
@@ -692,7 +682,7 @@ public class DashboardServiceImpl implements IDashboardService {
                     break;
                 case "USERS_NOT_LOGGED_IN":
                     try {
-                        card.setValue(countUsersNotLoggedInToday());
+                        card.setValue(findUsersNotLoggedInToday(dataScope).size());
                     } catch (Exception e) {
                         log.error("Failed to load users not logged in count for dashboard card", e);
                         card.setValue(0);
@@ -700,7 +690,7 @@ public class DashboardServiceImpl implements IDashboardService {
                     break;
                 case "FOLLOWUP_USERS_NOT_LOGGED_IN_11AM":
                     try {
-                        card.setValue(countFollowUpUsersNotLoggedInBy11Am());
+                        card.setValue(findFollowUpUsersNotLoggedInBy11Am(dataScope).size());
                     } catch (Exception e) {
                         log.error("Failed to load follow-up users not logged in count for dashboard card", e);
                         card.setValue(0);
@@ -716,18 +706,15 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public long countLowDataUsers() throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return findLowDataUserSummaries(currentUser, scope).size();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return findLowDataUserSummaries(dataScope).size();
     }
 
     @Override
     @Transactional(readOnly = true)
     public com.app.datadistribution.dto.dashboard.LowDataUserPageResponseDTO getLowDataUsers(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-
-        List<com.app.datadistribution.dto.dashboard.LowDataUserSummaryDTO> allLowDataUsers = findLowDataUserSummaries(currentUser, scope);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        List<com.app.datadistribution.dto.dashboard.LowDataUserSummaryDTO> allLowDataUsers = findLowDataUserSummaries(dataScope);
 
         if (pageRequest == null) {
             pageRequest = new com.app.datadistribution.common.PageRequestDTO();
@@ -790,23 +777,8 @@ public class DashboardServiceImpl implements IDashboardService {
                 .build();
     }
 
-    private List<com.app.datadistribution.dto.dashboard.LowDataUserSummaryDTO> findLowDataUserSummaries(User currentUser, DataScope scope) {
-        List<User> activeUsers = userRepository.findAll().stream()
-                .filter(u -> u.isActive() && !u.isDeleted())
-                .collect(Collectors.toList());
-
-        if (scope == DataScope.SELF) {
-            activeUsers = activeUsers.stream()
-                    .filter(u -> u.getId().equals(currentUser.getId()))
-                    .collect(Collectors.toList());
-        } else if (scope == DataScope.DEPARTMENT) {
-            Set<UUID> allowedDeptIds = currentUser.getDepartments() != null
-                    ? currentUser.getDepartments().stream().map(com.app.datadistribution.entity.Department::getId).collect(Collectors.toSet())
-                    : Collections.emptySet();
-            activeUsers = activeUsers.stream()
-                    .filter(u -> u.getDepartments() != null && u.getDepartments().stream().anyMatch(d -> allowedDeptIds.contains(d.getId())))
-                    .collect(Collectors.toList());
-        }
+    private List<com.app.datadistribution.dto.dashboard.LowDataUserSummaryDTO> findLowDataUserSummaries(UserDataScope dataScope) {
+        List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
 
         List<Object[]> allottedResults = leadRepository.findAllottedLeadCountsGroupedByUser();
         Map<UUID, Long> allottedMap = new HashMap<>();
@@ -855,72 +827,155 @@ public class DashboardServiceImpl implements IDashboardService {
         return lowDataUsers;
     }
 
-    private long countLeadsInScope(User user, DataScope scope, LocalDateTime start, LocalDateTime end) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> query = cb.createQuery(Long.class);
-        Root<Lead> root = query.from(Lead.class);
-
-        Predicate spec = cb.equal(root.get("isDeleted"), false);
-        spec = applyScopePredicate(cb, root, spec, user, scope);
-
-        if (start != null) {
-            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start));
-        }
-        if (end != null) {
-            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end));
-        }
-
-        query.select(cb.count(root)).where(spec);
-        return entityManager.createQuery(query).getSingleResult();
+    private long countLeadsInScope(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
+        return dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filter);
     }
 
-    private long countFollowUpsTodayInScope(User user, DataScope scope) {
+    private long countFollowUpsTodayInScope(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> query = cb.createQuery(Long.class);
         Root<LeadFollowUp> root = query.from(LeadFollowUp.class);
 
-        Predicate spec = cb.equal(root.get("isDeleted"), false);
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.equal(root.get("lead").get("isDeleted"), false));
+
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
-        spec = cb.and(spec, cb.between(root.get("followUpDate"), todayStart, todayEnd));
+        predicates.add(cb.between(root.get("followUpDate"), todayStart, todayEnd));
 
-        if (scope == DataScope.SELF) {
-            spec = cb.and(spec, cb.equal(root.get("createdByUser").get("id"), user.getId()));
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            predicates.add(cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.and(cb.isNull(root.get("assignedTo")), cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownFollowUp = cb.or(
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.and(cb.isNull(root.get("assignedTo")), cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())),
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
+            );
+            Predicate deptLead = (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty())
+                    ? root.get("lead").get("department").get("id").in(dataScope.getDepartmentIds())
+                    : cb.disjunction();
+            Predicate deptUsers = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                    ? cb.or(
+                            root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds()),
+                            root.get("lead").get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                    )
+                    : cb.disjunction();
+            predicates.add(cb.or(ownFollowUp, deptLead, deptUsers));
         }
 
-        query.select(cb.count(root)).where(spec);
+        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(query).getSingleResult();
     }
 
-    private long countFeedbacksInScope(User user, DataScope scope, LocalDateTime start, LocalDateTime end) {
+    private long countFeedbacksInScope(UserDataScope dataScope, DashboardAnalyticsFilterRequest filter) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> query = cb.createQuery(Long.class);
         Root<LeadFeedback> root = query.from(LeadFeedback.class);
 
-        Predicate spec = cb.equal(root.get("isDeleted"), false);
-        if (scope == DataScope.SELF) {
-            spec = cb.and(spec, cb.equal(root.get("createdByUser").get("id"), user.getId()));
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.equal(root.get("lead").get("isDeleted"), false));
+
+        LocalDate startDate = filter != null ? filter.getEffectiveStartDate() : null;
+        LocalDate endDate = filter != null ? filter.getEffectiveEndDate() : null;
+        if (startDate != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate.atStartOfDay()));
+        }
+        if (endDate != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), endDate.atTime(LocalTime.MAX)));
         }
 
-        if (start != null) {
-            spec = cb.and(spec, cb.greaterThanOrEqualTo(root.get("createdAt"), start));
-        }
-        if (end != null) {
-            spec = cb.and(spec, cb.lessThanOrEqualTo(root.get("createdAt"), end));
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            predicates.add(cb.or(
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            ));
+        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Predicate ownFeedback = cb.or(
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            );
+            Predicate deptLead = (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty())
+                    ? root.get("lead").get("department").get("id").in(dataScope.getDepartmentIds())
+                    : cb.disjunction();
+            Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
+                    ? cb.or(
+                            root.get("createdByUser").get("id").in(dataScope.getDepartmentUserIds()),
+                            root.get("lead").get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
+                    )
+                    : cb.disjunction();
+            predicates.add(cb.or(ownFeedback, deptLead, deptUser));
         }
 
-        query.select(cb.count(root)).where(spec);
+        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(query).getSingleResult();
     }
 
-    private Predicate applyScopePredicate(CriteriaBuilder cb, Root<Lead> root, Predicate spec, User user, DataScope scope) {
-        if (scope == DataScope.SELF) {
-            return cb.and(spec, cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), user.getId()),
-                    cb.equal(root.get("createdByUser").get("id"), user.getId())
-            ));
+    private long countCounsellorsLoggedTodayInScope(UserDataScope dataScope) {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            User u = dataScope.getCurrentUser();
+            if (u != null && u.getLastLogin() != null && !u.getLastLogin().isBefore(startOfDay)) {
+                return 1L;
+            }
+            return 0L;
         }
-        return spec;
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<User> root = query.from(User.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("active"), true));
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.greaterThanOrEqualTo(root.get("lastLogin"), startOfDay));
+
+        if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            if (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty()) {
+                predicates.add(root.get("id").in(dataScope.getDepartmentUserIds()));
+            } else {
+                return 0L;
+            }
+        }
+
+        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(query).getSingleResult();
+    }
+
+    private long countCounsellorsWorkingInScope(UserDataScope dataScope) {
+        LocalDateTime eightHoursAgo = LocalDateTime.now().minusHours(8);
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            User u = dataScope.getCurrentUser();
+            if (u != null && u.isActive() && !u.isDeleted() && u.getLastLogin() != null && !u.getLastLogin().isBefore(eightHoursAgo)) {
+                return 1L;
+            }
+            return 0L;
+        }
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> query = cb.createQuery(Long.class);
+        Root<User> root = query.from(User.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(root.get("active"), true));
+        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(cb.greaterThanOrEqualTo(root.get("lastLogin"), eightHoursAgo));
+
+        if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            if (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty()) {
+                predicates.add(root.get("id").in(dataScope.getDepartmentUserIds()));
+            } else {
+                return 0L;
+            }
+        }
+
+        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(query).getSingleResult();
     }
 
     private String formatSectionName(String sectionCode) {
@@ -946,21 +1001,25 @@ public class DashboardServiceImpl implements IDashboardService {
         }
     }
 
-    private List<User> getActiveMonitoredUsersInScope(User currentUser, DataScope scope) {
+    private List<User> getActiveMonitoredUsersInScope(UserDataScope dataScope) {
+        if (dataScope.getScopeType() == ScopeType.SELF) {
+            User current = dataScope.getCurrentUser();
+            if (current != null && current.isActive() && !current.isDeleted()) {
+                return List.of(current);
+            }
+            return Collections.emptyList();
+        }
+
         List<User> activeUsers = userRepository.findAll().stream()
                 .filter(u -> u.isActive() && !u.isDeleted())
                 .collect(Collectors.toList());
 
-        if (scope == DataScope.SELF) {
+        if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
+            Set<UUID> allowedUserIds = dataScope.getDepartmentUserIds() != null ? dataScope.getDepartmentUserIds() : Collections.emptySet();
+            Set<UUID> allowedDeptIds = dataScope.getDepartmentIds() != null ? dataScope.getDepartmentIds() : Collections.emptySet();
             activeUsers = activeUsers.stream()
-                    .filter(u -> u.getId().equals(currentUser.getId()))
-                    .collect(Collectors.toList());
-        } else if (scope == DataScope.DEPARTMENT) {
-            Set<UUID> allowedDeptIds = currentUser.getDepartments() != null
-                    ? currentUser.getDepartments().stream().map(com.app.datadistribution.entity.Department::getId).collect(Collectors.toSet())
-                    : Collections.emptySet();
-            activeUsers = activeUsers.stream()
-                    .filter(u -> u.getDepartments() != null && u.getDepartments().stream().anyMatch(d -> allowedDeptIds.contains(d.getId())))
+                    .filter(u -> allowedUserIds.contains(u.getId())
+                            || (u.getDepartments() != null && u.getDepartments().stream().anyMatch(d -> allowedDeptIds.contains(d.getId()))))
                     .collect(Collectors.toList());
         }
         return activeUsers;
@@ -969,18 +1028,15 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public long countUsersNotLoggedInToday() throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return findUsersNotLoggedInToday(currentUser, scope).size();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return findUsersNotLoggedInToday(dataScope).size();
     }
 
     @Override
     @Transactional(readOnly = true)
     public com.app.datadistribution.dto.dashboard.UserNotLoggedInPageResponseDTO getUsersNotLoggedInToday(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-
-        List<com.app.datadistribution.dto.dashboard.UserNotLoggedInSummaryDTO> allItems = findUsersNotLoggedInToday(currentUser, scope);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        List<com.app.datadistribution.dto.dashboard.UserNotLoggedInSummaryDTO> allItems = findUsersNotLoggedInToday(dataScope);
 
         if (pageRequest == null) {
             pageRequest = new com.app.datadistribution.common.PageRequestDTO();
@@ -1040,12 +1096,12 @@ public class DashboardServiceImpl implements IDashboardService {
                 .build();
     }
 
-    private List<com.app.datadistribution.dto.dashboard.UserNotLoggedInSummaryDTO> findUsersNotLoggedInToday(User currentUser, DataScope scope) {
+    private List<com.app.datadistribution.dto.dashboard.UserNotLoggedInSummaryDTO> findUsersNotLoggedInToday(UserDataScope dataScope) {
         ZonedDateTime nowIST = ZonedDateTime.now(IST_ZONE);
         LocalDateTime startOfDayIST = nowIST.toLocalDate().atStartOfDay();
         LocalDateTime endOfDayIST = nowIST.toLocalDate().atTime(LocalTime.MAX);
 
-        List<User> activeUsers = getActiveMonitoredUsersInScope(currentUser, scope);
+        List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
 
         List<Object[]> loginStats = activityLogRepository.findDailyLoginStatsGroupedByPerformedBy(startOfDayIST, endOfDayIST);
         Set<String> loggedInPerformersToday = new HashSet<>();
@@ -1086,18 +1142,15 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public long countFollowUpUsersNotLoggedInBy11Am() throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-        return findFollowUpUsersNotLoggedInBy11Am(currentUser, scope).size();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return findFollowUpUsersNotLoggedInBy11Am(dataScope).size();
     }
 
     @Override
     @Transactional(readOnly = true)
     public com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInPageResponseDTO getFollowUpUsersNotLoggedInBy11Am(com.app.datadistribution.common.PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        User currentUser = getCurrentUserEntity();
-        DataScope scope = resolveDataScope(currentUser);
-
-        List<com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInSummaryDTO> allItems = findFollowUpUsersNotLoggedInBy11Am(currentUser, scope);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        List<com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInSummaryDTO> allItems = findFollowUpUsersNotLoggedInBy11Am(dataScope);
 
         if (pageRequest == null) {
             pageRequest = new com.app.datadistribution.common.PageRequestDTO();
@@ -1157,7 +1210,7 @@ public class DashboardServiceImpl implements IDashboardService {
                 .build();
     }
 
-    private List<com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInSummaryDTO> findFollowUpUsersNotLoggedInBy11Am(User currentUser, DataScope scope) {
+    private List<com.app.datadistribution.dto.dashboard.FollowUpUserNotLoggedInSummaryDTO> findFollowUpUsersNotLoggedInBy11Am(UserDataScope dataScope) {
         ZonedDateTime nowIST = ZonedDateTime.now(IST_ZONE);
         LocalTime cutoff = parseCutoffTime();
 
@@ -1169,7 +1222,7 @@ public class DashboardServiceImpl implements IDashboardService {
         LocalDateTime endOfDayIST = nowIST.toLocalDate().atTime(LocalTime.MAX);
         LocalDateTime cutoffDateTimeIST = nowIST.toLocalDate().atTime(cutoff);
 
-        List<User> activeUsers = getActiveMonitoredUsersInScope(currentUser, scope);
+        List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
 
         List<Object[]> followUpCounts = leadFollowUpRepository.countScheduledFollowUpsGroupedByUserBetween(startOfDayIST, endOfDayIST);
         Map<UUID, Long> countMap = new HashMap<>();
