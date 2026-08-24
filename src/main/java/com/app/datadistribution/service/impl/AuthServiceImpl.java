@@ -230,8 +230,9 @@ public class AuthServiceImpl implements IAuthService {
                 .collect(Collectors.toSet());
 
         if (roles.isEmpty()) {
-            Role defaultRole = roleRepository.findByName(RoleType.USER.name())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role USER not found"));
+            Role defaultRole = roleRepository.findByName(RoleType.COUNSELOR.name())
+                    .or(() -> roleRepository.findByName(RoleType.USER.name()))
+                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role COUNSELOR not found"));
             roles.add(defaultRole);
         }
 

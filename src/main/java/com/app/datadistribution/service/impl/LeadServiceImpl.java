@@ -11,6 +11,7 @@ import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.*;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 import jakarta.persistence.Tuple;
@@ -49,6 +50,7 @@ public class LeadServiceImpl implements ILeadService {
     private final LeadFeedbackRepository leadFeedbackRepository;
     private final CourseRepository courseRepository;
     private final IUserDataScopeService dataScopeService;
+    private final ILeadDataScopeService leadDataScopeService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -61,6 +63,7 @@ public class LeadServiceImpl implements ILeadService {
     @Transactional
     public LeadResponse create(LeadRequest request) throws BadRequestException, UnauthorizedException {
         User currentUser = getCurrentUserEntity();
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
         Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
@@ -81,6 +84,18 @@ public class LeadServiceImpl implements ILeadService {
 
         if (assignedTo != null && department != null) {
             validateLeadAssignmentDepartment(assignedTo, department);
+        }
+
+        if (dataScope.isSelfScope() && request.getAssignedToUserId() != null && !request.getAssignedToUserId().equals(currentUser.getId())) {
+            throw new BadRequestException("Counselors can only assign leads to themselves or leave unassigned.");
+        }
+        if (dataScope.isDepartmentScope()) {
+            if (department != null && dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().contains(department.getId())) {
+                throw new BadRequestException("HOD can only create leads within their assigned department(s).");
+            }
+            if (assignedTo != null && dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().contains(assignedTo.getId())) {
+                throw new BadRequestException("HOD can only assign leads to members of their assigned department(s).");
+            }
         }
 
         String leadCode = request.getLeadCode();
@@ -144,10 +159,25 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public LeadResponse update(UUID id, LeadRequest request) {
+    public LeadResponse update(UUID id, LeadRequest request) throws BadRequestException, UnauthorizedException {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        if (dataScope.isSelfScope() && request.getAssignedToUserId() != null && !request.getAssignedToUserId().equals(dataScope.getUserId())) {
+            throw new BadRequestException("Counselors can only assign leads to themselves or leave unassigned.");
+        }
+        if (dataScope.isDepartmentScope()) {
+            if (request.getDepartmentId() != null && dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().contains(request.getDepartmentId())) {
+                throw new BadRequestException("HOD cannot assign lead to department outside their scope.");
+            }
+            if (request.getAssignedToUserId() != null && dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().contains(request.getAssignedToUserId())) {
+                throw new BadRequestException("HOD can only assign leads to members of their assigned department(s).");
+            }
+        }
 
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
 
@@ -260,17 +290,19 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional(readOnly = true)
-    public LeadResponse getById(UUID id) {
+    public LeadResponse getById(UUID id) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadReadAccess(lead, dataScope);
         return leadMapper.toDto(lead);
     }
 
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
-        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
 
         String sortBy = pageRequest.getSortBy();
         if (sortBy == null || !ALLOWED_LEAD_SORT_FIELDS.contains(sortBy)) {
@@ -281,13 +313,7 @@ public class LeadServiceImpl implements ILeadService {
         );
         Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, sortBy));
 
-        Specification<Lead> spec = Specification.where(isNotDeleted());
-
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            spec = spec.and(filterByAssignedOrCreatedUser(dataScope.getUserId()));
-        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            spec = spec.and(filterByDepartmentScope(dataScope.getDepartmentIds(), dataScope.getDepartmentUserIds(), dataScope.getUserId()));
-        }
+        Specification<Lead> spec = leadDataScopeService.getLeadScopeSpecification(dataScope);
 
         if (leadSourceIds != null && !leadSourceIds.isEmpty()) {
             spec = spec.and(filterBySources(leadSourceIds));
@@ -343,10 +369,13 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public LeadResponse addInterestedCourses(UUID leadId, List<UUID> courseIds) {
+    public LeadResponse addInterestedCourses(UUID leadId, List<UUID> courseIds) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         Set<Course> coursesToAdd = resolveCourses(courseIds);
         if (lead.getInterestedCourses() == null) {
@@ -361,10 +390,13 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public LeadResponse removeInterestedCourse(UUID leadId, UUID courseId) {
+    public LeadResponse removeInterestedCourse(UUID leadId, UUID courseId) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         if (lead.getInterestedCourses() != null) {
             lead.getInterestedCourses().removeIf(c -> c.getId().equals(courseId));
@@ -377,10 +409,13 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public LeadResponse registerCourse(UUID leadId, UUID courseId) {
+    public LeadResponse registerCourse(UUID leadId, UUID courseId) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         Course course = courseRepository.findById(courseId)
                 .filter(c -> !c.isDeleted())
@@ -399,10 +434,14 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public void deleteLead(UUID id) {
+    public void deleteLead(UUID id) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
         lead.setDeleted(true);
         leadRepository.save(lead);
         log.info("Soft deleted lead: {}", lead.getLeadCode());
@@ -418,6 +457,9 @@ public class LeadServiceImpl implements ILeadService {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         LeadStatus newStatus = resolveNewStatus(request);
         User currentUser = getCurrentUserEntity();
@@ -459,7 +501,8 @@ public class LeadServiceImpl implements ILeadService {
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
 
-        validateLeadDataScopeAccess(lead);
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadReadAccess(lead, dataScope);
 
         List<LeadStatusHistory> histories = leadStatusHistoryRepository.findByLeadIdOrderByCreatedAtDesc(lead.getId());
         return histories.stream()
@@ -474,7 +517,8 @@ public class LeadServiceImpl implements ILeadService {
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
 
-        validateLeadDataScopeAccess(lead);
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadReadAccess(lead, dataScope);
 
         String sortBy = pageRequest.getSortBy();
         if (sortBy == null || sortBy.isBlank()) {
@@ -500,61 +544,18 @@ public class LeadServiceImpl implements ILeadService {
                 .build();
     }
 
-    private void validateLeadDataScopeAccess(Lead lead) throws UnauthorizedException, BadRequestException {
-        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        if (dataScope.getScopeType() == ScopeType.SYSTEM) {
-            return;
-        }
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            boolean isAssigned = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(dataScope.getUserId());
-            boolean isCreator = lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(dataScope.getUserId());
-            if (!isAssigned && !isCreator) {
-                throw new UnauthorizedException("You do not have permission to view status history for this lead.");
-            }
-        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            boolean isOwn = (lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(dataScope.getUserId()))
-                    || (lead.getCreatedByUser() != null && lead.getCreatedByUser().getId().equals(dataScope.getUserId()));
-            boolean isDeptLead = lead.getDepartment() != null && dataScope.getDepartmentIds() != null && dataScope.getDepartmentIds().contains(lead.getDepartment().getId());
-            boolean isDeptUser = lead.getAssignedTo() != null && dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(lead.getAssignedTo().getId());
-            if (!isOwn && !isDeptLead && !isDeptUser) {
-                throw new UnauthorizedException("You do not have permission to view status history for this lead outside your department scope.");
-            }
-        }
-    }
-
     @Override
     @Transactional(readOnly = true)
     public List<LeadSourceStatsResponse> getSourceWiseStats() throws UnauthorizedException, BadRequestException {
-        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<Lead> root = query.from(Lead.class);
         jakarta.persistence.criteria.SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", jakarta.persistence.criteria.JoinType.INNER);
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(leadDataScopeService.buildScopePredicate(cb, root, dataScope));
         predicates.add(cb.equal(sourceJoin.get("isDeleted"), false));
-
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            predicates.add(cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
-            ));
-        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            Predicate ownData = cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
-            );
-            if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
-                Predicate deptLead = root.get("department").get("id").in(dataScope.getDepartmentIds());
-                Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
-                        ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
-                        : cb.disjunction();
-                predicates.add(cb.or(ownData, deptLead, deptUser));
-            } else {
-                predicates.add(ownData);
-            }
-        }
 
         query.select(cb.tuple(sourceJoin.get("id").alias("id"), sourceJoin.get("name").alias("name"), cb.countDistinct(root.get("id")).alias("count")));
         query.where(predicates.toArray(new Predicate[0]));
@@ -578,36 +579,15 @@ public class LeadServiceImpl implements ILeadService {
     @Override
     @Transactional(readOnly = true)
     public Map<String, Long> getStatusWiseStats() throws UnauthorizedException, BadRequestException {
-        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<Lead> root = query.from(Lead.class);
         jakarta.persistence.criteria.Join<Lead, LeadStatus> statusJoin = root.join("currentStatus", jakarta.persistence.criteria.JoinType.INNER);
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.equal(root.get("isDeleted"), false));
+        predicates.add(leadDataScopeService.buildScopePredicate(cb, root, dataScope));
         predicates.add(cb.equal(statusJoin.get("isDeleted"), false));
-
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            predicates.add(cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
-            ));
-        } else if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            Predicate ownData = cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId())
-            );
-            if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
-                Predicate deptLead = root.get("department").get("id").in(dataScope.getDepartmentIds());
-                Predicate deptUser = (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty())
-                        ? root.get("assignedTo").get("id").in(dataScope.getDepartmentUserIds())
-                        : cb.disjunction();
-                predicates.add(cb.or(ownData, deptLead, deptUser));
-            } else {
-                predicates.add(ownData);
-            }
-        }
 
         query.select(cb.tuple(statusJoin.get("code").alias("code"), cb.countDistinct(root.get("id")).alias("count")));
         query.where(predicates.toArray(new Predicate[0]));
@@ -675,32 +655,6 @@ public class LeadServiceImpl implements ILeadService {
             courses.add(course);
         }
         return courses;
-    }
-
-    private Specification<Lead> isNotDeleted() {
-        return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
-    }
-
-    private Specification<Lead> filterByAssignedOrCreatedUser(UUID userId) {
-        return (root, query, cb) -> cb.or(
-                cb.equal(root.get("assignedTo").get("id"), userId),
-                cb.equal(root.get("createdByUser").get("id"), userId)
-        );
-    }
-
-    private Specification<Lead> filterByDepartmentScope(Set<UUID> departmentIds, Set<UUID> departmentUserIds, UUID currentUserId) {
-        return (root, query, cb) -> {
-            jakarta.persistence.criteria.Predicate ownData = cb.or(
-                    cb.equal(root.get("assignedTo").get("id"), currentUserId),
-                    cb.equal(root.get("createdByUser").get("id"), currentUserId)
-            );
-            if (departmentIds == null || departmentIds.isEmpty()) {
-                return ownData;
-            }
-            jakarta.persistence.criteria.Predicate deptLead = root.get("department").get("id").in(departmentIds);
-            jakarta.persistence.criteria.Predicate deptUser = root.get("assignedTo").get("id").in(departmentUserIds);
-            return cb.or(ownData, deptLead, deptUser);
-        };
     }
 
     private Specification<Lead> filterBySources(List<UUID> leadSourceIds) {

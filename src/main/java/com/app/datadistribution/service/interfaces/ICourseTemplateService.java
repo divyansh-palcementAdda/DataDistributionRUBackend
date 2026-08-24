@@ -14,6 +14,6 @@ public interface ICourseTemplateService {
     List<CourseTemplateResponseDTO> getTemplatesByCourseId(UUID courseId);
     List<CourseTemplateResponseDTO> getAllTemplates();
     void deleteTemplate(UUID id);
-    List<CourseTemplateResponseDTO> getTemplatesForLead(UUID leadId);
-    void sendTemplateToLead(UUID leadId, UUID templateId) throws UnauthorizedException;
+    List<CourseTemplateResponseDTO> getTemplatesForLead(UUID leadId) throws UnauthorizedException;
+    void sendTemplateToLead(UUID leadId, UUID templateId) throws UnauthorizedException, BadRequestException;
 }

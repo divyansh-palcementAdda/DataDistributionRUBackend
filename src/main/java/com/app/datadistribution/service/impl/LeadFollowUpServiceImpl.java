@@ -16,12 +16,15 @@ import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.FollowUpStatus;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.LeadFollowUpRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadFollowUpService;
 
 import lombok.RequiredArgsConstructor;
@@ -36,13 +39,17 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
     private final LeadRepository leadRepository;
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
+    private final ILeadDataScopeService leadDataScopeService;
 
     @Override
     @Transactional
-    public LeadFollowUpResponse createFollowUp(UUID leadId, LeadFollowUpRequest request) throws UnauthorizedException {
+    public LeadFollowUpResponse createFollowUp(UUID leadId, LeadFollowUpRequest request) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         User currentUser = getCurrentUserEntity();
 
@@ -65,10 +72,18 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeadFollowUpResponse> getFollowUpsByLeadId(UUID leadId) {
-        if (!leadRepository.existsById(leadId)) {
-            throw new ResourcesNotFoundException("Lead not found with id: " + leadId);
+    public List<LeadFollowUpResponse> getFollowUpsByLeadId(UUID leadId) throws UnauthorizedException {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        try {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadReadAccess(lead, dataScope);
+        } catch (BadRequestException e) {
+            throw new UnauthorizedException("Cannot resolve user data scope: " + e.getMessage());
         }
+
         return leadFollowUpRepository.findByLeadIdOrderByFollowUpDateDesc(leadId).stream()
                 .map(leadMapper::toDto)
                 .collect(Collectors.toList());
@@ -76,9 +91,15 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
 
     @Override
     @Transactional
-    public LeadFollowUpResponse completeFollowUp(UUID followUpId, String remarks) {
+    public LeadFollowUpResponse completeFollowUp(UUID followUpId, String remarks) throws UnauthorizedException, BadRequestException {
         LeadFollowUp followUp = leadFollowUpRepository.findById(followUpId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Follow-up not found with id: " + followUpId));
+
+        Lead lead = followUp.getLead();
+        if (lead != null) {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+        }
 
         followUp.setCompleted(true);
         followUp.setCompletedAt(LocalDateTime.now());

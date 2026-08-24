@@ -266,7 +266,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
     public List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> allUsers = getDepartmentUsers(departmentId);
         return allUsers.stream()
-                .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD")))
+                .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r) || r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD")))
                 .collect(Collectors.toList());
     }
 
@@ -275,7 +275,8 @@ public class DepartmentServiceImpl implements IDepartmentService {
     public List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         List<UserResponse> allUsers = getDepartmentUsers(departmentId);
         return allUsers.stream()
-                .filter(u -> u.getRoles() == null || u.getRoles().stream().noneMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r) || RoleType.ADMIN.name().equalsIgnoreCase(r)))
+                .filter(u -> u.getRoles() != null && (u.getRoles().stream().anyMatch(r -> RoleType.COUNSELOR.name().equalsIgnoreCase(r) || "USER".equalsIgnoreCase(r))
+                        || u.getRoles().stream().noneMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r) || RoleType.ADMIN.name().equalsIgnoreCase(r) || RoleType.HOD.name().equalsIgnoreCase(r) || r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD"))))
                 .collect(Collectors.toList());
     }
 
@@ -318,7 +319,9 @@ public class DepartmentServiceImpl implements IDepartmentService {
     private boolean isHODUser(User user) {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
-                .anyMatch(r -> r.getName().toUpperCase().contains("HOD") || r.getName().toUpperCase().contains("HEAD"));
+                .anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName())
+                        || r.getName().toUpperCase().contains("HOD")
+                        || r.getName().toUpperCase().contains("HEAD"));
     }
 
     private void validateUserAccessToDepartment(UUID departmentId) throws UnauthorizedException, BadRequestException {

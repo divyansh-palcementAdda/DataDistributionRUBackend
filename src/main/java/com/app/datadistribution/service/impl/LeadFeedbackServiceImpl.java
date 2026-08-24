@@ -14,12 +14,15 @@ import com.app.datadistribution.dto.lead.LeadFeedbackResponse;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.LeadFeedbackRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadFeedbackService;
 
 import lombok.RequiredArgsConstructor;
@@ -34,13 +37,17 @@ public class LeadFeedbackServiceImpl implements ILeadFeedbackService {
     private final LeadRepository leadRepository;
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
+    private final ILeadDataScopeService leadDataScopeService;
 
     @Override
     @Transactional
-    public LeadFeedbackResponse addFeedback(UUID leadId, LeadFeedbackRequest request) throws UnauthorizedException {
+    public LeadFeedbackResponse addFeedback(UUID leadId, LeadFeedbackRequest request) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         User currentUser = getCurrentUserEntity();
 
@@ -58,10 +65,18 @@ public class LeadFeedbackServiceImpl implements ILeadFeedbackService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LeadFeedbackResponse> getFeedbacksByLeadId(UUID leadId) {
-        if (!leadRepository.existsById(leadId)) {
-            throw new ResourcesNotFoundException("Lead not found with id: " + leadId);
+    public List<LeadFeedbackResponse> getFeedbacksByLeadId(UUID leadId) throws UnauthorizedException {
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        try {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadReadAccess(lead, dataScope);
+        } catch (BadRequestException e) {
+            throw new UnauthorizedException("Cannot resolve user data scope: " + e.getMessage());
         }
+
         return leadFeedbackRepository.findByLeadIdOrderByCreatedAtDesc(leadId).stream()
                 .map(leadMapper::toDto)
                 .collect(Collectors.toList());

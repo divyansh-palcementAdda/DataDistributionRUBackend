@@ -9,6 +9,6 @@ import com.app.datadistribution.dto.lead.LeadResponse;
 import com.app.datadistribution.exception.UnauthorizedException;
 
 public interface ILeadAssignmentService {
-    LeadResponse assignLead(UUID leadId, LeadAssignmentRequest request) throws UnauthorizedException;
-    List<LeadAssignmentHistoryResponse> getAssignmentHistoryByLeadId(UUID leadId);
+    LeadResponse assignLead(UUID leadId, LeadAssignmentRequest request) throws UnauthorizedException, com.app.datadistribution.exception.BadRequestException;
+    List<LeadAssignmentHistoryResponse> getAssignmentHistoryByLeadId(UUID leadId) throws UnauthorizedException;
 }

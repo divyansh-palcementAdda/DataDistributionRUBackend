@@ -1,6 +1,21 @@
 package com.app.datadistribution.service.impl;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.user.UserPageResponse;
 import com.app.datadistribution.dto.user.UserRequest;
@@ -10,6 +25,7 @@ import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.ActivityType;
+import com.app.datadistribution.enums.HodAccessType;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.DuplicateResourceException;
@@ -20,24 +36,11 @@ import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
 import com.app.datadistribution.service.interfaces.IUserService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -139,12 +142,19 @@ public class UserServiceImpl implements IUserService {
                 .collect(Collectors.toSet());
 
         if (roles.isEmpty()) {
-            Role defaultRole = roleRepository.findByName(RoleType.USER.name())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role USER not found"));
+            Role defaultRole = roleRepository.findByName(RoleType.COUNSELOR.name())
+                    .or(() -> roleRepository.findByName(RoleType.USER.name()))
+                    .orElseThrow(() -> new ResourcesNotFoundException("Default Role COUNSELOR not found"));
             roles.add(defaultRole);
         }
 
         boolean isAdmin = roles.stream().anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()));
+        boolean requiresDepartment = roles.stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName())
+                || RoleType.COUNSELOR.name().equalsIgnoreCase(r.getName())
+                || RoleType.USER.name().equalsIgnoreCase(r.getName())
+                || r.getName().toUpperCase().contains("HOD")
+                || r.getName().toUpperCase().contains("HEAD")
+                || r.getName().toUpperCase().contains("COUNSELOR"));
 
         Set<Department> departments = new HashSet<>();
         if (request.getDepartmentIds() != null && !request.getDepartmentIds().isEmpty()) {
@@ -157,6 +167,14 @@ public class UserServiceImpl implements IUserService {
                         .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + dId));
                 departments.add(dept);
             }
+        } else if (!isAdmin && requiresDepartment) {
+            throw new BadRequestException("Department mapping is required for HOD and COUNSELOR roles.");
+        }
+
+        boolean isHod = roles.stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName()) || r.getName().toUpperCase().contains("HOD") || r.getName().toUpperCase().contains("HEAD"));
+        HodAccessType hodAccessType = request.getHodAccessType();
+        if (isHod && hodAccessType == null) {
+            hodAccessType = HodAccessType.FULL_ACCESS;
         }
 
         User user = User.builder()
@@ -170,7 +188,7 @@ public class UserServiceImpl implements IUserService {
                 .locked(request.isLocked())
                 .emailVerified(request.isEmailVerified())
                 .profileImage(request.getProfileImage())
-                .hodAccessType(request.getHodAccessType())
+                .hodAccessType(hodAccessType)
                 .roles(roles)
                 .departments(departments)
                 .tokenVersion(1L)
@@ -203,6 +221,12 @@ public class UserServiceImpl implements IUserService {
                 .collect(Collectors.toSet());
 
         boolean isAdmin = roles.stream().anyMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()));
+        boolean requiresDepartment = roles.stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName())
+                || RoleType.COUNSELOR.name().equalsIgnoreCase(r.getName())
+                || RoleType.USER.name().equalsIgnoreCase(r.getName())
+                || r.getName().toUpperCase().contains("HOD")
+                || r.getName().toUpperCase().contains("HEAD")
+                || r.getName().toUpperCase().contains("COUNSELOR"));
 
         if (request.getDepartmentIds() != null) {
             if (isAdmin && !request.getDepartmentIds().isEmpty()) {
@@ -215,6 +239,9 @@ public class UserServiceImpl implements IUserService {
                             .filter(d -> !d.isDeleted())
                             .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + dId));
                     newDepartments.add(dept);
+                }
+                if (requiresDepartment && newDepartments.isEmpty()) {
+                    throw new BadRequestException("Department mapping is required for HOD and COUNSELOR roles.");
                 }
             }
             user.setDepartments(newDepartments);
@@ -234,8 +261,11 @@ public class UserServiceImpl implements IUserService {
         }
 
         user.setProfileImage(request.getProfileImage());
+        boolean isHod = roles.stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName()) || r.getName().toUpperCase().contains("HOD") || r.getName().toUpperCase().contains("HEAD"));
         if (request.getHodAccessType() != null) {
             user.setHodAccessType(request.getHodAccessType());
+        } else if (isHod && user.getHodAccessType() == null) {
+            user.setHodAccessType(HodAccessType.FULL_ACCESS);
         }
         user.setRoles(roles);
         user.setActive(request.isActive());

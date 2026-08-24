@@ -5,14 +5,30 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
+import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadStatus;
+import com.app.datadistribution.entity.LeadStatusHistory;
 import com.app.datadistribution.entity.User;
-import com.app.datadistribution.repository.*;
+import com.app.datadistribution.repository.BoardRepository;
+import com.app.datadistribution.repository.CourseTypeRepository;
+import com.app.datadistribution.repository.DepartmentRepository;
+import com.app.datadistribution.repository.GradeRepository;
+import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.LeadSourceRepository;
+import com.app.datadistribution.repository.LeadStatusHistoryRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.impl.LeadBulkUploadServiceImpl;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import java.io.ByteArrayOutputStream;
 import java.util.Collections;
 import java.util.Optional;
-import org.apache.poi.ss.usermodel.*;
+import java.util.UUID;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +61,8 @@ class LeadBulkUploadServiceImplTest {
     private CourseTypeRepository courseTypeRepository;
     @Mock
     private LeadStatusHistoryRepository leadStatusHistoryRepository;
+    @Mock
+    private com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
 
     @InjectMocks
     private LeadBulkUploadServiceImpl bulkUploadService;
@@ -66,7 +84,14 @@ class LeadBulkUploadServiceImplTest {
         SecurityContextHolder.setContext(securityContext);
 
         User user = User.builder().username("admin").active(true).build();
+        user.setId(UUID.randomUUID());
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+
+        com.app.datadistribution.service.dto.UserDataScope dataScope = com.app.datadistribution.service.dto.UserDataScope.builder()
+                .scopeType(com.app.datadistribution.service.dto.UserDataScope.ScopeType.SYSTEM)
+                .userId(user.getId())
+                .build();
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(dataScope);
 
         LeadStatus status = LeadStatus.builder().name("Raw").code("RAW").active(true).build();
         when(leadStatusRepository.findByCodeIgnoreCase("RAW")).thenReturn(Optional.of(status));

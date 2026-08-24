@@ -36,6 +36,7 @@ import com.app.datadistribution.repository.LeadFeedbackRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.PlaceholderRenderService;
+import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ICourseCommunicationService;
 import com.app.datadistribution.service.interfaces.ICourseImageService;
 import com.app.datadistribution.service.interfaces.ICourseUSPService;
@@ -59,6 +60,7 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
     private final PlaceholderRenderService placeholderRenderService;
     private final ICourseImageService imageService;
     private final ICourseUSPService uspService;
+    private final com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
 
     @Override
     @Transactional(readOnly = true)
@@ -149,6 +151,13 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
 
+        try {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadReadAccess(lead, dataScope);
+        } catch (Exception e) {
+            log.warn("Lead access check warning for info panel lead {}: {}", leadId, e.getMessage());
+        }
+
         Course course = null;
         if (courseId != null) {
             course = courseRepository.findById(courseId)
@@ -216,6 +225,9 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
 
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
         Course course = resolveCourseForLead(lead, request.getCourseId());
         CourseCommunicationConfig config = configRepository.findByCourseIdAndIsDeletedFalse(course.getId()).orElse(null);
 
@@ -259,6 +271,9 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         Course course = resolveCourseForLead(lead, request.getCourseId());
         CourseCommunicationConfig config = configRepository.findByCourseIdAndIsDeletedFalse(course.getId()).orElse(null);

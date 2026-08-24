@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -76,6 +77,18 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final com.app.datadistribution.entity.LeadSource leadSourceEntityHelper = null;
 	private final jakarta.persistence.EntityManager entityManager;
 
+	@org.springframework.beans.factory.annotation.Value("${app.seed.default-superadmin-password:Admin@123}")
+	private String defaultSuperAdminPassword;
+
+	@org.springframework.beans.factory.annotation.Value("${app.seed.default-admin-password:Admin@123}")
+	private String defaultAdminPassword;
+
+	@org.springframework.beans.factory.annotation.Value("${app.seed.default-hod-password:Hod@123}")
+	private String defaultHodPassword;
+
+	@org.springframework.beans.factory.annotation.Value("${app.seed.default-counselor-password:Counselor@123}")
+	private String defaultCounselorPassword;
+
 	@Override
 	@Transactional
 	public void run(String... args) {
@@ -83,6 +96,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedPermissions();
 		seedRoles();
 		seedDepartments();
+		migrateLegacyUserRoleToCounselor();
 		seedUsers();
 		seedLeadStatuses();
 		seedLeadSources();
@@ -97,6 +111,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 			String name = type.name();
 			if (!permissionRepository.findByName(name).isPresent()) {
 				Permission permission = Permission.builder().name(name).description("Dynamic permission for " + name)
+						.active(true)
 						.build();
 				permissionRepository.save(permission);
 				log.info("Seeded permission: {}", name);
@@ -107,54 +122,160 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private void seedRoles() {
 		Set<Permission> allPermissions = new HashSet<>(permissionRepository.findAll());
 
-		// 1. SUPER_ADMIN Role
-		createRoleIfNotExist(RoleType.SUPER_ADMIN.name(), "Super Administrator Role", allPermissions);
+		// 1. SUPER_ADMIN Role (Full System Access)
+		syncRoleDefaultPermissions(RoleType.SUPER_ADMIN.name(), "Super Administrator Role", allPermissions);
 
-		// 2. ADMIN Role
-		Set<Permission> adminPermissions = allPermissions.stream()
-				.filter(p -> p.getName().equals(PermissionType.USER_CREATE.name())
-						|| p.getName().equals(PermissionType.USER_READ.name())
-						|| p.getName().equals(PermissionType.USER_UPDATE.name())
-						|| p.getName().equals(PermissionType.AUTH_READ.name())
-						|| p.getName().startsWith("LEAD_")
-						|| p.getName().startsWith("LEADSOURCE_")
-						|| p.getName().startsWith("BOARD_")
-						|| p.getName().startsWith("GRADE_")
-						|| p.getName().startsWith("DASHBOARD_")
-						|| p.getName().startsWith("COURSE_")
-						|| p.getName().startsWith("FOLLOWUP_")
-						|| p.getName().startsWith("FEEDBACK_")
-						|| p.getName().startsWith("DEPARTMENT_"))
-				.collect(Collectors.toSet());
-		createRoleIfNotExist(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
+		// 2. ADMIN Role (Administrative System-wide Access)
+		Set<Permission> adminPermissions = filterPermissions(allPermissions,
+				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
+				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "FOLLOWUP_",
+				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_");
+		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
-		// 3. USER Role
-		Set<Permission> userPermissions = allPermissions.stream()
-				.filter(p -> p.getName().equals(PermissionType.USER_READ.name())
-						|| p.getName().startsWith("FOLLOWUP_")
-						|| p.getName().startsWith("FEEDBACK_")
-						|| p.getName().equals(PermissionType.DASHBOARD_VIEW.name())
-						|| p.getName().equals(PermissionType.DASHBOARD_COURSE_TYPE_VIEW.name())
-						|| p.getName().equals(PermissionType.DASHBOARD_CARD_VIEW.name())
-						|| p.getName().equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
-						|| p.getName().equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name())
-						|| p.getName().equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
-						|| p.getName().equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
-						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_VIEW.name())
-						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND.name())
-						|| p.getName().equals(PermissionType.COURSE_IMAGE_VIEW.name())
-						|| p.getName().equals(PermissionType.COURSE_USP_VIEW.name())
-						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND_EMAIL.name())
-						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_SEND_WHATSAPP.name())
-						|| p.getName().equals(PermissionType.COURSE_TEMPLATE_IMAGE_SELECT.name())
-						|| p.getName().equals(PermissionType.DEPARTMENT_VIEW.name()))
+		// 3. HOD Role (Department-level Operational & Management Access)
+		Set<Permission> hodPermissions = allPermissions.stream()
+				.filter(p -> {
+					String n = p.getName();
+					return n.equals(PermissionType.LEAD_READ.name())
+							|| n.equals(PermissionType.LEAD_CREATE.name())
+							|| n.equals(PermissionType.LEAD_UPDATE.name())
+							|| n.equals(PermissionType.LEAD_ASSIGN.name())
+							|| n.equals(PermissionType.LEAD_STATUS_CHANGE.name())
+							|| n.equals(PermissionType.LEAD_FEEDBACK_CREATE.name())
+							|| n.equals(PermissionType.LEAD_FOLLOWUP_CREATE.name())
+							|| n.equals(PermissionType.LEAD_HISTORY_READ.name())
+							|| n.equals(PermissionType.LEAD_DISTRIBUTE.name())
+							|| n.equals(PermissionType.LEAD_DISTRIBUTION_PREVIEW.name())
+							|| n.equals(PermissionType.LEAD_REASSIGN.name())
+							|| n.equals(PermissionType.LEAD_BULK_REASSIGN.name())
+							|| n.equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
+							|| n.equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
+							|| n.startsWith("FOLLOWUP_")
+							|| n.startsWith("FOLLOW_UP_")
+							|| n.startsWith("FEEDBACK_")
+							|| n.equals(PermissionType.DASHBOARD_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_VIEW_DEPARTMENT.name())
+							|| n.equals(PermissionType.DASHBOARD_COURSE_TYPE_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name())
+							|| n.equals(PermissionType.DASHBOARD_USER_PREFERENCE_MANAGE.name())
+							|| n.equals(PermissionType.DASHBOARD_LOW_DATA_USERS_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_LOW_DATA_USERS_READ.name())
+							|| n.equals(PermissionType.DASHBOARD_USERS_NOT_LOGGED_IN_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_USERS_NOT_LOGGED_IN_READ.name())
+							|| n.equals(PermissionType.DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_READ.name())
+							|| n.equals(PermissionType.DEPARTMENT_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_USER_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_HOD_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_COUNSELLOR_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_DATA_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_DATA_CREATE.name())
+							|| n.equals(PermissionType.DEPARTMENT_DATA_UPDATE.name())
+							|| n.startsWith("COURSE_")
+							|| n.startsWith("LEAD_STATUS_")
+							|| n.startsWith("LEADSOURCE_")
+							|| n.startsWith("BOARD_")
+							|| n.startsWith("GRADE_")
+							|| n.equals(PermissionType.USER_READ.name())
+							|| n.equals(PermissionType.AUTH_READ.name());
+				})
 				.collect(Collectors.toSet());
-		createRoleIfNotExist(RoleType.USER.name(), "Standard User Role", userPermissions);
+		syncRoleDefaultPermissions(RoleType.HOD.name(), "Head of Department Role", hodPermissions);
+
+		// 4. COUNSELOR Role (Operational / Self-level Access)
+		Set<Permission> counselorPermissions = allPermissions.stream()
+				.filter(p -> {
+					String n = p.getName();
+					return n.equals(PermissionType.LEAD_READ.name())
+							|| n.equals(PermissionType.LEAD_STATUS_CHANGE.name())
+							|| n.equals(PermissionType.LEAD_FEEDBACK_CREATE.name())
+							|| n.equals(PermissionType.LEAD_FOLLOWUP_CREATE.name())
+							|| n.equals(PermissionType.LEAD_HISTORY_READ.name())
+							|| n.equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
+							|| n.equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
+							|| n.equals(PermissionType.FOLLOWUP_VIEW.name())
+							|| n.equals(PermissionType.FOLLOWUP_CREATE.name())
+							|| n.equals(PermissionType.FOLLOWUP_UPDATE.name())
+							|| n.equals(PermissionType.FEEDBACK_VIEW.name())
+							|| n.equals(PermissionType.FEEDBACK_CREATE.name())
+							|| n.equals(PermissionType.FEEDBACK_UPDATE.name())
+							|| n.equals(PermissionType.DASHBOARD_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_COURSE_TYPE_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_VIEW.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
+							|| n.equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name())
+							|| n.equals(PermissionType.COURSE_VIEW.name())
+							|| n.equals(PermissionType.COURSE_TYPE_VIEW.name())
+							|| n.equals(PermissionType.COURSE_TEMPLATE_VIEW.name())
+							|| n.equals(PermissionType.COURSE_TEMPLATE_SEND.name())
+							|| n.equals(PermissionType.COURSE_TEMPLATE_SEND_EMAIL.name())
+							|| n.equals(PermissionType.COURSE_TEMPLATE_SEND_WHATSAPP.name())
+							|| n.equals(PermissionType.COURSE_TEMPLATE_IMAGE_SELECT.name())
+							|| n.equals(PermissionType.COURSE_IMAGE_VIEW.name())
+							|| n.equals(PermissionType.COURSE_USP_VIEW.name())
+							|| n.equals(PermissionType.DEPARTMENT_VIEW.name())
+							|| n.equals(PermissionType.USER_READ.name())
+							|| n.equals(PermissionType.AUTH_READ.name())
+							|| n.equals(PermissionType.LEAD_STATUS_VIEW.name())
+							|| n.equals(PermissionType.LEAD_STATUS_HISTORY_VIEW.name())
+							|| n.equals(PermissionType.LEADSOURCE_READ.name())
+							|| n.equals(PermissionType.BOARD_VIEW.name())
+							|| n.equals(PermissionType.GRADE_VIEW.name());
+				})
+				.collect(Collectors.toSet());
+		syncRoleDefaultPermissions(RoleType.COUNSELOR.name(), "Counselor Operational Role", counselorPermissions);
+	}
+
+	private Set<Permission> filterPermissions(Set<Permission> allPermissions, String... prefixes) {
+		return allPermissions.stream()
+				.filter(p -> {
+					for (String prefix : prefixes) {
+						if (p.getName().startsWith(prefix) || p.getName().equals(prefix)) {
+							return true;
+						}
+					}
+					return false;
+				})
+				.collect(Collectors.toSet());
+	}
+
+	private void syncRoleDefaultPermissions(String name, String description, Set<Permission> defaultPermissions) {
+		Optional<Role> roleOpt = roleRepository.findByName(name);
+		if (roleOpt.isEmpty()) {
+			Role role = Role.builder()
+					.name(name)
+					.description(description)
+					.active(true)
+					.permissions(new HashSet<>(defaultPermissions))
+					.build();
+			roleRepository.save(role);
+			log.info("Created default role: {} with {} initial permissions", name, defaultPermissions.size());
+		} else {
+			Role role = roleOpt.get();
+			if (role.getPermissions() == null) {
+				role.setPermissions(new HashSet<>());
+			}
+			boolean modified = false;
+			for (Permission p : defaultPermissions) {
+				if (!role.getPermissions().contains(p)) {
+					role.getPermissions().add(p);
+					modified = true;
+				}
+			}
+			if (modified) {
+				roleRepository.save(role);
+				log.info("Added newly introduced default permissions to role {}. Total permissions now: {}", name, role.getPermissions().size());
+			} else {
+				log.debug("Role {} is up-to-date with default permissions. Dynamic RBAC preserved.", name);
+			}
+		}
 	}
 
 	private void seedDepartments() {
 		createDepartmentIfNotExist("Admissions", "ADM", "Student Admissions & Enrollment Department");
-//		createDepartmentIfNotExist("Marketing", "MKT", "Lead Generation & Marketing Department");
+		createDepartmentIfNotExist("Marketing", "MKT", "Lead Generation & Marketing Department");
 //		createDepartmentIfNotExist("Academics", "ACA", "Academic Course Guidance Department");
 //		createDepartmentIfNotExist("Finance", "FIN", "Fee Processing & Financial Aid Department");
 	}
@@ -172,61 +293,148 @@ public class DatabaseSeeder implements CommandLineRunner {
 		}
 	}
 
-	private void createRoleIfNotExist(String name, String description, Set<Permission> permissions) {
-		if (!roleRepository.findByName(name).isPresent()) {
-			Role role = Role.builder().name(name).description(description).active(true).permissions(permissions)
-					.build();
-			roleRepository.save(role);
-			log.info("Seeded role: {}", name);
-		} else {
-			// Update permissions to match code config
-			Role role = roleRepository.findByName(name).get();
-			role.setPermissions(permissions);
-			roleRepository.save(role);
+	private void migrateLegacyUserRoleToCounselor() {
+		Optional<Role> legacyUserRoleOpt = roleRepository.findByName(RoleType.USER.name());
+		if (legacyUserRoleOpt.isEmpty()) {
+			return;
+		}
+		Role legacyUserRole = legacyUserRoleOpt.get();
+		Role counselorRole = roleRepository.findByName(RoleType.COUNSELOR.name())
+				.orElseThrow(() -> new RuntimeException("COUNSELOR role not seeded before migration"));
+
+		Department defaultDept = departmentRepository.findByCodeIgnoreCaseAndIsDeletedFalse("ADM").orElse(null);
+
+		List<User> allUsers = userRepository.findAll();
+		int migratedCount = 0;
+		for (User user : allUsers) {
+			if (user.getRoles() != null && user.getRoles().contains(legacyUserRole)) {
+				user.getRoles().remove(legacyUserRole);
+				user.getRoles().add(counselorRole);
+
+				if ((user.getDepartments() == null || user.getDepartments().isEmpty()) && defaultDept != null) {
+					if (user.getDepartments() == null) {
+						user.setDepartments(new HashSet<>());
+					}
+					user.getDepartments().add(defaultDept);
+				}
+				userRepository.save(user);
+				migratedCount++;
+			}
+		}
+
+		if (migratedCount > 0) {
+			log.info("Migrated {} users from legacy USER role to COUNSELOR role while preserving user data and department mappings", migratedCount);
+		}
+
+		if (legacyUserRole.isActive()) {
+			legacyUserRole.setActive(false);
+			roleRepository.save(legacyUserRole);
+			log.info("Marked legacy USER role as inactive");
 		}
 	}
 
 	private void seedUsers() {
-		// Seed default Super Admin
-		if (!userRepository.findByUsername("superadmin").isPresent()) {
+		Department defaultDept = departmentRepository.findByCodeIgnoreCaseAndIsDeletedFalse("ADM").orElse(null);
+
+		// 1. Seed default Super Admin
+		if (!userRepository.findByUsername("superadmin").isPresent() && !userRepository.existsByEmail("superadmin@datadistribution.com")) {
 			Role superAdminRole = roleRepository.findByName(RoleType.SUPER_ADMIN.name())
 					.orElseThrow(() -> new RuntimeException("SUPER_ADMIN role not seeded"));
 
-			User superAdmin = User.builder().firstName("Super").lastName("Admin")
-					.email("superadmin@datadistribution.com").phone("+919999999999").username("superadmin")
-					.password(passwordEncoder.encode("Admin@123")).active(true).locked(false).emailVerified(true)
-
-					.roles(new HashSet<>(Arrays.asList(superAdminRole))).build();
+			User superAdmin = User.builder()
+					.firstName("Super")
+					.lastName("Admin")
+					.email("superadmin@datadistribution.com")
+					.phone("+919999999999")
+					.username("superadmin")
+					.password(passwordEncoder.encode(defaultSuperAdminPassword))
+					.active(true)
+					.locked(false)
+					.emailVerified(true)
+					.roles(new HashSet<>(Set.of(superAdminRole)))
+					.tokenVersion(1L)
+					.build();
 			userRepository.save(superAdmin);
-			log.info("Seeded default superadmin user");
+			log.info("Seeded default superadmin user (without department mapping)");
 		}
 
-		// Seed default Admin
-		if (!userRepository.findByUsername("admin").isPresent()) {
+		// 2. Seed default Admin
+		if (!userRepository.findByUsername("admin").isPresent() && !userRepository.existsByEmail("admin@datadistribution.com")) {
 			Role adminRole = roleRepository.findByName(RoleType.ADMIN.name())
 					.orElseThrow(() -> new RuntimeException("ADMIN role not seeded"));
 
-			User admin = User.builder().firstName("Standard").lastName("Admin").email("admin@datadistribution.com")
-					.phone("+918888888888").username("admin").password(passwordEncoder.encode("Admin@123")).active(true)
-					.locked(false).emailVerified(true)
-
-					.roles(new HashSet<>(Arrays.asList(adminRole))).build();
+			User admin = User.builder()
+					.firstName("Standard")
+					.lastName("Admin")
+					.email("admin@datadistribution.com")
+					.phone("+918888888888")
+					.username("admin")
+					.password(passwordEncoder.encode(defaultAdminPassword))
+					.active(true)
+					.locked(false)
+					.emailVerified(true)
+					.roles(new HashSet<>(Set.of(adminRole)))
+					.tokenVersion(1L)
+					.build();
 			userRepository.save(admin);
-			log.info("Seeded default admin user");
+			log.info("Seeded default admin user (without department mapping)");
 		}
 
-		// Seed default User
-		if (!userRepository.findByUsername("user").isPresent()) {
-			Role userRole = roleRepository.findByName(RoleType.USER.name())
-					.orElseThrow(() -> new RuntimeException("USER role not seeded"));
+		// 3. Seed default HOD
+		if (!userRepository.findByUsername("hod").isPresent() && !userRepository.existsByEmail("hod@datadistribution.com")) {
+			Role hodRole = roleRepository.findByName(RoleType.HOD.name())
+					.orElseThrow(() -> new RuntimeException("HOD role not seeded"));
 
-			User user = User.builder().firstName("Standard").lastName("User").email("user@datadistribution.com")
-					.phone("+917777777777").username("user").password(passwordEncoder.encode("User@123")).active(true)
-					.locked(false).emailVerified(true)
+			Set<Department> hodDepts = new HashSet<>();
+			if (defaultDept != null) {
+				hodDepts.add(defaultDept);
+			}
 
-					.roles(new HashSet<>(Arrays.asList(userRole))).build();
-			userRepository.save(user);
-			log.info("Seeded default standard user");
+			User hod = User.builder()
+					.firstName("Head")
+					.lastName("Department")
+					.email("hod@datadistribution.com")
+					.phone("+917777777777")
+					.username("hod")
+					.password(passwordEncoder.encode(defaultHodPassword))
+					.active(true)
+					.locked(false)
+					.emailVerified(true)
+					.hodAccessType(com.app.datadistribution.enums.HodAccessType.FULL_ACCESS)
+					.roles(new HashSet<>(Set.of(hodRole)))
+					.departments(hodDepts)
+					.tokenVersion(1L)
+					.build();
+			userRepository.save(hod);
+			log.info("Seeded default HOD user (mapped to department: Admissions, FULL_ACCESS)");
+		}
+
+		// 4. Seed default Counselor
+		if (!userRepository.findByUsername("counselor").isPresent() && !userRepository.existsByEmail("counselor@datadistribution.com")) {
+			Role counselorRole = roleRepository.findByName(RoleType.COUNSELOR.name())
+					.orElseThrow(() -> new RuntimeException("COUNSELOR role not seeded"));
+
+			Set<Department> counselorDepts = new HashSet<>();
+			if (defaultDept != null) {
+				counselorDepts.add(defaultDept);
+			}
+
+			User counselor = User.builder()
+					.firstName("Lead")
+					.lastName("Counselor")
+					.email("counselor@datadistribution.com")
+					.phone("+916666666666")
+					.username("counselor")
+					.password(passwordEncoder.encode(defaultCounselorPassword))
+					.active(true)
+					.locked(false)
+					.emailVerified(true)
+					.roles(new HashSet<>(Set.of(counselorRole)))
+					.departments(counselorDepts)
+					.tokenVersion(1L)
+					.build();
+			userRepository.save(counselor);
+			log.info("Seeded default counselor user (mapped to department: Admissions)");
 		}
 	}
 
@@ -522,19 +730,19 @@ public class DatabaseSeeder implements CommandLineRunner {
 //		createGradeIfNotExist("Undergraduate", "UG", "Bachelor Degree Aspirant / Student", 5);
 //	}
 
-	private void createGradeIfNotExist(String name, String code, String description, int displayOrder) {
-		if (!gradeRepository.findByCodeIgnoreCase(code).isPresent()) {
-			Grade grade = Grade.builder()
-					.name(name)
-					.code(code)
-					.description(description)
-					.displayOrder(displayOrder)
-					.active(true)
-					.build();
-			gradeRepository.save(grade);
-			log.info("Seeded default grade: {} ({})", name, code);
-		}
-	}
+//	private void createGradeIfNotExist(String name, String code, String description, int displayOrder) {
+//		if (!gradeRepository.findByCodeIgnoreCase(code).isPresent()) {
+//			Grade grade = Grade.builder()
+//					.name(name)
+//					.code(code)
+//					.description(description)
+//					.displayOrder(displayOrder)
+//					.active(true)
+//					.build();
+//			gradeRepository.save(grade);
+//			log.info("Seeded default grade: {} ({})", name, code);
+//		}
+//	}
 
 	private void seedDashboardCards() {
 		Set<com.app.datadistribution.entity.Role> allRoles = new HashSet<>(roleRepository.findAll());

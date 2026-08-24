@@ -29,7 +29,9 @@ import com.app.datadistribution.repository.CourseTemplateRepository;
 import com.app.datadistribution.repository.LeadFeedbackRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ICourseTemplateService;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,7 @@ public class CourseTemplateServiceImpl implements ICourseTemplateService {
     private final LeadRepository leadRepository;
     private final LeadFeedbackRepository leadFeedbackRepository;
     private final UserRepository userRepository;
+    private final ILeadDataScopeService leadDataScopeService;
 
     @Override
     @Transactional
@@ -127,10 +130,17 @@ public class CourseTemplateServiceImpl implements ICourseTemplateService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CourseTemplateResponseDTO> getTemplatesForLead(UUID leadId) {
+    public List<CourseTemplateResponseDTO> getTemplatesForLead(UUID leadId) throws UnauthorizedException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        try {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadReadAccess(lead, dataScope);
+        } catch (BadRequestException e) {
+            throw new UnauthorizedException("Cannot resolve user data scope: " + e.getMessage());
+        }
 
         Set<UUID> courseIds = new HashSet<>();
         if (lead.getCourse() != null && !lead.getCourse().isDeleted()) {
@@ -156,10 +166,13 @@ public class CourseTemplateServiceImpl implements ICourseTemplateService {
 
     @Override
     @Transactional
-    public void sendTemplateToLead(UUID leadId, UUID templateId) throws UnauthorizedException {
+    public void sendTemplateToLead(UUID leadId, UUID templateId) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
         CourseTemplate template = courseTemplateRepository.findById(templateId)
                 .filter(t -> !t.isDeleted())

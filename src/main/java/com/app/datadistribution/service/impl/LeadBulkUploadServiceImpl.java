@@ -39,6 +39,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
     private final UserRepository userRepository;
     private final CourseTypeRepository courseTypeRepository;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
+    private final com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^[+]?[0-9\\s\\-]{7,20}$");
@@ -61,8 +62,21 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         // 1. Validate Uploaded File
         validateFile(file);
 
-        // 2. Validate Current User Context
+        // 2. Validate Current User Context & Scope
         User currentUser = getCurrentUserEntity();
+        com.app.datadistribution.service.dto.UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+
+        if (dataScope.isSelfScope() && assignedToUserId != null && !assignedToUserId.equals(currentUser.getId())) {
+            throw new BadRequestException("Counselors can only assign uploaded leads to themselves or leave unassigned.");
+        }
+        if (dataScope.isDepartmentScope()) {
+            if (departmentId != null && dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().contains(departmentId)) {
+                throw new BadRequestException("HOD can only upload leads for their mapped department(s).");
+            }
+            if (assignedToUserId != null && dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().contains(assignedToUserId)) {
+                throw new BadRequestException("HOD can only assign leads to members of their assigned department(s).");
+            }
+        }
 
         // 3. Preload & Validate UI Selected Master Data Entities (Fast Fail)
         CourseType selectedCourseType = validateAndFetchCourseType(courseTypeId);

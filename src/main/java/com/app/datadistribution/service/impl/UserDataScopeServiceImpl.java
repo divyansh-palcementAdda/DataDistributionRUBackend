@@ -199,7 +199,9 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
     private boolean isHOD(User user) {
         if (user.getRoles() == null) return false;
         return user.getRoles().stream()
-                .anyMatch(r -> r.getName().toUpperCase().contains("HOD") || r.getName().toUpperCase().contains("HEAD"))
+                .anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r.getName())
+                        || r.getName().toUpperCase().contains("HOD")
+                        || r.getName().toUpperCase().contains("HEAD"))
                 || hasPermission(user, PermissionType.DASHBOARD_VIEW_DEPARTMENT.name());
     }
 

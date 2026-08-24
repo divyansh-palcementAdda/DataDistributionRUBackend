@@ -5,6 +5,7 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
@@ -23,7 +24,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "leads")
+@Table(name = "leads", indexes = {
+    @Index(name = "idx_lead_assigned_to", columnList = "assigned_to_id"),
+    @Index(name = "idx_lead_department", columnList = "department_id"),
+    @Index(name = "idx_lead_status", columnList = "lead_status_id"),
+    @Index(name = "idx_lead_is_deleted", columnList = "is_deleted"),
+    @Index(name = "idx_lead_created_by", columnList = "created_by_user_id")
+})
 @Getter
 @Setter
 @Builder

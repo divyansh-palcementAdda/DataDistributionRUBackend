@@ -61,6 +61,8 @@ class LeadStatusHistoryTest {
     @Mock
     private IUserDataScopeService dataScopeService;
     @Mock
+    private com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
+    @Mock
     private LeadMapper leadMapper;
 
     @InjectMocks
@@ -97,7 +99,7 @@ class LeadStatusHistoryTest {
     }
 
     @Test
-    void testUpdate_StatusChange_CreatesHistoryRecord() {
+    void testUpdate_StatusChange_CreatesHistoryRecord() throws Exception {
         SecurityContext securityContext = mock(SecurityContext.class);
         Authentication authentication = mock(Authentication.class);
         lenient().when(authentication.isAuthenticated()).thenReturn(true);
@@ -109,6 +111,12 @@ class LeadStatusHistoryTest {
         when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead));
         when(leadStatusRepository.findById(statusConnected.getId())).thenReturn(Optional.of(statusConnected));
         when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserDataScope scope = UserDataScope.builder()
+                .scopeType(ScopeType.SYSTEM)
+                .userId(currentUser.getId())
+                .build();
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
         LeadRequest request = LeadRequest.builder()
                 .fullName("John Doe")
@@ -123,10 +131,16 @@ class LeadStatusHistoryTest {
     }
 
     @Test
-    void testUpdate_SameStatus_DoesNotCreateDuplicateHistoryRecord() {
+    void testUpdate_SameStatus_DoesNotCreateDuplicateHistoryRecord() throws Exception {
         when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead));
         when(leadStatusRepository.findById(statusRaw.getId())).thenReturn(Optional.of(statusRaw));
         when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserDataScope scope = UserDataScope.builder()
+                .scopeType(ScopeType.SYSTEM)
+                .userId(currentUser.getId())
+                .build();
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
         LeadRequest request = LeadRequest.builder()
                 .fullName("John Doe Updated")
@@ -147,7 +161,7 @@ class LeadStatusHistoryTest {
                 .scopeType(ScopeType.SYSTEM)
                 .userId(currentUser.getId())
                 .build();
-        when(dataScopeService.getScopeForCurrentUser()).thenReturn(scope);
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
         LeadStatusHistory history = LeadStatusHistory.builder()
                 .lead(lead)

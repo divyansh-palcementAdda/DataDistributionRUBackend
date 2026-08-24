@@ -81,7 +81,7 @@ public class LeadController {
     @Operation(summary = "Update an existing lead")
     public ResponseEntity<ApiResponse<LeadResponse>> update(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody LeadRequest request) {
+            @Valid @RequestBody LeadRequest request) throws BadRequestException, UnauthorizedException {
         LeadResponse response = leadService.update(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead updated successfully", response, HttpStatus.OK.value()));
     }
@@ -89,7 +89,7 @@ public class LeadController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get lead details by ID")
-    public ResponseEntity<ApiResponse<LeadResponse>> getById(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<LeadResponse>> getById(@PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
         LeadResponse response = leadService.getById(id);
         return ResponseEntity.ok(ApiResponse.success("Lead fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -137,7 +137,7 @@ public class LeadController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('LEAD_DELETE')")
     @Operation(summary = "Soft delete a lead")
-    public ResponseEntity<ApiResponse<Void>> deleteLead(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteLead(@PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
         leadService.deleteLead(id);
         return ResponseEntity.ok(ApiResponse.success("Lead deleted successfully", null, HttpStatus.OK.value()));
     }
@@ -157,7 +157,7 @@ public class LeadController {
     @Operation(summary = "Add feedback to a lead")
     public ResponseEntity<ApiResponse<LeadFeedbackResponse>> addFeedback(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody LeadFeedbackRequest request) throws UnauthorizedException {
+            @Valid @RequestBody LeadFeedbackRequest request) throws UnauthorizedException, BadRequestException {
         LeadFeedbackResponse response = leadFeedbackService.addFeedback(id, request);
         return ResponseEntity.ok(ApiResponse.success("Feedback added successfully", response, HttpStatus.OK.value()));
     }
@@ -165,7 +165,7 @@ public class LeadController {
     @GetMapping("/{id}/feedbacks")
     @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get feedback history for a lead")
-    public ResponseEntity<ApiResponse<List<LeadFeedbackResponse>>> getFeedbacks(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<List<LeadFeedbackResponse>>> getFeedbacks(@PathVariable("id") UUID id) throws UnauthorizedException {
         List<LeadFeedbackResponse> response = leadFeedbackService.getFeedbacksByLeadId(id);
         return ResponseEntity.ok(ApiResponse.success("Lead feedbacks fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -175,7 +175,7 @@ public class LeadController {
     @Operation(summary = "Schedule a follow-up for a lead")
     public ResponseEntity<ApiResponse<LeadFollowUpResponse>> createFollowUp(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody LeadFollowUpRequest request) throws UnauthorizedException {
+            @Valid @RequestBody LeadFollowUpRequest request) throws UnauthorizedException, BadRequestException {
         LeadFollowUpResponse response = leadFollowUpService.createFollowUp(id, request);
         return ResponseEntity.ok(ApiResponse.success("Follow-up scheduled successfully", response, HttpStatus.OK.value()));
     }
@@ -183,7 +183,7 @@ public class LeadController {
     @GetMapping("/{id}/followups")
     @PreAuthorize("hasAuthority('LEAD_READ')")
     @Operation(summary = "Get follow-ups for a lead")
-    public ResponseEntity<ApiResponse<List<LeadFollowUpResponse>>> getFollowUps(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<List<LeadFollowUpResponse>>> getFollowUps(@PathVariable("id") UUID id) throws UnauthorizedException {
         List<LeadFollowUpResponse> response = leadFollowUpService.getFollowUpsByLeadId(id);
         return ResponseEntity.ok(ApiResponse.success("Lead follow-ups fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -193,7 +193,7 @@ public class LeadController {
     @Operation(summary = "Mark a follow-up as completed")
     public ResponseEntity<ApiResponse<LeadFollowUpResponse>> completeFollowUp(
             @PathVariable("followUpId") UUID followUpId,
-            @RequestParam(value = "remarks", required = false) String remarks) {
+            @RequestParam(value = "remarks", required = false) String remarks) throws UnauthorizedException, BadRequestException {
         LeadFollowUpResponse response = leadFollowUpService.completeFollowUp(followUpId, remarks);
         return ResponseEntity.ok(ApiResponse.success("Follow-up marked completed successfully", response, HttpStatus.OK.value()));
     }
@@ -203,7 +203,7 @@ public class LeadController {
     @Operation(summary = "Assign/reassign a lead to a user")
     public ResponseEntity<ApiResponse<LeadResponse>> assignLead(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody LeadAssignmentRequest request) throws UnauthorizedException {
+            @Valid @RequestBody LeadAssignmentRequest request) throws UnauthorizedException, BadRequestException {
         LeadResponse response = leadAssignmentService.assignLead(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead assigned successfully", response, HttpStatus.OK.value()));
     }
@@ -211,7 +211,7 @@ public class LeadController {
     @GetMapping("/{id}/assignment-history")
     @PreAuthorize("hasAuthority('LEAD_HISTORY_READ')")
     @Operation(summary = "Get assignment history for a lead")
-    public ResponseEntity<ApiResponse<List<LeadAssignmentHistoryResponse>>> getAssignmentHistory(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<List<LeadAssignmentHistoryResponse>>> getAssignmentHistory(@PathVariable("id") UUID id) throws UnauthorizedException {
         List<LeadAssignmentHistoryResponse> response = leadAssignmentService.getAssignmentHistoryByLeadId(id);
         return ResponseEntity.ok(ApiResponse.success("Lead assignment history fetched successfully", response, HttpStatus.OK.value()));
     }
@@ -278,7 +278,7 @@ public class LeadController {
     @Operation(summary = "Add interested courses to a lead")
     public ResponseEntity<ApiResponse<LeadResponse>> addInterestedCourses(
             @PathVariable("id") UUID id,
-            @RequestBody Map<String, List<UUID>> requestBody) {
+            @RequestBody Map<String, List<UUID>> requestBody) throws UnauthorizedException, BadRequestException {
         List<UUID> courseIds = requestBody != null ? requestBody.get("courseIds") : null;
         LeadResponse response = leadService.addInterestedCourses(id, courseIds);
         return ResponseEntity.ok(ApiResponse.success("Interested courses added to lead successfully", response, HttpStatus.OK.value()));
@@ -289,7 +289,7 @@ public class LeadController {
     @Operation(summary = "Remove an interested course from a lead")
     public ResponseEntity<ApiResponse<LeadResponse>> removeInterestedCourse(
             @PathVariable("id") UUID id,
-            @PathVariable("courseId") UUID courseId) {
+            @PathVariable("courseId") UUID courseId) throws UnauthorizedException, BadRequestException {
         LeadResponse response = leadService.removeInterestedCourse(id, courseId);
         return ResponseEntity.ok(ApiResponse.success("Interested course removed from lead successfully", response, HttpStatus.OK.value()));
     }
@@ -299,7 +299,7 @@ public class LeadController {
     @Operation(summary = "Register lead in a specific course")
     public ResponseEntity<ApiResponse<LeadResponse>> registerCourse(
             @PathVariable("id") UUID id,
-            @PathVariable("courseId") UUID courseId) {
+            @PathVariable("courseId") UUID courseId) throws UnauthorizedException, BadRequestException {
         LeadResponse response = leadService.registerCourse(id, courseId);
         return ResponseEntity.ok(ApiResponse.success("Lead registered in course successfully", response, HttpStatus.OK.value()));
     }
@@ -307,7 +307,7 @@ public class LeadController {
     @GetMapping("/{id}/course-templates")
     @PreAuthorize("hasAuthority('COURSE_TEMPLATE_VIEW') or hasAuthority('LEAD_READ')")
     @Operation(summary = "Get course templates applicable for a lead")
-    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO>>> getCourseTemplatesForLead(@PathVariable("id") UUID id) {
+    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO>>> getCourseTemplatesForLead(@PathVariable("id") UUID id) throws UnauthorizedException {
         List<com.app.datadistribution.dto.coursetemplate.CourseTemplateResponseDTO> response = courseTemplateService.getTemplatesForLead(id);
         return ResponseEntity.ok(ApiResponse.success("Applicable course templates retrieved successfully", response, HttpStatus.OK.value()));
     }
@@ -317,7 +317,7 @@ public class LeadController {
     @Operation(summary = "Send a course template to a lead")
     public ResponseEntity<ApiResponse<Void>> sendTemplateToLead(
             @PathVariable("id") UUID id,
-            @PathVariable("templateId") UUID templateId) throws UnauthorizedException {
+            @PathVariable("templateId") UUID templateId) throws UnauthorizedException, BadRequestException {
         courseTemplateService.sendTemplateToLead(id, templateId);
         return ResponseEntity.ok(ApiResponse.success("Course template sent to lead successfully", null, HttpStatus.OK.value()));
     }
