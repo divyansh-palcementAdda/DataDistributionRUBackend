@@ -31,17 +31,20 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         DashboardAnalyticsResponseDTO result = dashboardService.getAnalytics(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @PostMapping("/analytics")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get generic, filterable analytics breakdown by any groupBy dimension (POST payload)")
     public ResponseEntity<ApiResponse<DashboardAnalyticsResponseDTO>> getAnalyticsPost(
-            @Valid @RequestBody DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+            @Valid @RequestBody DashboardAnalyticsFilterRequest filterRequest)
+            throws UnauthorizedException, BadRequestException {
 
         DashboardAnalyticsResponseDTO result = dashboardService.getAnalytics(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Dashboard analytics retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/summary")
@@ -51,15 +54,48 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         DashboardSummaryDTO summary = dashboardService.getDashboardSummary(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Dashboard summary retrieved successfully", summary, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Dashboard summary retrieved successfully", summary, HttpStatus.OK.value()));
     }
 
     @GetMapping("/cards")
     @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
     @Operation(summary = "Get resolved dashboard cards with role permissions and user preferences applied")
-    public ResponseEntity<ApiResponse<List<DashboardCardDTO>>> getResolvedCards() throws UnauthorizedException, BadRequestException {
+    public ResponseEntity<ApiResponse<List<DashboardCardDTO>>> getResolvedCards()
+            throws UnauthorizedException, BadRequestException {
         List<DashboardCardDTO> cards = dashboardService.getResolvedCards();
-        return ResponseEntity.ok(ApiResponse.success("Resolved dashboard cards retrieved successfully", cards, HttpStatus.OK.value()));
+        return ResponseEntity.ok(
+                ApiResponse.success("Resolved dashboard cards retrieved successfully", cards, HttpStatus.OK.value()));
+    }
+
+    @GetMapping({ "/leads/allotted/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of all allotted (assigned) leads matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getAllottedCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getAllottedLeadsCount(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Allotted leads count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping({ "/leads/unallotted/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of all unallotted (unassigned) leads matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getUnallottedCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getUnallottedLeadsCount(filterRequest);
+        return ResponseEntity.ok(
+                ApiResponse.success("Unallotted leads count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping({ "/leads/availed/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of all availed leads matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getAvailedCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getAvailedLeadsCount(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Availed leads count retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/lead-status")
@@ -69,7 +105,8 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getLeadStatusBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Lead status breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Lead status breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/lead-source")
@@ -79,7 +116,8 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getLeadSourceBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Lead source breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Lead source breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/board")
@@ -89,7 +127,8 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getBoardBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Board breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Board breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/grade")
@@ -99,7 +138,8 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getGradeBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Grade breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Grade breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/course")
@@ -109,25 +149,29 @@ public class DashboardController {
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getCourseBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Course breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Course breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
-    @GetMapping({"/course-types"})
+    @GetMapping({ "/course-types" })
     @PreAuthorize("hasAuthority('DASHBOARD_COURSE_TYPE_VIEW')")
     @Operation(summary = "Get course type breakdown count for current user scope with dynamic filters")
     public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getCourseTypeBreakdown(
             @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
 
         List<GroupCountDTO> result = dashboardService.getCourseTypeBreakdown(filterRequest);
-        return ResponseEntity.ok(ApiResponse.success("Course type breakdown retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Course type breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/recent-activity")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get recent lead activity audit feed for current user scope")
-    public ResponseEntity<ApiResponse<List<Object>>> getRecentActivity() throws UnauthorizedException, BadRequestException {
+    public ResponseEntity<ApiResponse<List<Object>>> getRecentActivity()
+            throws UnauthorizedException, BadRequestException {
         List<Object> result = dashboardService.getRecentActivity();
-        return ResponseEntity.ok(ApiResponse.success("Recent activity retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Recent activity retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/low-data-users")
@@ -138,9 +182,11 @@ public class DashboardController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "sortBy", defaultValue = "remainingDataCount") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "search", required = false) String search)
+            throws UnauthorizedException, BadRequestException {
 
-        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO
+                .builder()
                 .page(page)
                 .size(size)
                 .sortBy(sortBy)
@@ -149,7 +195,8 @@ public class DashboardController {
                 .build();
 
         LowDataUserPageResponseDTO result = dashboardService.getLowDataUsers(pageRequest);
-        return ResponseEntity.ok(ApiResponse.success("Low data users list retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Low data users list retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/users-not-logged-in")
@@ -160,9 +207,11 @@ public class DashboardController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "sortBy", defaultValue = "name") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "search", required = false) String search)
+            throws UnauthorizedException, BadRequestException {
 
-        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO
+                .builder()
                 .page(page)
                 .size(size)
                 .sortBy(sortBy)
@@ -171,7 +220,8 @@ public class DashboardController {
                 .build();
 
         UserNotLoggedInPageResponseDTO result = dashboardService.getUsersNotLoggedInToday(pageRequest);
-        return ResponseEntity.ok(ApiResponse.success("Users not logged in today retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity.ok(
+                ApiResponse.success("Users not logged in today retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/followup-users-not-logged-in-11am")
@@ -182,9 +232,11 @@ public class DashboardController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "sortBy", defaultValue = "todayFollowUpCount") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "DESC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "search", required = false) String search)
+            throws UnauthorizedException, BadRequestException {
 
-        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO.builder()
+        com.app.datadistribution.common.PageRequestDTO pageRequest = com.app.datadistribution.common.PageRequestDTO
+                .builder()
                 .page(page)
                 .size(size)
                 .sortBy(sortBy)
@@ -193,15 +245,18 @@ public class DashboardController {
                 .build();
 
         FollowUpUserNotLoggedInPageResponseDTO result = dashboardService.getFollowUpUsersNotLoggedInBy11Am(pageRequest);
-        return ResponseEntity.ok(ApiResponse.success("Follow-up users not logged in by 11 AM IST retrieved successfully", result, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success(
+                "Follow-up users not logged in by 11 AM IST retrieved successfully", result, HttpStatus.OK.value()));
     }
 
     @GetMapping("/preferences")
     @PreAuthorize("hasAuthority('DASHBOARD_CARD_VIEW')")
     @Operation(summary = "Get current authenticated user's card preferences")
-    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferences() throws UnauthorizedException {
+    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferences()
+            throws UnauthorizedException {
         List<UserDashboardPreferenceDTO> preferences = dashboardService.getUserPreferences();
-        return ResponseEntity.ok(ApiResponse.success("User dashboard preferences retrieved successfully", preferences, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success("User dashboard preferences retrieved successfully", preferences,
+                HttpStatus.OK.value()));
     }
 
     @PutMapping("/preferences/{cardId}/visibility")
@@ -212,7 +267,8 @@ public class DashboardController {
             @Valid @RequestBody CardPreferenceUpdateRequest request) throws BadRequestException, UnauthorizedException {
 
         dashboardService.updateCardVisibility(cardId, Boolean.TRUE.equals(request.getVisible()));
-        return ResponseEntity.ok(ApiResponse.success("Card visibility preference updated successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity.ok(
+                ApiResponse.success("Card visibility preference updated successfully", null, HttpStatus.OK.value()));
     }
 
     @PutMapping("/preferences/order")
@@ -222,7 +278,8 @@ public class DashboardController {
             @Valid @RequestBody CardOrderUpdateRequest request) throws BadRequestException, UnauthorizedException {
 
         dashboardService.updateCardOrders(request);
-        return ResponseEntity.ok(ApiResponse.success("Card display order preference updated successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity.ok(
+                ApiResponse.success("Card display order preference updated successfully", null, HttpStatus.OK.value()));
     }
 
     @PostMapping("/preferences/reset")
@@ -230,7 +287,8 @@ public class DashboardController {
     @Operation(summary = "Reset current user's dashboard preferences back to role defaults")
     public ResponseEntity<ApiResponse<Void>> resetUserPreferences() throws BadRequestException, UnauthorizedException {
         dashboardService.resetUserPreferences();
-        return ResponseEntity.ok(ApiResponse.success("Dashboard preferences reset to role defaults successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success("Dashboard preferences reset to role defaults successfully", null,
+                HttpStatus.OK.value()));
     }
 
     // --- Admin Endpoints for Card Role Access & User Preferences ---
@@ -238,9 +296,11 @@ public class DashboardController {
     @GetMapping("/admin/cards/{cardId}/roles")
     @PreAuthorize("hasAuthority('ROLE_READ') or hasAuthority('DASHBOARD_VIEW_ALL')")
     @Operation(summary = "Get roles assigned to a dashboard card")
-    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.user.RoleDTO>>> getCardRoles(@PathVariable("cardId") UUID cardId) throws BadRequestException {
+    public ResponseEntity<ApiResponse<List<com.app.datadistribution.dto.user.RoleDTO>>> getCardRoles(
+            @PathVariable("cardId") UUID cardId) throws BadRequestException {
         List<com.app.datadistribution.dto.user.RoleDTO> roles = dashboardService.getCardRoles(cardId);
-        return ResponseEntity.ok(ApiResponse.success("Card roles retrieved successfully", roles, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Card roles retrieved successfully", roles, HttpStatus.OK.value()));
     }
 
     @PutMapping("/admin/cards/{cardId}/roles")
@@ -251,15 +311,18 @@ public class DashboardController {
             @Valid @RequestBody CardRoleAssignRequest request) throws BadRequestException {
 
         dashboardService.updateCardRolePermissions(cardId, request.getRoleIds());
-        return ResponseEntity.ok(ApiResponse.success("Card role permissions updated successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("Card role permissions updated successfully", null, HttpStatus.OK.value()));
     }
 
     @GetMapping("/admin/users/{userId}/preferences")
     @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
     @Operation(summary = "Admin: Get dashboard card preferences for a specific user")
-    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferencesForUser(@PathVariable("userId") UUID userId) throws BadRequestException, UnauthorizedException {
+    public ResponseEntity<ApiResponse<List<UserDashboardPreferenceDTO>>> getUserPreferencesForUser(
+            @PathVariable("userId") UUID userId) throws BadRequestException, UnauthorizedException {
         List<UserDashboardPreferenceDTO> preferences = dashboardService.getUserPreferencesForUser(userId);
-        return ResponseEntity.ok(ApiResponse.success("Target user dashboard preferences retrieved successfully", preferences, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success("Target user dashboard preferences retrieved successfully",
+                preferences, HttpStatus.OK.value()));
     }
 
     @PutMapping("/admin/users/{userId}/preferences/{cardId}/visibility")
@@ -271,7 +334,8 @@ public class DashboardController {
             @Valid @RequestBody CardPreferenceUpdateRequest request) throws BadRequestException, UnauthorizedException {
 
         dashboardService.updateCardVisibilityForUser(userId, cardId, Boolean.TRUE.equals(request.getVisible()));
-        return ResponseEntity.ok(ApiResponse.success("User card visibility updated successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("User card visibility updated successfully", null, HttpStatus.OK.value()));
     }
 
     @PutMapping("/admin/users/{userId}/preferences/order")
@@ -282,14 +346,17 @@ public class DashboardController {
             @Valid @RequestBody CardOrderUpdateRequest request) throws BadRequestException, UnauthorizedException {
 
         dashboardService.updateCardOrdersForUser(userId, request);
-        return ResponseEntity.ok(ApiResponse.success("User card order preferences updated successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity.ok(
+                ApiResponse.success("User card order preferences updated successfully", null, HttpStatus.OK.value()));
     }
 
     @PostMapping("/admin/users/{userId}/preferences/reset")
     @PreAuthorize("hasAuthority('DASHBOARD_USER_PREFERENCE_MANAGE')")
     @Operation(summary = "Admin: Reset dashboard card preferences for a specific user")
-    public ResponseEntity<ApiResponse<Void>> resetPreferencesForUser(@PathVariable("userId") UUID userId) throws BadRequestException, UnauthorizedException {
+    public ResponseEntity<ApiResponse<Void>> resetPreferencesForUser(@PathVariable("userId") UUID userId)
+            throws BadRequestException, UnauthorizedException {
         dashboardService.resetPreferencesForUser(userId);
-        return ResponseEntity.ok(ApiResponse.success("User dashboard preferences reset successfully", null, HttpStatus.OK.value()));
+        return ResponseEntity
+                .ok(ApiResponse.success("User dashboard preferences reset successfully", null, HttpStatus.OK.value()));
     }
 }

@@ -26,17 +26,15 @@ import com.app.datadistribution.dto.dashboard.CardOrderUpdateRequest;
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsResponseDTO;
 import com.app.datadistribution.dto.dashboard.DashboardCardDTO;
+import com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO;
 import com.app.datadistribution.dto.dashboard.DashboardSectionDTO;
 import com.app.datadistribution.dto.dashboard.DashboardSummaryDTO;
 import com.app.datadistribution.dto.dashboard.GroupCountDTO;
 import com.app.datadistribution.dto.dashboard.UserDashboardPreferenceDTO;
 import com.app.datadistribution.entity.DashboardCard;
-import com.app.datadistribution.entity.Department;
-import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.entity.LeadStatusHistory;
-import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.entity.UserDashboardCardPreference;
 import com.app.datadistribution.enums.DashboardGroupBy;
@@ -153,6 +151,45 @@ public class DashboardServiceImpl implements IDashboardService {
                 .endDate(endDate)
                 .build();
         return getDashboardSummary(filterRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getAllottedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setAllotted(true);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("ALLOTTED")
+                .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getUnallottedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setAllotted(false);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("UNALLOTTED")
+                .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getAvailedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setIsAvailed(true);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("AVAILED")
+                .count(count)
+                .build();
     }
 
     @Override
@@ -631,6 +668,21 @@ public class DashboardServiceImpl implements IDashboardService {
             switch (card.getCode()) {
                 case "TOTAL_LEADS":
                     card.setValue(countLeadsInScope(dataScope, filter));
+                    break;
+                case "TOTAL_ALLOTTED_DATA":
+                    filter.setAllotted(true);
+                    card.setValue(countLeadsInScope(dataScope, filter));
+                    filter.setAllotted(null);
+                    break;
+                case "TOTAL_UNALLOTTED_DATA":
+                    filter.setAllotted(false);
+                    card.setValue(countLeadsInScope(dataScope, filter));
+                    filter.setAllotted(null);
+                    break;
+                case "TOTAL_AVAILED_DATA":
+                    filter.setIsAvailed(true);
+                    card.setValue(countLeadsInScope(dataScope, filter));
+                    filter.setIsAvailed(null);
                     break;
                 case "TOTAL_FOLLOWUPS_TODAY":
                     card.setValue(countFollowUpsTodayInScope(dataScope, filter));

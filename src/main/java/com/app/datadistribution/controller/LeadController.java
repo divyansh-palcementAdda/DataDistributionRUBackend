@@ -25,6 +25,7 @@ import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
 import com.app.datadistribution.dto.lead.LeadAssignmentHistoryResponse;
 import com.app.datadistribution.dto.lead.LeadAssignmentRequest;
+import com.app.datadistribution.dto.lead.LeadAvailedResponse;
 import com.app.datadistribution.dto.lead.LeadDistributionRequest;
 import com.app.datadistribution.dto.lead.LeadDistributionResponse;
 import com.app.datadistribution.dto.lead.LeadFeedbackRequest;
@@ -96,7 +97,7 @@ public class LeadController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('LEAD_READ')")
-    @Operation(summary = "Get list of leads with pagination, sorting, search, source, status, course, interested courses, and course type filtering")
+    @Operation(summary = "Get all leads with pagination, search, and comprehensive dynamic filters")
     public ResponseEntity<ApiResponse<LeadPageResponse>> getAllLeads(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
@@ -109,18 +110,50 @@ public class LeadController {
             @RequestParam(value = "interestedCourseIds", required = false) List<UUID> interestedCourseIds,
             @RequestParam(value = "registeredCourseId", required = false) UUID registeredCourseId,
             @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
+            @RequestParam(value = "courseTypeIds", required = false) List<UUID> courseTypeIds,
             @RequestParam(value = "withoutCourse", required = false) Boolean withoutCourse,
             @RequestParam(value = "statusId", required = false) UUID statusId,
             @RequestParam(value = "statusIds", required = false) List<UUID> statusIds,
             @RequestParam(value = "boardId", required = false) UUID boardId,
             @RequestParam(value = "boardIds", required = false) List<UUID> boardIds,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
-            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds,
+            @RequestParam(value = "departmentId", required = false) UUID departmentId,
+            @RequestParam(value = "departmentIds", required = false) List<UUID> departmentIds,
+            @RequestParam(value = "assignedUserId", required = false) UUID assignedUserId,
+            @RequestParam(value = "assignedUserIds", required = false) List<UUID> assignedUserIds,
+            @RequestParam(value = "allotted", required = false) Boolean allotted,
+            @RequestParam(value = "availed", required = false) Boolean availed,
+            @RequestParam(value = "isAvailed", required = false) Boolean isAvailed,
+            @RequestParam(value = "availedByUserId", required = false) UUID availedByUserId,
+            @RequestParam(value = "availedByUserIds", required = false) List<UUID> availedByUserIds,
+            @RequestParam(value = "availedFrom", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate availedFrom,
+            @RequestParam(value = "availedTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate availedTo,
+            @RequestParam(value = "startDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate endDate,
+            @RequestParam(value = "fromDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(value = "toDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
+            @RequestParam(value = "updatedFrom", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate updatedFrom,
+            @RequestParam(value = "updatedTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate updatedTo) throws UnauthorizedException, BadRequestException {
 
         List<UUID> sourceIdsToFilter = leadSourceIds;
         if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
             sourceIdsToFilter = List.of(sourceId);
         }
+
+        List<UUID> deptIdsToFilter = departmentIds;
+        if ((deptIdsToFilter == null || deptIdsToFilter.isEmpty()) && departmentId != null) {
+            deptIdsToFilter = List.of(departmentId);
+        }
+
+        List<UUID> assignedUsersToFilter = assignedUserIds;
+        if ((assignedUsersToFilter == null || assignedUsersToFilter.isEmpty()) && assignedUserId != null) {
+            assignedUsersToFilter = List.of(assignedUserId);
+        }
+
+        Boolean effectiveAvailed = isAvailed != null ? isAvailed : availed;
+        java.time.LocalDate effectiveStartDate = startDate != null ? startDate : fromDate;
+        java.time.LocalDate effectiveEndDate = endDate != null ? endDate : toDate;
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -130,7 +163,34 @@ public class LeadController {
                 .search(search)
                 .build();
 
-        LeadPageResponse response = leadService.getAllLeads(pageRequest, sourceIdsToFilter, courseId, interestedCourseIds, registeredCourseId, courseTypeId, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds);
+        LeadPageResponse response = leadService.getAllLeads(
+                pageRequest,
+                sourceIdsToFilter,
+                courseId,
+                interestedCourseIds,
+                registeredCourseId,
+                courseTypeId,
+                courseTypeIds,
+                withoutCourse,
+                statusId,
+                statusIds,
+                boardId,
+                boardIds,
+                gradeId,
+                gradeIds,
+                deptIdsToFilter,
+                assignedUsersToFilter,
+                allotted,
+                effectiveAvailed,
+                availedByUserId,
+                availedByUserIds,
+                availedFrom,
+                availedTo,
+                effectiveStartDate,
+                effectiveEndDate,
+                updatedFrom,
+                updatedTo
+        );
         return ResponseEntity.ok(ApiResponse.success("Leads retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -150,6 +210,14 @@ public class LeadController {
             @Valid @RequestBody LeadStatusChangeRequest request) throws BadRequestException, UnauthorizedException {
         LeadResponse response = leadService.changeStatus(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead status changed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/avail")
+    @PreAuthorize("hasAuthority('LEAD_AVAIL') or hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Mark lead as availed by the currently assigned user")
+    public ResponseEntity<ApiResponse<LeadAvailedResponse>> markLeadAsAvailed(@PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
+        LeadAvailedResponse response = leadService.markLeadAsAvailed(id);
+        return ResponseEntity.ok(ApiResponse.success("Lead marked as availed successfully", response, HttpStatus.OK.value()));
     }
 
     @PostMapping("/{id}/feedback")

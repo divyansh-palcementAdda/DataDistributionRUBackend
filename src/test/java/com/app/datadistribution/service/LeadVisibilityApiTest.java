@@ -59,6 +59,10 @@ class LeadVisibilityApiTest {
     @Mock
     private LeadFeedbackRepository leadFeedbackRepository;
     @Mock
+    private LeadAvailedRepository leadAvailedRepository;
+    @Mock
+    private LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
+    @Mock
     private CourseRepository courseRepository;
     @Mock
     private IUserDataScopeService dataScopeService;
@@ -309,5 +313,31 @@ class LeadVisibilityApiTest {
         assertNotNull(response);
         assertEquals(0, response.getTotalElements());
         assertTrue(response.getContent().isEmpty());
+    }
+
+    @Test
+    void testGetAllLeads_FilterAllottedAndAvailed_Success() throws Exception {
+        UserDataScope scope = UserDataScope.builder()
+                .userId(adminUser.getId())
+                .scopeType(ScopeType.SYSTEM)
+                .build();
+        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+
+        Specification<Lead> realSpec = (root, query, cb) -> cb.conjunction();
+        when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(realSpec);
+
+        Page<Lead> page = new PageImpl<>(List.of(lead1));
+        when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+        when(leadAvailedRepository.findByLeadIdInAndIsDeletedFalse(anyCollection())).thenReturn(Collections.emptyList());
+        when(leadMapper.toDto(lead1)).thenReturn(LeadResponse.builder().id(lead1.getId()).leadCode(lead1.getLeadCode()).build());
+
+        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+        LeadPageResponse response = leadService.getAllLeads(
+                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, true, false, null, null, null, null, null, null, null, null
+        );
+
+        assertNotNull(response);
+        assertEquals(1, response.getContent().size());
+        assertEquals("LEAD-101", response.getContent().get(0).getLeadCode());
     }
 }

@@ -1,6 +1,7 @@
 package com.app.datadistribution.dto.dashboard;
 
 import com.app.datadistribution.enums.DashboardGroupBy;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 import java.util.List;
@@ -28,6 +29,38 @@ public class DashboardAnalyticsFilterRequest {
     private List<UUID> departmentIds;
     private List<UUID> assignedUserIds;
     private List<UUID> createdByUserIds;
+
+    // Allotted / Unallotted filter (true = assignedTo is not null, false = assignedTo is null)
+    private Boolean allotted;
+
+    // Availed / Unavailed filter
+    @JsonProperty("isAvailed")
+    private Boolean isAvailed;
+    private Boolean availed;
+
+    private UUID availedByUserId;
+    private List<UUID> availedByUserIds;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate availedFrom;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate availedTo;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate assignedFrom;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate assignedTo;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate updatedFrom;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate updatedTo;
+
+    private String leadCode;
+    private String search;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate startDate;
@@ -63,6 +96,10 @@ public class DashboardAnalyticsFilterRequest {
 
     public Integer getEffectivePageSize() {
         return pageSize != null ? pageSize : size;
+    }
+
+    public Boolean getEffectiveIsAvailed() {
+        return isAvailed != null ? isAvailed : availed;
     }
 
     public String getEffectiveScope() {

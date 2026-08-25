@@ -14,6 +14,7 @@ import com.app.datadistribution.dto.lead.BoardResponse;
 import com.app.datadistribution.dto.lead.GradeRequest;
 import com.app.datadistribution.dto.lead.GradeResponse;
 import com.app.datadistribution.dto.lead.LeadAssignmentHistoryResponse;
+import com.app.datadistribution.dto.lead.LeadAvailedResponse;
 import com.app.datadistribution.dto.lead.LeadFeedbackResponse;
 import com.app.datadistribution.dto.lead.LeadFollowUpResponse;
 import com.app.datadistribution.dto.lead.LeadRequest;
@@ -28,6 +29,7 @@ import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.Grade;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
+import com.app.datadistribution.entity.LeadAvailed;
 import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.entity.LeadSource;
@@ -123,6 +125,22 @@ public interface LeadMapper {
 
         UserMapper userMapper = org.mapstruct.factory.Mappers.getMapper(UserMapper.class);
 
+        boolean isAvailed = false;
+        java.time.LocalDateTime availedAt = null;
+        com.app.datadistribution.dto.user.UserResponse availedBy = null;
+
+        if (lead.getAssignedTo() != null && lead.getAvailedRecords() != null && !lead.getAvailedRecords().isEmpty()) {
+            java.util.UUID assignedUserId = lead.getAssignedTo().getId();
+            for (com.app.datadistribution.entity.LeadAvailed la : lead.getAvailedRecords()) {
+                if (!la.isDeleted() && la.getAvailedByUser() != null && assignedUserId.equals(la.getAvailedByUser().getId())) {
+                    isAvailed = true;
+                    availedAt = la.getAvailedAt();
+                    availedBy = userMapper.toDto(la.getAvailedByUser());
+                    break;
+                }
+            }
+        }
+
         return LeadResponse.builder()
                 .id(lead.getId())
                 .leadCode(lead.getLeadCode())
@@ -148,6 +166,9 @@ public interface LeadMapper {
                 .assignedTo(userMapper.toDto(lead.getAssignedTo()))
                 .createdBy(userMapper.toDto(lead.getCreatedByUser()))
                 .active(lead.isActive())
+                .isAvailed(isAvailed)
+                .availedAt(availedAt)
+                .availedBy(availedBy)
                 .lastContactedAt(lead.getLastContactedAt())
                 .nextFollowUpDate(lead.getNextFollowUpDate())
                 .createdAt(lead.getCreatedAt())
@@ -171,6 +192,7 @@ public interface LeadMapper {
     @Mapping(target = "followUps", ignore = true)
     @Mapping(target = "statusHistories", ignore = true)
     @Mapping(target = "assignmentHistories", ignore = true)
+    @Mapping(target = "availedRecords", ignore = true)
     Lead toEntity(LeadRequest dto);
 
     // --- LeadFeedback ---
@@ -230,4 +252,11 @@ public interface LeadMapper {
     @Mapping(source = "lead.leadCode", target = "leadCode")
     @Mapping(source = "lead.fullName", target = "leadFullName")
     FeedbackResponseDTO toFeedbackResponseDto(LeadFeedback feedback);
+
+    // --- LeadAvailed ---
+    @Mapping(source = "availedByUser", target = "availedBy")
+    @Mapping(source = "lead.id", target = "leadId")
+    @Mapping(source = "lead.leadCode", target = "leadCode")
+    @Mapping(target = "availed", constant = "true")
+    LeadAvailedResponse toDto(LeadAvailed availed);
 }

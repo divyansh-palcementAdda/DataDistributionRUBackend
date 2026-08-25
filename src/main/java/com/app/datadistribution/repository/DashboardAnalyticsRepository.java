@@ -379,6 +379,100 @@ public class DashboardAnalyticsRepository {
             ));
         }
 
+        // Allotted / Unallotted filter
+        if (Boolean.TRUE.equals(filter.getAllotted())) {
+            predicates.add(cb.isNotNull(root.get("assignedTo")));
+        } else if (Boolean.FALSE.equals(filter.getAllotted())) {
+            predicates.add(cb.isNull(root.get("assignedTo")));
+        }
+
+        // Availed / Unavailed and Availed Date/User filters
+        Boolean effectiveIsAvailed = filter.getEffectiveIsAvailed();
+        boolean hasAvailedFilters = effectiveIsAvailed != null
+                || filter.getAvailedByUserId() != null
+                || (filter.getAvailedByUserIds() != null && !filter.getAvailedByUserIds().isEmpty())
+                || filter.getAvailedFrom() != null
+                || filter.getAvailedTo() != null;
+
+        if (hasAvailedFilters) {
+            jakarta.persistence.criteria.Subquery<UUID> subquery = entityManager.getCriteriaBuilder().createQuery().subquery(UUID.class);
+            jakarta.persistence.criteria.Root<com.app.datadistribution.entity.LeadAvailed> availedRoot = subquery.from(com.app.datadistribution.entity.LeadAvailed.class);
+            subquery.select(availedRoot.get("lead").get("id"));
+
+            List<Predicate> subqueryPreds = new ArrayList<>();
+            subqueryPreds.add(cb.equal(availedRoot.get("lead"), root));
+            subqueryPreds.add(cb.equal(availedRoot.get("availedByUser"), root.get("assignedTo")));
+            subqueryPreds.add(cb.equal(availedRoot.get("isDeleted"), false));
+
+            if (filter.getAvailedByUserId() != null) {
+                subqueryPreds.add(cb.equal(availedRoot.get("availedByUser").get("id"), filter.getAvailedByUserId()));
+            }
+            if (filter.getAvailedByUserIds() != null && !filter.getAvailedByUserIds().isEmpty()) {
+                subqueryPreds.add(availedRoot.get("availedByUser").get("id").in(filter.getAvailedByUserIds()));
+            }
+            if (filter.getAvailedFrom() != null) {
+                subqueryPreds.add(cb.greaterThanOrEqualTo(availedRoot.get("availedAt"), filter.getAvailedFrom().atStartOfDay()));
+            }
+            if (filter.getAvailedTo() != null) {
+                subqueryPreds.add(cb.lessThanOrEqualTo(availedRoot.get("availedAt"), filter.getAvailedTo().atTime(LocalTime.MAX)));
+            }
+            subquery.where(subqueryPreds.toArray(new Predicate[0]));
+
+            if (Boolean.FALSE.equals(effectiveIsAvailed)) {
+                predicates.add(cb.not(cb.exists(subquery)));
+            } else {
+                predicates.add(cb.and(cb.isNotNull(root.get("assignedTo")), cb.exists(subquery)));
+            }
+        }
+
+        // Assigned Date Range filter
+        if (filter.getAssignedFrom() != null || filter.getAssignedTo() != null) {
+            jakarta.persistence.criteria.Subquery<UUID> assignSubquery = entityManager.getCriteriaBuilder().createQuery().subquery(UUID.class);
+            jakarta.persistence.criteria.Root<com.app.datadistribution.entity.LeadAssignmentHistory> assignRoot = assignSubquery.from(com.app.datadistribution.entity.LeadAssignmentHistory.class);
+            assignSubquery.select(assignRoot.get("lead").get("id"));
+
+            List<Predicate> assignPreds = new ArrayList<>();
+            assignPreds.add(cb.equal(assignRoot.get("lead"), root));
+            assignPreds.add(cb.equal(assignRoot.get("newAssignedUser"), root.get("assignedTo")));
+            assignPreds.add(cb.equal(assignRoot.get("isDeleted"), false));
+            if (filter.getAssignedFrom() != null) {
+                assignPreds.add(cb.greaterThanOrEqualTo(assignRoot.get("createdAt"), filter.getAssignedFrom().atStartOfDay()));
+            }
+            if (filter.getAssignedTo() != null) {
+                assignPreds.add(cb.lessThanOrEqualTo(assignRoot.get("createdAt"), filter.getAssignedTo().atTime(LocalTime.MAX)));
+            }
+            assignSubquery.where(assignPreds.toArray(new Predicate[0]));
+            predicates.add(cb.and(cb.isNotNull(root.get("assignedTo")), cb.exists(assignSubquery)));
+        }
+
+        // Updated Date Range filter
+        if (filter.getUpdatedFrom() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("updatedAt"), filter.getUpdatedFrom().atStartOfDay()));
+        }
+        if (filter.getUpdatedTo() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("updatedAt"), filter.getUpdatedTo().atTime(LocalTime.MAX)));
+        }
+
+        // Lead Code filter
+        if (filter.getLeadCode() != null && !filter.getLeadCode().isBlank()) {
+            predicates.add(cb.equal(cb.lower(root.get("leadCode")), filter.getLeadCode().trim().toLowerCase()));
+        }
+
+        // Generic Search Keyword filter
+        if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
+            String pattern = "%" + filter.getSearch().trim().toLowerCase() + "%";
+            predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("fullName")), pattern),
+                    cb.like(cb.lower(root.get("email")), pattern),
+                    cb.like(cb.lower(root.get("phoneNumber")), pattern),
+                    cb.like(cb.lower(root.get("leadCode")), pattern),
+                    cb.like(cb.lower(root.get("city")), pattern),
+                    cb.like(cb.lower(root.get("state")), pattern),
+                    cb.like(cb.lower(root.get("country")), pattern),
+                    cb.like(cb.lower(root.get("courseInterested")), pattern)
+            ));
+        }
+
         return predicates;
     }
 }

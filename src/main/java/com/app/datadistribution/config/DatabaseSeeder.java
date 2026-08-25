@@ -141,6 +141,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.LEAD_UPDATE.name())
 							|| n.equals(PermissionType.LEAD_ASSIGN.name())
 							|| n.equals(PermissionType.LEAD_STATUS_CHANGE.name())
+							|| n.equals(PermissionType.LEAD_AVAIL.name())
 							|| n.equals(PermissionType.LEAD_FEEDBACK_CREATE.name())
 							|| n.equals(PermissionType.LEAD_FOLLOWUP_CREATE.name())
 							|| n.equals(PermissionType.LEAD_HISTORY_READ.name())
@@ -190,6 +191,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 					String n = p.getName();
 					return n.equals(PermissionType.LEAD_READ.name())
 							|| n.equals(PermissionType.LEAD_STATUS_CHANGE.name())
+							|| n.equals(PermissionType.LEAD_AVAIL.name())
 							|| n.equals(PermissionType.LEAD_FEEDBACK_CREATE.name())
 							|| n.equals(PermissionType.LEAD_FOLLOWUP_CREATE.name())
 							|| n.equals(PermissionType.LEAD_HISTORY_READ.name())
@@ -764,6 +766,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 		createCardIfNotExist("LOW_DATA_USERS", "Low Data Users Alert", "Count of users with unavailed leads below threshold", "OPERATIONS", "STAT_CARD", "user-minus", 13, allRoles);
 		createCardIfNotExist("USERS_NOT_LOGGED_IN", "Users Not Logged In Today", "Count of eligible users who have not logged in today", "OPERATIONS", "STAT_CARD", "user-x", 14, allRoles);
 		createCardIfNotExist("FOLLOWUP_USERS_NOT_LOGGED_IN_11AM", "Follow-up Users Not Logged In by 11 AM", "Count of users with scheduled follow-ups today who did not log in by 11 AM IST", "OPERATIONS", "STAT_CARD", "clock-alert", 15, allRoles);
+		createCardIfNotExist("TOTAL_ALLOTTED_DATA", "Total Allotted Data", "Count of leads currently assigned to users", "OVERVIEW", "STAT_CARD", "user-check", 16, allRoles);
+		createCardIfNotExist("TOTAL_UNALLOTTED_DATA", "Total Unallotted Data", "Count of leads currently unassigned", "OVERVIEW", "STAT_CARD", "user-x", 17, allRoles);
+		createCardIfNotExist("TOTAL_AVAILED_DATA", "Total Availed Data", "Count of leads currently marked as availed", "OVERVIEW", "STAT_CARD", "check-circle", 18, allRoles);
 	}
 
 	private void createCardIfNotExist(String code, String name, String description, String section, String cardType, String icon, int displayOrder, Set<com.app.datadistribution.entity.Role> roles) {

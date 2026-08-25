@@ -3,6 +3,7 @@ package com.app.datadistribution.dto.lead;
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.department.DepartmentSummaryDTO;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -42,8 +43,31 @@ public class LeadResponse {
     private UserResponse assignedTo;
     private UserResponse createdBy;
     private boolean active;
+
+    @JsonProperty("isAvailed")
+    private boolean isAvailed;
+
+    private LocalDateTime availedAt;
+    private UserResponse availedBy;
     private LocalDateTime lastContactedAt;
     private LocalDateTime nextFollowUpDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @JsonProperty("isAvailed")
+    public boolean isAvailed() {
+        return isAvailed;
+    }
+
+    public void setAvailed(boolean availed) {
+        this.isAvailed = availed;
+    }
+
+    public boolean getIsAvailed() {
+        return isAvailed;
+    }
+
+    public void setIsAvailed(boolean isAvailed) {
+        this.isAvailed = isAvailed;
+    }
 }

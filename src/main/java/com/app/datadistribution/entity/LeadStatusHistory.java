@@ -58,4 +58,20 @@ public class LeadStatusHistory extends BaseEntity {
     public void setOldStatus(LeadStatus oldStatus) {
         this.previousStatus = oldStatus;
     }
+
+    public LeadStatus getCurrentStatus() {
+        return newStatus;
+    }
+
+    public void setCurrentStatus(LeadStatus currentStatus) {
+        this.newStatus = currentStatus;
+    }
+
+    public String getRemarks() {
+        return feedback;
+    }
+
+    public void setRemarks(String remarks) {
+        this.feedback = remarks;
+    }
 }

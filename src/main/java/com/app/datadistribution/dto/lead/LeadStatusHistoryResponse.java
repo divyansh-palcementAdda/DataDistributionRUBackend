@@ -29,4 +29,12 @@ public class LeadStatusHistoryResponse {
     public LeadStatusResponse getOldStatus() {
         return previousStatus;
     }
+
+    public LeadStatusResponse getCurrentStatus() {
+        return newStatus;
+    }
+
+    public String getRemarks() {
+        return feedback;
+    }
 }

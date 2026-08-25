@@ -273,4 +273,191 @@ class DashboardDataScopeTest {
         assertEquals("RAW", result.get(0).getName());
         assertEquals(15L, result.get(0).getCount());
     }
+
+    @Test
+    void testGetAllottedLeadsCount_AdminScope_ReturnsCount() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("admin");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(adminUser.getId()).scopeType(ScopeType.SYSTEM).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(65L);
+
+        DashboardAnalyticsFilterRequest filter = new DashboardAnalyticsFilterRequest();
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getAllottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("ALLOTTED", result.getType());
+        assertEquals(65L, result.getCount());
+        assertTrue(Boolean.TRUE.equals(filter.getAllotted()), "Filter allotted must be set to true");
+    }
+
+    @Test
+    void testGetUnallottedLeadsCount_AdminScope_ReturnsCount() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("admin");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(adminUser.getId()).scopeType(ScopeType.SYSTEM).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(35L);
+
+        DashboardAnalyticsFilterRequest filter = new DashboardAnalyticsFilterRequest();
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getUnallottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("UNALLOTTED", result.getType());
+        assertEquals(35L, result.getCount());
+        assertTrue(Boolean.FALSE.equals(filter.getAllotted()), "Filter allotted must be set to false");
+    }
+
+    @Test
+    void testGetAvailedLeadsCount_AdminScope_ReturnsCount() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("admin");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(adminUser.getId()).scopeType(ScopeType.SYSTEM).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(42L);
+
+        DashboardAnalyticsFilterRequest filter = new DashboardAnalyticsFilterRequest();
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getAvailedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("AVAILED", result.getType());
+        assertEquals(42L, result.getCount());
+        assertTrue(Boolean.TRUE.equals(filter.getIsAvailed()), "Filter isAvailed must be set to true");
+    }
+
+    @Test
+    void testGetAllottedLeadsCount_CounselorScope_ReturnsSelfCount() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("counselor");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("counselor")).thenReturn(Optional.of(counselorUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(counselorUser.getId()).scopeType(ScopeType.SELF).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(15L);
+
+        DashboardAnalyticsFilterRequest filter = new DashboardAnalyticsFilterRequest();
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getAllottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("ALLOTTED", result.getType());
+        assertEquals(15L, result.getCount());
+    }
+
+    @Test
+    void testGetUnallottedLeadsCount_CounselorScope_ReturnsZero() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("counselor");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("counselor")).thenReturn(Optional.of(counselorUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(counselorUser.getId()).scopeType(ScopeType.SELF).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(0L);
+
+        DashboardAnalyticsFilterRequest filter = new DashboardAnalyticsFilterRequest();
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getUnallottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("UNALLOTTED", result.getType());
+        assertEquals(0L, result.getCount());
+    }
+
+    @Test
+    void testGetCountWithMultipleFilters_PassesAllFilters() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("admin");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(adminUser.getId()).scopeType(ScopeType.SYSTEM).build();
+        when(dataScopeService.getScopeForCurrentUser(any(DashboardAnalyticsFilterRequest.class))).thenReturn(scope);
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class))).thenReturn(8L);
+
+        UUID statusId = UUID.randomUUID();
+        UUID sourceId = UUID.randomUUID();
+        UUID courseTypeId = UUID.randomUUID();
+
+        DashboardAnalyticsFilterRequest filter = DashboardAnalyticsFilterRequest.builder()
+                .leadStatusIds(List.of(statusId))
+                .leadSourceIds(List.of(sourceId))
+                .courseTypeIds(List.of(courseTypeId))
+                .build();
+
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getAllottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals(8L, result.getCount());
+        assertEquals(List.of(statusId), filter.getLeadStatusIds());
+        assertEquals(List.of(sourceId), filter.getLeadSourceIds());
+        assertEquals(List.of(courseTypeId), filter.getCourseTypeIds());
+        assertTrue(Boolean.TRUE.equals(filter.getAllotted()));
+    }
+
+    @Test
+    void testResolvedCards_PopulatesThreeNewCardValues() throws UnauthorizedException, BadRequestException {
+        SecurityContext securityContext = mock(SecurityContext.class);
+        Authentication authentication = mock(Authentication.class);
+        lenient().when(authentication.isAuthenticated()).thenReturn(true);
+        lenient().when(authentication.getName()).thenReturn("admin");
+        lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        UserDataScope scope = UserDataScope.builder().userId(adminUser.getId()).scopeType(ScopeType.SYSTEM).build();
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(scope);
+
+        com.app.datadistribution.entity.DashboardCard card1 = com.app.datadistribution.entity.DashboardCard.builder().code("TOTAL_ALLOTTED_DATA").name("Total Allotted Data").displayOrder(16).active(true).build();
+        com.app.datadistribution.entity.DashboardCard card2 = com.app.datadistribution.entity.DashboardCard.builder().code("TOTAL_UNALLOTTED_DATA").name("Total Unallotted Data").displayOrder(17).active(true).build();
+        com.app.datadistribution.entity.DashboardCard card3 = com.app.datadistribution.entity.DashboardCard.builder().code("TOTAL_AVAILED_DATA").name("Total Availed Data").displayOrder(18).active(true).build();
+
+        when(dashboardCardRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of(card1, card2, card3));
+        when(userPreferenceRepository.findByUserId(adminUser.getId())).thenReturn(Collections.emptyList());
+
+        when(dashboardAnalyticsRepository.fetchTotalMatchingLeads(eq(scope), any(DashboardAnalyticsFilterRequest.class)))
+                .thenReturn(50L)  // allotted
+                .thenReturn(20L)  // unallotted
+                .thenReturn(30L); // availed
+
+        List<com.app.datadistribution.dto.dashboard.DashboardCardDTO> cards = dashboardService.getResolvedCards();
+
+        assertNotNull(cards);
+        assertEquals(3, cards.size());
+
+        com.app.datadistribution.dto.dashboard.DashboardCardDTO allottedCard = cards.stream().filter(c -> "TOTAL_ALLOTTED_DATA".equals(c.getCode())).findFirst().orElseThrow();
+        assertEquals(50L, allottedCard.getValue());
+
+        com.app.datadistribution.dto.dashboard.DashboardCardDTO unallottedCard = cards.stream().filter(c -> "TOTAL_UNALLOTTED_DATA".equals(c.getCode())).findFirst().orElseThrow();
+        assertEquals(20L, unallottedCard.getValue());
+
+        com.app.datadistribution.dto.dashboard.DashboardCardDTO availedCard = cards.stream().filter(c -> "TOTAL_AVAILED_DATA".equals(c.getCode())).findFirst().orElseThrow();
+        assertEquals(30L, availedCard.getValue());
+    }
 }

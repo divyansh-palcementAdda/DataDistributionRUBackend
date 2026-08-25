@@ -28,12 +28,18 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
     @Query("SELECT s, COUNT(l) FROM Lead l JOIN l.leadSources s WHERE l.isDeleted = false AND s.isDeleted = false GROUP BY s")
     List<Object[]> countBySource();
 
-    @Query("SELECT COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id = :userId AND l.lastContactedAt IS NULL AND l.feedbacks IS EMPTY AND l.followUps IS EMPTY")
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id = :userId AND NOT EXISTS (SELECT la FROM LeadAvailed la WHERE la.lead = l AND la.availedByUser.id = :userId AND la.isDeleted = false)")
     long countUnavailedLeadsByUserId(@org.springframework.data.repository.query.Param("userId") UUID userId);
 
     @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IS NOT NULL GROUP BY l.assignedTo.id")
     List<Object[]> findAllottedLeadCountsGroupedByUser();
 
-    @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IS NOT NULL AND l.lastContactedAt IS NULL AND l.feedbacks IS EMPTY AND l.followUps IS EMPTY GROUP BY l.assignedTo.id")
+    @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IS NOT NULL AND NOT EXISTS (SELECT la FROM LeadAvailed la WHERE la.lead = l AND la.availedByUser = l.assignedTo AND la.isDeleted = false) GROUP BY l.assignedTo.id")
     List<Object[]> findUnavailedLeadCountsGroupedByUser();
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id = :userId AND EXISTS (SELECT la FROM LeadAvailed la WHERE la.lead = l AND la.availedByUser.id = :userId AND la.isDeleted = false)")
+    long countAvailedLeadsByUserId(@org.springframework.data.repository.query.Param("userId") UUID userId);
+
+    @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IS NOT NULL AND EXISTS (SELECT la FROM LeadAvailed la WHERE la.lead = l AND la.availedByUser = l.assignedTo AND la.isDeleted = false) GROUP BY l.assignedTo.id")
+    List<Object[]> findAvailedLeadCountsGroupedByUser();
 }

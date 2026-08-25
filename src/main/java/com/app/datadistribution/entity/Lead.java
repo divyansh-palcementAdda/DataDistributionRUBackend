@@ -143,11 +143,15 @@ public class Lead extends BaseEntity {
     @Builder.Default
     private List<LeadFollowUp> followUps = new ArrayList<>();
 
-    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<LeadStatusHistory> statusHistories = new ArrayList<>();
 
-    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<LeadAssignmentHistory> assignmentHistories = new ArrayList<>();
+
+    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<LeadAvailed> availedRecords = new ArrayList<>();
 }

@@ -18,12 +18,42 @@ public interface ILeadService {
     LeadResponse create(LeadRequest request) throws BadRequestException, UnauthorizedException;
     LeadResponse update(UUID id, LeadRequest request) throws BadRequestException, UnauthorizedException;
     LeadResponse getById(UUID id) throws UnauthorizedException, BadRequestException;
+    LeadPageResponse getAllLeads(
+            PageRequestDTO pageRequest,
+            List<UUID> leadSourceIds,
+            UUID courseId,
+            List<UUID> interestedCourseIds,
+            UUID registeredCourseId,
+            UUID courseTypeId,
+            List<UUID> courseTypeIds,
+            Boolean withoutCourse,
+            UUID statusId,
+            List<UUID> statusIds,
+            UUID boardId,
+            List<UUID> boardIds,
+            UUID gradeId,
+            List<UUID> gradeIds,
+            List<UUID> departmentIds,
+            List<UUID> assignedUserIds,
+            Boolean allotted,
+            Boolean availed,
+            UUID availedByUserId,
+            List<UUID> availedByUserIds,
+            java.time.LocalDate availedFrom,
+            java.time.LocalDate availedTo,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            java.time.LocalDate updatedFrom,
+            java.time.LocalDate updatedTo
+    ) throws UnauthorizedException, BadRequestException;
+    LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, Boolean availed) throws UnauthorizedException, BadRequestException;
     LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException;
     LeadResponse addInterestedCourses(UUID leadId, List<UUID> courseIds) throws UnauthorizedException, BadRequestException;
     LeadResponse removeInterestedCourse(UUID leadId, UUID courseId) throws UnauthorizedException, BadRequestException;
     LeadResponse registerCourse(UUID leadId, UUID courseId) throws UnauthorizedException, BadRequestException;
     void deleteLead(UUID id) throws UnauthorizedException, BadRequestException;
     LeadResponse changeStatus(UUID id, LeadStatusChangeRequest request) throws BadRequestException, UnauthorizedException;
+    com.app.datadistribution.dto.lead.LeadAvailedResponse markLeadAsAvailed(UUID leadId) throws UnauthorizedException, BadRequestException;
     List<LeadStatusHistoryResponse> getStatusHistoryByLeadId(UUID leadId) throws UnauthorizedException, BadRequestException;
     com.app.datadistribution.dto.lead.LeadStatusHistoryPageResponse getStatusHistoryByLeadId(UUID leadId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
     List<LeadSourceStatsResponse> getSourceWiseStats() throws UnauthorizedException, BadRequestException;
