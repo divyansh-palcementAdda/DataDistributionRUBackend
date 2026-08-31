@@ -127,7 +127,7 @@ public interface LeadMapper {
 
         boolean isAvailed = false;
         java.time.LocalDateTime availedAt = null;
-        com.app.datadistribution.dto.user.UserResponse availedBy = null;
+        com.app.datadistribution.dto.user.UserSummaryResponse availedBy = null;
 
         if (lead.getAssignedTo() != null && lead.getAvailedRecords() != null && !lead.getAvailedRecords().isEmpty()) {
             java.util.UUID assignedUserId = lead.getAssignedTo().getId();
@@ -135,7 +135,7 @@ public interface LeadMapper {
                 if (!la.isDeleted() && la.getAvailedByUser() != null && assignedUserId.equals(la.getAvailedByUser().getId())) {
                     isAvailed = true;
                     availedAt = la.getAvailedAt();
-                    availedBy = userMapper.toDto(la.getAvailedByUser());
+                    availedBy = userMapper.toSummaryDto(la.getAvailedByUser());
                     break;
                 }
             }
@@ -163,8 +163,8 @@ public interface LeadMapper {
                 .department(departmentDto)
                 .remarks(lead.getRemarks())
                 .currentStatus(toDto(lead.getCurrentStatus()))
-                .assignedTo(userMapper.toDto(lead.getAssignedTo()))
-                .createdBy(userMapper.toDto(lead.getCreatedByUser()))
+                .assignedTo(userMapper.toSummaryDto(lead.getAssignedTo()))
+                .createdBy(userMapper.toSummaryDto(lead.getCreatedByUser()))
                 .active(lead.isActive())
                 .isAvailed(isAvailed)
                 .availedAt(availedAt)
@@ -244,6 +244,7 @@ public interface LeadMapper {
     @Mapping(source = "lead.id", target = "leadId")
     @Mapping(source = "lead.leadCode", target = "leadCode")
     @Mapping(source = "lead.fullName", target = "leadFullName")
+    @Mapping(source = "lead.currentStatus", target = "leadStatus")
     FollowUpResponseDTO toFollowUpResponseDto(LeadFollowUp followUp);
 
     // --- FeedbackResponseDTO ---

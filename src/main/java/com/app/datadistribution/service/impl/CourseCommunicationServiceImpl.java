@@ -201,6 +201,32 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
                 .status(course.getStatus())
                 .build();
 
+        List<CourseSummaryDTO> allCourseSummaries = new java.util.ArrayList<>();
+        if (lead.getCourse() != null && !lead.getCourse().isDeleted()) {
+            allCourseSummaries.add(CourseSummaryDTO.builder()
+                    .id(lead.getCourse().getId())
+                    .courseName(lead.getCourse().getCourseName())
+                    .courseCode(lead.getCourse().getCourseCode())
+                    .status(lead.getCourse().getStatus())
+                    .build());
+        }
+        if (lead.getInterestedCourses() != null) {
+            for (Course ic : lead.getInterestedCourses()) {
+                if (ic != null && !ic.isDeleted() && allCourseSummaries.stream().noneMatch(c -> c.getId().equals(ic.getId()))) {
+                    allCourseSummaries.add(CourseSummaryDTO.builder()
+                            .id(ic.getId())
+                            .courseName(ic.getCourseName())
+                            .courseCode(ic.getCourseCode())
+                            .status(ic.getStatus())
+                            .build());
+                }
+            }
+        }
+        final UUID selectedCourseId = course.getId();
+        if (allCourseSummaries.stream().noneMatch(c -> c.getId().equals(selectedCourseId))) {
+            allCourseSummaries.add(courseSummary);
+        }
+
         List<CourseUSPDTO> uspDtos = uspService.getUSPsByCourseId(course.getId(), true);
         List<CourseImageDTO> imageDtos = imageService.getImagesByCourseId(course.getId(), true);
 
@@ -209,12 +235,152 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
                 .leadCode(lead.getLeadCode())
                 .leadFullName(lead.getFullName())
                 .course(courseSummary)
+                .courses(allCourseSummaries)
                 .template(template != null ? toTemplateDto(template) : null)
                 .activeImage(activeImage != null ? toImageDto(activeImage) : null)
                 .renderedSubject(renderedSubject)
                 .renderedContent(renderedContent)
                 .usps(uspDtos)
                 .availableImages(imageDtos)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO previewWhatsApp(UUID leadId, com.app.datadistribution.dto.communication.WhatsAppPreviewRequestDTO request) throws BadRequestException, UnauthorizedException {
+        if (leadId == null) {
+            throw new BadRequestException("Lead ID is required");
+        }
+        if (request == null || request.getCourseId() == null) {
+            throw new BadRequestException("Course ID is required to generate WhatsApp preview");
+        }
+
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadReadAccess(lead, dataScope);
+
+        Course course = courseRepository.findById(request.getCourseId())
+                .filter(c -> !c.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getCourseId()));
+
+        if (!course.isActive()) {
+            throw new BadRequestException("Selected Course is inactive.");
+        }
+
+        CourseSummaryDTO courseSummary = CourseSummaryDTO.builder()
+                .id(course.getId())
+                .courseName(course.getCourseName())
+                .courseCode(course.getCourseCode())
+                .status(course.getStatus())
+                .build();
+
+        // Validate Course ↔ USP relationship
+        CourseUSP selectedUsp = null;
+        if (request.getUspId() != null) {
+            selectedUsp = uspRepository.findByIdAndCourseIdAndIsDeletedFalse(request.getUspId(), course.getId())
+                    .orElseThrow(() -> new BadRequestException("Selected USP does not belong to the specified Course or is invalid."));
+            if (!selectedUsp.isActive()) {
+                throw new BadRequestException("Selected USP is inactive.");
+            }
+        }
+
+        // Validate & resolve template
+        CourseTemplate template = null;
+        if (request.getTemplateId() != null) {
+            template = templateRepository.findByIdAndCourseIdAndIsDeletedFalse(request.getTemplateId(), course.getId())
+                    .orElseThrow(() -> new BadRequestException("Selected WhatsApp template does not belong to course"));
+            if (!template.isActive()) {
+                throw new BadRequestException("Selected WhatsApp template is inactive.");
+            }
+        } else {
+            CourseCommunicationConfig config = configRepository.findByCourseIdAndIsDeletedFalse(course.getId()).orElse(null);
+            template = (config != null && config.getWhatsappTemplate() != null) ? config.getWhatsappTemplate() : null;
+            if (template == null || !template.isActive() || template.isDeleted()) {
+                List<CourseTemplate> waTemplates = templateRepository.findByCourseIdAndChannelIgnoreCaseAndActiveTrueAndIsDeletedFalse(course.getId(), "WHATSAPP");
+                if (!waTemplates.isEmpty()) {
+                    template = waTemplates.get(0);
+                }
+            }
+        }
+
+        // Validate & resolve image
+        CourseImage selectedImage = null;
+        if (request.getImageId() != null) {
+            selectedImage = imageRepository.findByIdAndCourseIdAndIsDeletedFalse(request.getImageId(), course.getId()).orElse(null);
+        }
+        if (selectedImage == null) {
+            CourseCommunicationConfig config = configRepository.findByCourseIdAndIsDeletedFalse(course.getId()).orElse(null);
+            selectedImage = (config != null && config.getWhatsappImage() != null) ? config.getWhatsappImage() : null;
+        }
+        if (selectedImage == null) {
+            List<CourseImage> images = imageRepository.findByCourseIdAndActiveTrueAndIsDeletedFalseOrderByDisplayOrderAsc(course.getId());
+            if (!images.isEmpty()) {
+                selectedImage = images.get(0);
+            }
+        }
+
+        User currentUser = null;
+        try {
+            currentUser = getCurrentUserEntity();
+        } catch (Exception ignored) {}
+
+        List<CourseUSP> usps = (selectedUsp != null) ? List.of(selectedUsp) :
+                uspRepository.findByCourseIdAndActiveTrueAndIsDeletedFalseOrderByDisplayOrderAsc(course.getId());
+
+        String rawContent = template != null ? template.getContent() :
+                "Hello {{lead.name}}, explore {{course.name}} at {{institution.name}}.\n\nKey Highlights:\n{{course.usps}}\n\nBest regards,\n{{counsellor.name}}";
+
+        String renderedMessage = placeholderRenderService.render(rawContent, lead, course, selectedUsp, usps, currentUser);
+
+        // Resolve authoritative WhatsApp phone number
+        String phone = (lead.getPhoneNumber() != null && !lead.getPhoneNumber().isBlank()) ?
+                lead.getPhoneNumber() : lead.getAlternatePhoneNumber();
+
+        if (phone == null || phone.isBlank()) {
+            throw new BadRequestException("Lead phone/WhatsApp number is missing. Cannot generate WhatsApp preview.");
+        }
+
+        String cleanDigits = phone.replaceAll("[^0-9]", "");
+        if (cleanDigits.length() == 10) {
+            cleanDigits = "91" + cleanDigits;
+        }
+
+        String encodedMessage = java.net.URLEncoder.encode(renderedMessage, java.nio.charset.StandardCharsets.UTF_8);
+        String whatsAppWebUrl = "https://web.whatsapp.com/send?phone=" + cleanDigits + "&text=" + encodedMessage;
+
+        return com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO.builder()
+                .lead(com.app.datadistribution.dto.lead.LeadSummaryDTO.builder()
+                        .id(lead.getId())
+                        .leadCode(lead.getLeadCode())
+                        .fullName(lead.getFullName())
+                        .phoneNumber(lead.getPhoneNumber())
+                        .whatsappNumber(cleanDigits)
+                        .build())
+                .course(courseSummary)
+                .usp(selectedUsp != null ? toUspDto(selectedUsp) : null)
+                .template(template != null ? com.app.datadistribution.dto.coursetemplate.CourseTemplateSummaryDTO.builder()
+                        .id(template.getId())
+                        .name(template.getName())
+                        .subject(template.getSubject())
+                        .channel(template.getChannel())
+                        .build() : null)
+                .message(renderedMessage)
+                .imageUrl(selectedImage != null ? selectedImage.getImageUrl() : null)
+                .whatsAppUrl(whatsAppWebUrl)
+                .build();
+    }
+
+    private CourseUSPDTO toUspDto(CourseUSP usp) {
+        if (usp == null) return null;
+        return CourseUSPDTO.builder()
+                .id(usp.getId())
+                .courseId(usp.getCourse().getId())
+                .content(usp.getContent())
+                .displayOrder(usp.getDisplayOrder())
+                .active(usp.isActive())
                 .build();
     }
 

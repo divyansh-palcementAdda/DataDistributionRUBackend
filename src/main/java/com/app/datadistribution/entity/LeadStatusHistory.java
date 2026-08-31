@@ -22,7 +22,8 @@ import lombok.Setter;
         @Index(name = "idx_lsh_lead_id", columnList = "lead_id"),
         @Index(name = "idx_lsh_created_at", columnList = "created_at"),
         @Index(name = "idx_lsh_changed_by_user_id", columnList = "changed_by_user_id"),
-        @Index(name = "idx_lsh_new_status_id", columnList = "new_status_id")
+        @Index(name = "idx_lsh_new_status_id", columnList = "new_status_id"),
+        @Index(name = "idx_lsh_lead_new_status", columnList = "lead_id, new_status_id")
     }
 )
 @Getter
@@ -50,6 +51,10 @@ public class LeadStatusHistory extends BaseEntity {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String feedback;
+
+    @Column(name = "transition_type", length = 30)
+    @Builder.Default
+    private String transitionType = "USER";
 
     public LeadStatus getOldStatus() {
         return previousStatus;

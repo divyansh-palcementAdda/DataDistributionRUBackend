@@ -4,6 +4,7 @@ import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.department.DepartmentRequest;
 import com.app.datadistribution.dto.department.DepartmentResponse;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
@@ -26,7 +27,7 @@ public interface IDepartmentService {
     void removeDepartmentFromUser(UUID userId, UUID departmentId) throws BadRequestException, ResourcesNotFoundException, UnauthorizedException;
 
     // Department Users / HODs / Counsellors
-    List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
-    List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
-    List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    List<UserSummaryResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    List<UserSummaryResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
+    List<UserSummaryResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException;
 }

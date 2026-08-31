@@ -1,6 +1,26 @@
 package com.app.datadistribution.service.impl;
 
-import com.app.datadistribution.dto.lead.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.app.datadistribution.dto.lead.LeadDistributionFilterRequest;
+import com.app.datadistribution.dto.lead.LeadDistributionRequest;
+import com.app.datadistribution.dto.lead.LeadDistributionResponse;
+import com.app.datadistribution.dto.lead.UserDistributionSummaryDTO;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
 import com.app.datadistribution.entity.User;
@@ -12,22 +32,12 @@ import com.app.datadistribution.repository.LeadFollowUpRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.ILeadDistributionService;
+import com.app.datadistribution.service.util.LeadDepartmentResolver;
+
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.*;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -166,6 +176,7 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
                     User oldUser = leadToAssign.getAssignedTo();
 
                     leadToAssign.setAssignedTo(user);
+                    leadToAssign.setDepartment(LeadDepartmentResolver.resolveDepartmentForUser(user, leadToAssign.getDepartment()));
                     leadRepository.save(leadToAssign);
 
                     LeadAssignmentHistory history = LeadAssignmentHistory.builder()

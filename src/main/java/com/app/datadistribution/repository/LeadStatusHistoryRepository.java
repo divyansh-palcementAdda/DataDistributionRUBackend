@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface LeadStatusHistoryRepository extends JpaRepository<LeadStatusHistory, UUID> {
+    List<LeadStatusHistory> findByLeadId(UUID leadId);
     List<LeadStatusHistory> findByLeadIdOrderByCreatedAtDesc(UUID leadId);
     List<LeadStatusHistory> findByLeadIdOrderByCreatedAtDescIdDesc(UUID leadId);
     List<LeadStatusHistory> findByLeadIdOrderByCreatedAtAscIdAsc(UUID leadId);

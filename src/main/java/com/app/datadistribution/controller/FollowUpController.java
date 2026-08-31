@@ -11,6 +11,7 @@ import com.app.datadistribution.service.interfaces.FollowUpService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -23,6 +24,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.app.datadistribution.dto.lead.CancelFollowUpRequest;
+import com.app.datadistribution.dto.lead.CompleteFollowUpRequest;
+import com.app.datadistribution.dto.lead.LeadFollowUpRequest;
+import com.app.datadistribution.dto.lead.LeadFollowUpResponse;
+import com.app.datadistribution.service.interfaces.ILeadFollowUpService;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
 @RestController
 @RequestMapping("/api/followups")
 @RequiredArgsConstructor
@@ -30,6 +41,81 @@ import org.springframework.web.bind.annotation.RestController;
 public class FollowUpController {
 
     private final FollowUpService followUpService;
+    private final ILeadFollowUpService leadFollowUpService;
+    private final com.app.datadistribution.service.interfaces.IDropdownService dropdownService;
+
+    @GetMapping("/statuses/dropdown")
+    @PreAuthorize("hasAuthority('FOLLOWUP_VIEW') or hasAuthority('DROPDOWN_STATUS_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get valid Follow-Up lifecycle states dropdown")
+    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.dropdown.FollowUpStatusDropdownResponse>>> getFollowUpStatusesDropdown() {
+        java.util.List<com.app.datadistribution.dto.dropdown.FollowUpStatusDropdownResponse> response = dropdownService.getFollowUpStatusesDropdown();
+        return ResponseEntity.ok(ApiResponse.success("Follow-up statuses dropdown retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/dashboard/status-counts")
+    @PreAuthorize("hasAuthority('FOLLOWUP_VIEW') or hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get current lead counts for follow-up statuses scoped by user permissions")
+    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO>>> getFollowUpStatusCounts() throws UnauthorizedException, BadRequestException {
+        java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO> response = followUpService.getFollowUpStatusCounts();
+        return ResponseEntity.ok(ApiResponse.success("Follow-up status counts retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_CREATE')")
+    @Operation(summary = "Schedule a follow-up for a lead")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> scheduleFollowUp(
+            @Valid @RequestBody LeadFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+        LeadFollowUpResponse response = leadFollowUpService.createFollowUp(request);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up scheduled successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PatchMapping("/{id}/complete")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as completed (PATCH)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> completeFollowUpPatch(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) CompleteFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.completeFollowUp(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/complete")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as completed (POST)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> completeFollowUpPost(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) CompleteFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.completeFollowUp(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PatchMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as cancelled (PATCH)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> cancelFollowUpPatch(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) CancelFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.cancelFollowUp(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked cancelled successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as cancelled (POST)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> cancelFollowUpPost(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) CancelFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.cancelFollowUp(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked cancelled successfully", response, HttpStatus.OK.value()));
+    }
 
     @GetMapping
     @PreAuthorize("hasAuthority('FOLLOWUP_VIEW')")
@@ -43,7 +129,9 @@ public class FollowUpController {
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(value = "status", required = false) FollowUpStatus status,
             @RequestParam(value = "userId", required = false) UUID userId,
-            @RequestParam(value = "leadId", required = false) UUID leadId) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "leadId", required = false) UUID leadId,
+            @RequestParam(value = "leadStatusId", required = false) UUID leadStatusId,
+            @RequestParam(value = "leadStatusIds", required = false) List<UUID> leadStatusIds) throws UnauthorizedException, BadRequestException {
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)
@@ -53,7 +141,7 @@ public class FollowUpController {
                 .search(search)
                 .build();
 
-        FollowUpPagedResponseDTO response = followUpService.getAllFollowUps(pageRequest, date, status, userId, leadId);
+        FollowUpPagedResponseDTO response = followUpService.getAllFollowUps(pageRequest, date, status, userId, leadId, leadStatusId, leadStatusIds);
         return ResponseEntity.ok(ApiResponse.success("Follow-ups retrieved successfully", response, HttpStatus.OK.value()));
     }
 

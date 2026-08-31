@@ -71,4 +71,33 @@ public class CourseCommunicationController {
         communicationService.sendCourseWhatsApp(leadId, request);
         return ResponseEntity.ok(ApiResponse.success("Course WhatsApp message dispatched successfully", null, HttpStatus.OK.value()));
     }
+
+    @PostMapping("/leads/{leadId}/whatsapp/preview")
+    @PreAuthorize("hasAuthority('COURSE_TEMPLATE_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Generate WhatsApp message preview and click-to-chat URL (POST)")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO>> previewWhatsAppPost(
+            @PathVariable("leadId") UUID leadId,
+            @RequestBody com.app.datadistribution.dto.communication.WhatsAppPreviewRequestDTO request) throws BadRequestException, UnauthorizedException {
+        com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO response = communicationService.previewWhatsApp(leadId, request);
+        return ResponseEntity.ok(ApiResponse.success("WhatsApp preview generated successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/leads/{leadId}/whatsapp/preview")
+    @PreAuthorize("hasAuthority('COURSE_TEMPLATE_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Generate WhatsApp message preview and click-to-chat URL (GET)")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO>> previewWhatsAppGet(
+            @PathVariable("leadId") UUID leadId,
+            @RequestParam("courseId") UUID courseId,
+            @RequestParam(value = "uspId", required = false) UUID uspId,
+            @RequestParam(value = "templateId", required = false) UUID templateId,
+            @RequestParam(value = "imageId", required = false) UUID imageId) throws BadRequestException, UnauthorizedException {
+        com.app.datadistribution.dto.communication.WhatsAppPreviewRequestDTO request = com.app.datadistribution.dto.communication.WhatsAppPreviewRequestDTO.builder()
+                .courseId(courseId)
+                .uspId(uspId)
+                .templateId(templateId)
+                .imageId(imageId)
+                .build();
+        com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO response = communicationService.previewWhatsApp(leadId, request);
+        return ResponseEntity.ok(ApiResponse.success("WhatsApp preview generated successfully", response, HttpStatus.OK.value()));
+    }
 }

@@ -34,4 +34,6 @@ public class LeadStatusRequest {
 
     @Builder.Default
     private SentimentCategory sentimentCategory = SentimentCategory.NEUTRAL;
+
+    private Boolean isFollowUpStatus;
 }

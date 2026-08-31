@@ -117,6 +117,14 @@ public class Lead extends BaseEntity {
     @JoinColumn(name = "lead_status_id")
     private LeadStatus currentStatus;
 
+    public LeadStatus getLeadStatus() {
+        return this.currentStatus;
+    }
+
+    public void setLeadStatus(LeadStatus status) {
+        this.currentStatus = status;
+    }
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_id")
     private User assignedTo;

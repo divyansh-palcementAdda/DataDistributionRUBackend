@@ -1,9 +1,38 @@
 package com.app.datadistribution.service.impl;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.dto.lead.LeadResponse;
-import com.app.datadistribution.dto.reassign.*;
-import com.app.datadistribution.entity.*;
+import com.app.datadistribution.dto.reassign.FollowUpReassignItemDTO;
+import com.app.datadistribution.dto.reassign.FollowUpReassignRequest;
+import com.app.datadistribution.dto.reassign.FollowUpReassignResponse;
+import com.app.datadistribution.dto.reassign.FollowUpReassignableDTO;
+import com.app.datadistribution.dto.reassign.LeadReassignItemDTO;
+import com.app.datadistribution.dto.reassign.LeadReassignRequest;
+import com.app.datadistribution.dto.reassign.LeadReassignResponse;
+import com.app.datadistribution.dto.reassign.ReassignablePageResponseDTO;
+import com.app.datadistribution.entity.FollowUpAssignmentHistory;
+import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.LeadAssignmentHistory;
+import com.app.datadistribution.entity.LeadFollowUp;
+import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.FollowUpStatus;
 import com.app.datadistribution.enums.PermissionType;
 import com.app.datadistribution.enums.RoleType;
@@ -11,29 +40,28 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.LeadMapper;
-import com.app.datadistribution.repository.*;
+import com.app.datadistribution.repository.FollowUpAssignmentHistoryRepository;
+import com.app.datadistribution.repository.LeadAssignmentHistoryRepository;
+import com.app.datadistribution.repository.LeadFollowUpRepository;
+import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
 import com.app.datadistribution.service.interfaces.ILeadReassignmentService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+import com.app.datadistribution.service.util.LeadDepartmentResolver;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
-import jakarta.persistence.criteria.*;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -564,6 +592,7 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
             for (Lead lead : leadsToReassign) {
                 User oldAssignedUser = lead.getAssignedTo();
                 lead.setAssignedTo(targetUser);
+                lead.setDepartment(LeadDepartmentResolver.resolveDepartmentForUser(targetUser, lead.getDepartment()));
                 leadRepository.save(lead);
 
                 // Save Lead Assignment History

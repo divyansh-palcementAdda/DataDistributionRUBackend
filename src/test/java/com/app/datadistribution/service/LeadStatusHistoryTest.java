@@ -1,33 +1,25 @@
 package com.app.datadistribution.service;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.app.datadistribution.common.PageRequestDTO;
-import com.app.datadistribution.dto.lead.LeadRequest;
-import com.app.datadistribution.dto.lead.LeadResponse;
-import com.app.datadistribution.dto.lead.LeadStatusChangeRequest;
-import com.app.datadistribution.dto.lead.LeadStatusHistoryPageResponse;
-import com.app.datadistribution.dto.lead.LeadStatusHistoryResponse;
-import com.app.datadistribution.dto.lead.LeadStatusResponse;
-import com.app.datadistribution.entity.Department;
-import com.app.datadistribution.entity.Lead;
-import com.app.datadistribution.entity.LeadFeedback;
-import com.app.datadistribution.entity.LeadStatus;
-import com.app.datadistribution.entity.LeadStatusHistory;
-import com.app.datadistribution.entity.User;
-import com.app.datadistribution.exception.BadRequestException;
-import com.app.datadistribution.exception.UnauthorizedException;
-import com.app.datadistribution.mapper.LeadMapper;
-import com.app.datadistribution.repository.*;
-import com.app.datadistribution.service.dto.UserDataScope;
-import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
-import com.app.datadistribution.service.impl.LeadServiceImpl;
-import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
-import com.app.datadistribution.service.interfaces.IUserDataScopeService;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,7 +34,41 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.lead.LeadRequest;
+import com.app.datadistribution.dto.lead.LeadResponse;
+import com.app.datadistribution.dto.lead.LeadStatusChangeRequest;
+import com.app.datadistribution.dto.lead.LeadStatusHistoryPageResponse;
+import com.app.datadistribution.dto.lead.LeadStatusHistoryResponse;
+import com.app.datadistribution.dto.lead.LeadStatusResponse;
+import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.LeadFeedback;
+import com.app.datadistribution.entity.LeadStatus;
+import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.mapper.LeadMapper;
+import com.app.datadistribution.repository.BoardRepository;
+import com.app.datadistribution.repository.CourseRepository;
+import com.app.datadistribution.repository.DepartmentRepository;
+import com.app.datadistribution.repository.GradeRepository;
+import com.app.datadistribution.repository.LeadAssignmentHistoryRepository;
+import com.app.datadistribution.repository.LeadAvailedRepository;
+import com.app.datadistribution.repository.LeadFeedbackRepository;
+import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.LeadSourceRepository;
+import com.app.datadistribution.repository.LeadStatusHistoryRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
+import com.app.datadistribution.service.impl.LeadServiceImpl;
+import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class LeadStatusHistoryTest {
 
     @Mock
@@ -74,6 +100,8 @@ class LeadStatusHistoryTest {
     @Mock
     private ILeadDataScopeService leadDataScopeService;
     @Mock
+    private com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
+    @Mock
     private LeadMapper leadMapper;
 
     @InjectMocks
@@ -91,7 +119,7 @@ class LeadStatusHistoryTest {
     private User counselorB;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws BadRequestException {
         leadId = UUID.randomUUID();
         UUID status1Id = UUID.randomUUID();
         UUID status2Id = UUID.randomUUID();
@@ -131,6 +159,26 @@ class LeadStatusHistoryTest {
                 .assignedTo(currentUser)
                 .build();
         lead.setId(leadId);
+
+        lenient().when(leadStatusTransitionService.executeStatusTransition(any(Lead.class), any(LeadStatus.class), any(User.class), any()))
+                .thenAnswer(inv -> {
+                    Lead l = inv.getArgument(0);
+                    LeadStatus s = inv.getArgument(1);
+                    User u = inv.getArgument(2);
+                    String feedback = inv.getArgument(3);
+                    LeadStatus old = l.getCurrentStatus();
+                    l.setCurrentStatus(s);
+                    l.setLastContactedAt(LocalDateTime.now());
+                    LeadStatusHistory h = LeadStatusHistory.builder()
+                            .lead(l)
+                            .previousStatus(old)
+                            .newStatus(s)
+                            .changedByUser(u)
+                            .feedback(feedback != null ? feedback : "Status changed")
+                            .build();
+                    leadStatusHistoryRepository.save(h);
+                    return l;
+                });
     }
 
     private void mockSecurityContext(User user) {

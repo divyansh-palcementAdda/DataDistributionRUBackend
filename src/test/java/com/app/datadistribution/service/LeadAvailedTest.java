@@ -142,7 +142,7 @@ class LeadAvailedTest {
                     .leadId(leadId)
                     .leadCode(lead.getLeadCode())
                     .isAvailed(true)
-                    .availedBy(UserResponse.builder().id(counselorA.getId()).username(counselorA.getUsername()).build())
+                    .availedBy(com.app.datadistribution.dto.user.UserSummaryResponse.builder().id(counselorA.getId()).username(counselorA.getUsername()).build())
                     .availedAt(la.getAvailedAt())
                     .build();
         });
@@ -204,7 +204,7 @@ class LeadAvailedTest {
                 .id(existingRecord.getId())
                 .leadId(leadId)
                 .isAvailed(true)
-                .availedBy(UserResponse.builder().id(counselorA.getId()).build())
+                .availedBy(com.app.datadistribution.dto.user.UserSummaryResponse.builder().id(counselorA.getId()).build())
                 .availedAt(existingRecord.getAvailedAt())
                 .build());
 
@@ -321,7 +321,7 @@ class LeadAvailedTest {
                     .id(la.getId())
                     .leadId(leadId)
                     .isAvailed(true)
-                    .availedBy(UserResponse.builder().id(counselorB.getId()).username(counselorB.getUsername()).build())
+                    .availedBy(com.app.datadistribution.dto.user.UserSummaryResponse.builder().id(counselorB.getId()).username(counselorB.getUsername()).build())
                     .availedAt(la.getAvailedAt())
                     .build();
         });

@@ -3,7 +3,7 @@ package com.app.datadistribution.dto.lead;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.AllArgsConstructor;
@@ -25,7 +25,7 @@ public class LeadAvailedResponse {
     @JsonProperty("isAvailed")
     private boolean isAvailed;
 
-    private UserResponse availedBy;
+    private UserSummaryResponse availedBy;
     private LocalDateTime availedAt;
 
     @JsonProperty("isAvailed")

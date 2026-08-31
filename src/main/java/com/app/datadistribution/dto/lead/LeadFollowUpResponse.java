@@ -3,7 +3,7 @@ package com.app.datadistribution.dto.lead;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.app.datadistribution.enums.FollowUpStatus;
 
 import lombok.AllArgsConstructor;
@@ -24,6 +24,6 @@ public class LeadFollowUpResponse {
     private FollowUpStatus status;
     private boolean completed;
     private LocalDateTime completedAt;
-    private UserResponse createdBy;
+    private UserSummaryResponse createdBy;
     private LocalDateTime createdAt;
 }

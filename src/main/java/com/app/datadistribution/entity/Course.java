@@ -57,6 +57,10 @@ public class Course extends BaseEntity {
     @Builder.Default
     private Status status = Status.ACTIVE;
 
+    public boolean isActive() {
+        return this.status == Status.ACTIVE;
+    }
+
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
     @Builder.Default
     private List<Lead> leads = new ArrayList<>();

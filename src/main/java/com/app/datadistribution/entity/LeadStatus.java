@@ -44,6 +44,21 @@ public class LeadStatus extends BaseEntity {
     @Builder.Default
     private SentimentCategory sentimentCategory = SentimentCategory.NEUTRAL;
 
+    @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @jakarta.persistence.JoinColumn(name = "parent_status_id")
+    private LeadStatus parentStatus;
+
+    @Column(name = "is_sequential", nullable = false)
+    @Builder.Default
+    private boolean isSequential = false;
+
+    @Column(name = "daily_attempt_limit")
+    private Integer dailyAttemptLimit;
+
+    @Column(name = "is_follow_up_status", nullable = false)
+    @Builder.Default
+    private boolean isFollowUpStatus = false;
+
     public String getStatus() {
         return active ? "ACTIVE" : "INACTIVE";
     }

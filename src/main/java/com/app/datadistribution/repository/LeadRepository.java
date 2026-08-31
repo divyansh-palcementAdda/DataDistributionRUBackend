@@ -19,6 +19,10 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
     boolean existsByPhoneNumberAndIsDeletedFalse(String phoneNumber);
     List<Lead> findByPhoneNumberInAndIsDeletedFalse(Collection<String> phoneNumbers);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT l FROM Lead l WHERE l.id = :id AND l.isDeleted = false")
+    Optional<Lead> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);
+
     @Query("SELECT DISTINCT l.phoneNumber FROM Lead l WHERE l.isDeleted = false AND l.phoneNumber IS NOT NULL")
     List<String> findAllActivePhoneNumbers();
 

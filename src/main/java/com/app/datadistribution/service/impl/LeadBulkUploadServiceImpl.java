@@ -1,29 +1,68 @@
 package com.app.datadistribution.service.impl;
 
-import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
-import com.app.datadistribution.dto.lead.BulkLeadUploadRowError;
-import com.app.datadistribution.entity.*;
-import com.app.datadistribution.enums.RoleType;
-import com.app.datadistribution.enums.Status;
-import com.app.datadistribution.exception.BadRequestException;
-import com.app.datadistribution.exception.ResourcesNotFoundException;
-import com.app.datadistribution.exception.UnauthorizedException;
-import com.app.datadistribution.repository.*;
-import com.app.datadistribution.service.interfaces.ILeadBulkUploadService;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.*;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
+import com.app.datadistribution.dto.lead.BulkLeadUploadRowError;
+import com.app.datadistribution.entity.Board;
+import com.app.datadistribution.entity.CourseType;
+import com.app.datadistribution.entity.Department;
+import com.app.datadistribution.entity.Grade;
+import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.LeadSource;
+import com.app.datadistribution.entity.LeadStatus;
+import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.User;
+import com.app.datadistribution.enums.RoleType;
+import com.app.datadistribution.enums.Status;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.ResourcesNotFoundException;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.repository.BoardRepository;
+import com.app.datadistribution.repository.CourseTypeRepository;
+import com.app.datadistribution.repository.DepartmentRepository;
+import com.app.datadistribution.repository.GradeRepository;
+import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.LeadSourceRepository;
+import com.app.datadistribution.repository.LeadStatusHistoryRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
+import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.ILeadBulkUploadService;
+import com.app.datadistribution.service.util.LeadDepartmentResolver;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -86,6 +125,8 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         LeadStatus selectedStatus = validateAndFetchLeadStatus(statusId);
         Department selectedDepartment = validateAndFetchDepartment(departmentId);
         User selectedAssignedTo = validateAndFetchAssignedUser(assignedToUserId, selectedDepartment);
+        // Synchronize Department with assigned user (Source of Truth)
+        selectedDepartment = LeadDepartmentResolver.resolveDepartmentForUser(selectedAssignedTo, selectedDepartment);
 
         // 4. Preload Active Phone Numbers for Duplicate Detection
         List<String> activePhoneNumbers = leadRepository.findAllActivePhoneNumbers();

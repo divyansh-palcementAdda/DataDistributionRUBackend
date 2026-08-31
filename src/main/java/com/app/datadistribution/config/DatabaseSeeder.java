@@ -60,7 +60,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 //	    └── FINALLY_NOT_CONNECTED
 //	
 //	
-//	
+	
 
 	private final PermissionRepository permissionRepository;
 	private final RoleRepository roleRepository;
@@ -129,7 +129,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		Set<Permission> adminPermissions = filterPermissions(allPermissions,
 				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
 				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "FOLLOWUP_",
-				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_");
+				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_");
 		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
 		// 3. HOD Role (Department-level Operational & Management Access)
@@ -179,6 +179,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.startsWith("LEADSOURCE_")
 							|| n.startsWith("BOARD_")
 							|| n.startsWith("GRADE_")
+							|| (n.startsWith("DROPDOWN_") && !n.equals(PermissionType.DROPDOWN_ROLE_VIEW.name()) && !n.equals(PermissionType.DROPDOWN_PERMISSION_VIEW.name()))
 							|| n.equals(PermissionType.USER_READ.name())
 							|| n.equals(PermissionType.AUTH_READ.name());
 				})
@@ -224,7 +225,16 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.LEAD_STATUS_HISTORY_VIEW.name())
 							|| n.equals(PermissionType.LEADSOURCE_READ.name())
 							|| n.equals(PermissionType.BOARD_VIEW.name())
-							|| n.equals(PermissionType.GRADE_VIEW.name());
+							|| n.equals(PermissionType.GRADE_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_USER_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_DEPARTMENT_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_LEAD_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_COURSE_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_STATUS_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_SOURCE_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_GRADE_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_BOARD_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name());
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.COUNSELOR.name(), "Counselor Operational Role", counselorPermissions);
@@ -445,191 +455,94 @@ public class DatabaseSeeder implements CommandLineRunner {
 	    // =========================
 	    // ROOT STATUS
 	    // =========================
-	    createStatusIfNotExist(
-	            "Raw",
-	            "RAW",
-	            "New lead received. Define the lead type as Inbound or Outbound.",
-	            1,
-	            SentimentCategory.NEUTRAL
-	    );
+	    createStatusIfNotExist("Raw", "RAW", "New lead received. Define the lead type as Inbound or Outbound.", 1, SentimentCategory.NEUTRAL, null, false, null, false);
 
 	    // =========================
 	    // PRIMARY OUTCOMES
 	    // =========================
-	    createStatusIfNotExist(
-	            "Connected",
-	            "CONNECTED",
-	            "Contact successfully established with the lead.",
-	            2,
-	            SentimentCategory.POSITIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Not Connected",
-	            "NOT_CONNECTED",
-	            "Unable to establish contact with the lead.",
-	            3,
-	            SentimentCategory.NEGATIVE
-	    );
+	    createStatusIfNotExist("Connected", "CONNECTED", "Contact successfully established with the lead.", 2, SentimentCategory.POSITIVE, "RAW", false, null, false);
+	    createStatusIfNotExist("Not Connected", "NOT_CONNECTED", "Unable to establish contact with the lead.", 3, SentimentCategory.NEGATIVE, "RAW", true, 2, false);
 
 	    // =========================
 	    // CONNECTED FLOW
 	    // =========================
-	    createStatusIfNotExist(
-	            "Interested",
-	            "INTERESTED",
-	            "Lead has shown interest in the course or service.",
-	            4,
-	            SentimentCategory.POSITIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Bad",
-	            "BAD",
-	            "Invalid, incorrect, duplicate, or unusable lead.",
-	            5,
-	            SentimentCategory.NEGATIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Not Interested",
-	            "NOT_INTERESTED",
-	            "Lead is currently not interested.",
-	            6,
-	            SentimentCategory.NEGATIVE
-	    );
+	    createStatusIfNotExist("Interested", "INTERESTED", "Lead has shown interest in the course or service.", 4, SentimentCategory.POSITIVE, "CONNECTED", false, null, false);
+	    createStatusIfNotExist("Bad", "BAD", "Invalid, incorrect, duplicate, or unusable lead.", 5, SentimentCategory.NEGATIVE, "CONNECTED", false, null, false);
+	    createStatusIfNotExist("Not Interested", "NOT_INTERESTED", "Lead is currently not interested.", 6, SentimentCategory.NEGATIVE, "CONNECTED", false, null, false);
 
 	    // =========================
 	    // INTERESTED -> FOLLOW-UP FLOW
 	    // =========================
-	    createStatusIfNotExist(
-	            "Form Follow-Up",
-	            "FORM_FOLLOW_UP",
-	            "Lead is interested and requires follow-up regarding form submission.",
-	            7,
-	            SentimentCategory.NEUTRAL
-	    );
-
-	    createStatusIfNotExist(
-	            "Counseling Follow-Up",
-	            "COUNSELING_FOLLOW_UP",
-	            "Lead requires counseling and further follow-up.",
-	            8,
-	            SentimentCategory.NEUTRAL
-	    );
+	    createStatusIfNotExist("Form Follow-Up", "FORM_FOLLOW_UP", "Lead is interested and requires follow-up regarding form submission.", 7, SentimentCategory.NEUTRAL, "INTERESTED", false, null, true);
+	    createStatusIfNotExist("Counseling Follow-Up", "COUNSELING_FOLLOW_UP", "Lead requires counseling and further follow-up.", 8, SentimentCategory.NEUTRAL, "INTERESTED", false, null, true);
 
 	    // =========================
 	    // FORM FOLLOW-UP OUTCOMES
 	    // =========================
-	    createStatusIfNotExist(
-	            "Registered",
-	            "REGISTERED",
-	            "Lead has successfully completed registration.",
-	            9,
-	            SentimentCategory.POSITIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Form Not Interested",
-	            "FORM_NOT_INTERESTED",
-	            "Lead is not interested in completing the registration form.",
-	            10,
-	            SentimentCategory.NEGATIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Continuous Form Follow-Up",
-	            "CONTINUOUS_FORM_FOLLOW_UP",
-	            "Lead requires continuous follow-up for form completion.",
-	            11,
-	            SentimentCategory.NEUTRAL
-	    );
+	    createStatusIfNotExist("Registered", "REGISTERED", "Lead has successfully completed registration.", 9, SentimentCategory.POSITIVE, "FORM_FOLLOW_UP", false, null, false);
+	    createStatusIfNotExist("Form Not Interested", "FORM_NOT_INTERESTED", "Lead is not interested in completing the registration form.", 10, SentimentCategory.NEGATIVE, "FORM_FOLLOW_UP", false, null, false);
+	    createStatusIfNotExist("Continuous Form Follow-Up", "CONTINUOUS_FORM_FOLLOW_UP", "Lead requires continuous follow-up for form completion.", 11, SentimentCategory.NEUTRAL, "FORM_FOLLOW_UP", false, null, true);
 
 	    // =========================
 	    // COUNSELING FOLLOW-UP FLOW
 	    // =========================
-	    createStatusIfNotExist(
-	            "Continuous Follow-Up",
-	            "CONTINUOUS_FOLLOW_UP",
-	            "Lead requires continuous counseling follow-up.",
-	            12,
-	            SentimentCategory.NEUTRAL
-	    );
-
-	    createStatusIfNotExist(
-	            "Interested Follow-Up",
-	            "INTERESTED_FOLLOW_UP",
-	            "Interested lead requires additional follow-up.",
-	            13,
-	            SentimentCategory.POSITIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Go To Form Follow-Up",
-	            "GO_TO_FORM_FOLLOW_UP",
-	            "Move the interested lead to the form follow-up process.",
-	            14,
-	            SentimentCategory.POSITIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Counseling Not Interested",
-	            "COUNSELING_NOT_INTERESTED",
-	            "Lead became not interested after counseling follow-up.",
-	            15,
-	            SentimentCategory.NEGATIVE
-	    );
+	    createStatusIfNotExist("Continuous Follow-Up", "CONTINUOUS_FOLLOW_UP", "Lead requires continuous counseling follow-up.", 12, SentimentCategory.NEUTRAL, "COUNSELING_FOLLOW_UP", false, null, true);
+	    createStatusIfNotExist("Interested Follow-Up", "INTERESTED_FOLLOW_UP", "Interested lead requires additional follow-up.", 13, SentimentCategory.POSITIVE, "CONTINUOUS_FOLLOW_UP", false, null, true);
+	    createStatusIfNotExist("Go To Form Follow-Up", "GO_TO_FORM_FOLLOW_UP", "Move the interested lead to the form follow-up process.", 14, SentimentCategory.POSITIVE, "INTERESTED_FOLLOW_UP", false, null, true);
+	    createStatusIfNotExist("Counseling Not Interested", "COUNSELING_NOT_INTERESTED", "Lead became not interested after counseling follow-up.", 15, SentimentCategory.NEGATIVE, "CONTINUOUS_FOLLOW_UP", false, null, false);
 
 	    // =========================
-	    // NOT CONNECTED FOLLOW-UP FLOW
+	    // NOT CONNECTED FOLLOW-UP FLOW (SEQUENTIAL & DAILY LIMIT)
 	    // =========================
-	    createStatusIfNotExist(
-	            "Not Connected - 1",
-	            "NOT_CONNECTED_1",
-	            "First unsuccessful contact attempt.",
-	            16,
-	            SentimentCategory.NEGATIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Not Connected - 2",
-	            "NOT_CONNECTED_2",
-	            "Second unsuccessful contact attempt.",
-	            17,
-	            SentimentCategory.NEGATIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Not Connected - 3",
-	            "NOT_CONNECTED_3",
-	            "Third unsuccessful contact attempt.",
-	            18,
-	            SentimentCategory.NEGATIVE
-	    );
-
-	    createStatusIfNotExist(
-	            "Finally Not Connected",
-	            "FINALLY_NOT_CONNECTED",
-	            "All contact attempts have failed and the lead is marked as finally not connected.",
-	            19,
-	            SentimentCategory.NEGATIVE
-	    );
+	    createStatusIfNotExist("Not Connected - 1", "NOT_CONNECTED_1", "First unsuccessful contact attempt.", 16, SentimentCategory.NEGATIVE, "NOT_CONNECTED", true, 2, false);
+	    createStatusIfNotExist("Not Connected - 2", "NOT_CONNECTED_2", "Second unsuccessful contact attempt.", 17, SentimentCategory.NEGATIVE, "NOT_CONNECTED_1", true, 2, false);
+	    createStatusIfNotExist("Not Connected - 3", "NOT_CONNECTED_3", "Third unsuccessful contact attempt.", 18, SentimentCategory.NEGATIVE, "NOT_CONNECTED_2", true, 2, false);
+	    createStatusIfNotExist("Finally Not Connected", "FINALLY_NOT_CONNECTED", "All contact attempts have failed and the lead is marked as finally not connected.", 19, SentimentCategory.NEGATIVE, "NOT_CONNECTED_3", true, 2, false);
 
 	    migrateExistingLeadStatusData();
 	}
 
-	private void createStatusIfNotExist(String name, String code, String description, int displayOrder, SentimentCategory sentimentCategory) {
-		if (!leadStatusRepository.findByCodeIgnoreCase(code).isPresent()) {
+	private void createStatusIfNotExist(String name, String code, String description, int displayOrder, SentimentCategory sentimentCategory, String parentCode, boolean isSequential, Integer dailyAttemptLimit, boolean isFollowUpStatus) {
+		LeadStatus parent = parentCode != null ? leadStatusRepository.findByCodeIgnoreCase(parentCode).orElse(null) : null;
+		Optional<LeadStatus> existingOpt = leadStatusRepository.findByCodeIgnoreCase(code);
+		if (existingOpt.isEmpty()) {
 			LeadStatus status = LeadStatus.builder()
 					.name(name)
 					.code(code)
 					.description(description)
 					.displayOrder(displayOrder)
 					.sentimentCategory(sentimentCategory)
+					.parentStatus(parent)
+					.isSequential(isSequential)
+					.dailyAttemptLimit(dailyAttemptLimit)
+					.isFollowUpStatus(isFollowUpStatus)
 					.active(true)
 					.build();
 			leadStatusRepository.save(status);
-			log.info("Seeded default lead status: {} ({})", name, code);
+			log.info("Seeded default lead status: {} ({}) with parent: {}, followUpStatus: {}", name, code, parentCode, isFollowUpStatus);
+		} else {
+			LeadStatus status = existingOpt.get();
+			boolean modified = false;
+			if (status.getParentStatus() == null && parent != null) {
+				status.setParentStatus(parent);
+				modified = true;
+			}
+			if (status.isSequential() != isSequential) {
+				status.setSequential(isSequential);
+				modified = true;
+			}
+			if (dailyAttemptLimit != null && (status.getDailyAttemptLimit() == null || !status.getDailyAttemptLimit().equals(dailyAttemptLimit))) {
+				status.setDailyAttemptLimit(dailyAttemptLimit);
+				modified = true;
+			}
+			if (status.isFollowUpStatus() != isFollowUpStatus) {
+				status.setFollowUpStatus(isFollowUpStatus);
+				modified = true;
+			}
+			if (modified) {
+				leadStatusRepository.save(status);
+				log.info("Updated hierarchy/follow-up metadata on lead status: {}", code);
+			}
 		}
 	}
 

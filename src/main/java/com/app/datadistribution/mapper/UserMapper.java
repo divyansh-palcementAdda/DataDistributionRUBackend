@@ -7,6 +7,7 @@ import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.dto.user.UserRequest;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,6 +22,12 @@ public interface UserMapper {
     @Mapping(source = "roles", target = "permissions", qualifiedByName = "mapRolesToPermissions")
     @Mapping(source = "departments", target = "departments", qualifiedByName = "mapDepartmentsToSummaries")
     UserResponse toDto(User user);
+
+    /**
+     * Maps only safe, non-sensitive fields. Used for all nested user references
+     * (createdBy, assignedTo, changedBy, etc.) in response DTOs.
+     */
+    UserSummaryResponse toSummaryDto(User user);
 
     @Mapping(target = "roles", ignore = true)
     @Mapping(target = "departments", ignore = true)

@@ -134,7 +134,10 @@ public class LeadController {
             @RequestParam(value = "fromDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
             @RequestParam(value = "toDate", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
             @RequestParam(value = "updatedFrom", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate updatedFrom,
-            @RequestParam(value = "updatedTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate updatedTo) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "updatedTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate updatedTo,
+            @RequestParam(value = "leadStatusHistoryId", required = false) UUID leadStatusHistoryId,
+            @RequestParam(value = "leadStatusHistoryIds", required = false) List<UUID> leadStatusHistoryIds,
+            @RequestParam(value = "leadStatusHistory", required = false) String leadStatusHistory) throws UnauthorizedException, BadRequestException {
 
         List<UUID> sourceIdsToFilter = leadSourceIds;
         if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
@@ -189,7 +192,10 @@ public class LeadController {
                 effectiveStartDate,
                 effectiveEndDate,
                 updatedFrom,
-                updatedTo
+                updatedTo,
+                leadStatusHistoryId,
+                leadStatusHistoryIds,
+                leadStatusHistory
         );
         return ResponseEntity.ok(ApiResponse.success("Leads retrieved successfully", response, HttpStatus.OK.value()));
     }
@@ -261,9 +267,23 @@ public class LeadController {
     @Operation(summary = "Mark a follow-up as completed")
     public ResponseEntity<ApiResponse<LeadFollowUpResponse>> completeFollowUp(
             @PathVariable("followUpId") UUID followUpId,
+            @RequestBody(required = false) com.app.datadistribution.dto.lead.CompleteFollowUpRequest request,
             @RequestParam(value = "remarks", required = false) String remarks) throws UnauthorizedException, BadRequestException {
-        LeadFollowUpResponse response = leadFollowUpService.completeFollowUp(followUpId, remarks);
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : remarks;
+        LeadFollowUpResponse response = leadFollowUpService.completeFollowUp(followUpId, feedback);
         return ResponseEntity.ok(ApiResponse.success("Follow-up marked completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/followups/{followUpId}/cancel")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE')")
+    @Operation(summary = "Mark a follow-up as cancelled")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> cancelFollowUp(
+            @PathVariable("followUpId") UUID followUpId,
+            @RequestBody(required = false) com.app.datadistribution.dto.lead.CancelFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String remarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null) ? request.getRemarks() : remarks;
+        LeadFollowUpResponse response = leadFollowUpService.cancelFollowUp(followUpId, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked cancelled successfully", response, HttpStatus.OK.value()));
     }
 
     @PostMapping("/{id}/assign")
@@ -339,6 +359,16 @@ public class LeadController {
     public ResponseEntity<ApiResponse<Map<String, Long>>> getStatusWiseStats() throws UnauthorizedException, BadRequestException {
         Map<String, Long> response = leadService.getStatusWiseStats();
         return ResponseEntity.ok(ApiResponse.success("Status-wise lead statistics retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PutMapping("/{id}/courses")
+    @PreAuthorize("hasAuthority('LEAD_INTERESTED_COURSE_UPDATE') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Update all assigned/interested courses for a lead")
+    public ResponseEntity<ApiResponse<LeadResponse>> updateLeadCourses(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody com.app.datadistribution.dto.lead.LeadCoursesUpdateRequest request) throws UnauthorizedException, BadRequestException {
+        LeadResponse response = leadService.updateLeadCourses(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Lead courses updated successfully", response, HttpStatus.OK.value()));
     }
 
     @PostMapping("/{id}/interested-courses")

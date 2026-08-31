@@ -1,6 +1,6 @@
 package com.app.datadistribution.dto.department;
 
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,10 +38,10 @@ public class DepartmentResponse {
     private long userCount;
 
     @Schema(description = "List of HODs mapped to this department")
-    private List<UserResponse> hods;
+    private List<UserSummaryResponse> hods;
 
     @Schema(description = "List of Counsellors/Users mapped to this department")
-    private List<UserResponse> counsellors;
+    private List<UserSummaryResponse> counsellors;
 
     @Schema(description = "Creation timestamp")
     private LocalDateTime createdAt;

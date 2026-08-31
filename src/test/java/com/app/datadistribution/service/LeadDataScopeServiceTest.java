@@ -180,7 +180,8 @@ class LeadDataScopeServiceTest {
         // Mapped Dept leads -> visible
         assertTrue(leadDataScopeService.isLeadAccessible(leadDept1Counselor1, hodScope));
         assertTrue(leadDataScopeService.isLeadAccessible(leadDept1Counselor2, hodScope));
-        assertTrue(leadDataScopeService.isLeadAccessible(leadDept1Unassigned, hodScope));
+        // Unassigned leads in mapped dept are NOT visible to HOD (only Admin sees unassigned pool)
+        assertFalse(leadDataScopeService.isLeadAccessible(leadDept1Unassigned, hodScope));
 
         // Self-assigned lead -> visible even without dept
         assertTrue(leadDataScopeService.isLeadAccessible(leadAssignedToHod, hodScope));
@@ -202,8 +203,9 @@ class LeadDataScopeServiceTest {
 
         assertTrue(leadDataScopeService.isLeadAccessible(leadDept1Counselor1, hodMultiScope));
         assertTrue(leadDataScopeService.isLeadAccessible(leadDept2Counselor2, hodMultiScope));
-        assertTrue(leadDataScopeService.isLeadAccessible(leadDept1Unassigned, hodMultiScope));
-        assertTrue(leadDataScopeService.isLeadAccessible(leadDept2Unassigned, hodMultiScope));
+        // Unassigned leads are NOT visible to HOD
+        assertFalse(leadDataScopeService.isLeadAccessible(leadDept1Unassigned, hodMultiScope));
+        assertFalse(leadDataScopeService.isLeadAccessible(leadDept2Unassigned, hodMultiScope));
     }
 
     @Test

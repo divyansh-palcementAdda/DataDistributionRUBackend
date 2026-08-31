@@ -11,4 +11,6 @@ public interface CourseTemplateRepository extends JpaRepository<CourseTemplate, 
     List<CourseTemplate> findByCourseIdAndIsDeletedFalse(UUID courseId);
     List<CourseTemplate> findByCourseIdInAndIsDeletedFalse(List<UUID> courseIds);
     List<CourseTemplate> findByIsDeletedFalse();
+    List<CourseTemplate> findByCourseIdAndChannelIgnoreCaseAndActiveTrueAndIsDeletedFalse(UUID courseId, String channel);
+    java.util.Optional<CourseTemplate> findByIdAndCourseIdAndIsDeletedFalse(UUID id, UUID courseId);
 }

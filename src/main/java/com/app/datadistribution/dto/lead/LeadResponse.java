@@ -2,7 +2,7 @@ package com.app.datadistribution.dto.lead;
 
 import com.app.datadistribution.dto.course.CourseSummaryDTO;
 import com.app.datadistribution.dto.department.DepartmentSummaryDTO;
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,15 +40,15 @@ public class LeadResponse {
     private DepartmentSummaryDTO department;
     private String remarks;
     private LeadStatusResponse currentStatus;
-    private UserResponse assignedTo;
-    private UserResponse createdBy;
+    private UserSummaryResponse assignedTo;
+    private UserSummaryResponse createdBy;
     private boolean active;
 
     @JsonProperty("isAvailed")
     private boolean isAvailed;
 
     private LocalDateTime availedAt;
-    private UserResponse availedBy;
+    private UserSummaryResponse availedBy;
     private LocalDateTime lastContactedAt;
     private LocalDateTime nextFollowUpDate;
     private LocalDateTime createdAt;
@@ -69,5 +69,14 @@ public class LeadResponse {
 
     public void setIsAvailed(boolean isAvailed) {
         this.isAvailed = isAvailed;
+    }
+
+    @JsonProperty("lastConnected")
+    public LocalDateTime getLastConnected() {
+        return lastContactedAt;
+    }
+
+    public void setLastConnected(LocalDateTime lastConnected) {
+        this.lastContactedAt = lastConnected;
     }
 }

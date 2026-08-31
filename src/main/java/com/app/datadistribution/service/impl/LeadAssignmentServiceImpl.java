@@ -25,6 +25,7 @@ import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ILeadAssignmentService;
 import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
+import com.app.datadistribution.service.util.LeadDepartmentResolver;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,8 +68,9 @@ public class LeadAssignmentServiceImpl implements ILeadAssignmentService {
             return leadMapper.toDto(lead);
         }
 
-        // Update Lead assignment
+        // Update Lead assignment & synchronize Department with new assignee
         lead.setAssignedTo(newAssignedUser);
+        lead.setDepartment(LeadDepartmentResolver.resolveDepartmentForUser(newAssignedUser, lead.getDepartment()));
         Lead savedLead = leadRepository.save(lead);
 
         // Save Assignment History trail

@@ -124,10 +124,8 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
         if (targetScopeType == ScopeType.SYSTEM) {
             List<Department> allDepts = departmentRepository.findByActiveTrueAndIsDeletedFalse();
             Set<UUID> allDeptIds = allDepts.stream().map(Department::getId).collect(Collectors.toSet());
-            Set<UUID> allUserIds = userRepository.findAll().stream()
-                    .filter(u -> !u.isDeleted())
-                    .map(User::getId)
-                    .collect(Collectors.toSet());
+            // For SYSTEM scope, departmentUserIds is never used in authorization decisions
+            // (all scope filters short-circuit on isAdmin()). Avoid a full table scan here.
 
             return UserDataScope.builder()
                     .scopeType(ScopeType.SYSTEM)
@@ -136,7 +134,7 @@ public class UserDataScopeServiceImpl implements IUserDataScopeService {
                     .userId(user.getId())
                     .currentUser(user)
                     .departmentIds(allDeptIds)
-                    .departmentUserIds(allUserIds)
+                    .departmentUserIds(java.util.Collections.emptySet())
                     .hodAccessType(user.getHodAccessType())
                     .isAdmin(true)
                     .isHod(false)

@@ -3,7 +3,7 @@ package com.app.datadistribution.dto.lead;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,9 +18,9 @@ import lombok.Setter;
 @AllArgsConstructor
 public class LeadAssignmentHistoryResponse {
     private UUID id;
-    private UserResponse oldAssignedUser;
-    private UserResponse newAssignedUser;
-    private UserResponse changedBy;
+    private UserSummaryResponse oldAssignedUser;
+    private UserSummaryResponse newAssignedUser;
+    private UserSummaryResponse changedBy;
     private LocalDateTime changedAt;
     private String remarks;
 }

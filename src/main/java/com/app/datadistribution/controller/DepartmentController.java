@@ -6,6 +6,7 @@ import com.app.datadistribution.dto.department.DepartmentRequest;
 import com.app.datadistribution.dto.department.DepartmentResponse;
 import com.app.datadistribution.dto.department.UserDepartmentAssignRequest;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
@@ -135,11 +136,11 @@ public class DepartmentController {
         summary = "Get all users in a department",
         description = "Retrieves all users (HODs, Counsellors, Callers) mapped to the specified department."
     )
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentUsers(
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> getDepartmentUsers(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
             throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
-        List<UserResponse> users = departmentService.getDepartmentUsers(id);
+        List<UserSummaryResponse> users = departmentService.getDepartmentUsers(id);
         return ResponseEntity.ok(ApiResponse.success("Department users retrieved successfully", users, HttpStatus.OK.value()));
     }
 
@@ -149,11 +150,11 @@ public class DepartmentController {
         summary = "Get HODs in a department",
         description = "Retrieves only Head of Department (HOD) users assigned to the specified department."
     )
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentHods(
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> getDepartmentHods(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
             throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
-        List<UserResponse> hods = departmentService.getDepartmentHods(id);
+        List<UserSummaryResponse> hods = departmentService.getDepartmentHods(id);
         return ResponseEntity.ok(ApiResponse.success("Department HODs retrieved successfully", hods, HttpStatus.OK.value()));
     }
 
@@ -163,11 +164,11 @@ public class DepartmentController {
         summary = "Get counsellors in a department",
         description = "Retrieves counsellor users assigned to the specified department."
     )
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getDepartmentCounsellors(
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> getDepartmentCounsellors(
             @Parameter(description = "UUID of the department", required = true)
             @PathVariable UUID id)
             throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
-        List<UserResponse> counsellors = departmentService.getDepartmentCounsellors(id);
+        List<UserSummaryResponse> counsellors = departmentService.getDepartmentCounsellors(id);
         return ResponseEntity.ok(ApiResponse.success("Department counsellors retrieved successfully", counsellors, HttpStatus.OK.value()));
     }
 

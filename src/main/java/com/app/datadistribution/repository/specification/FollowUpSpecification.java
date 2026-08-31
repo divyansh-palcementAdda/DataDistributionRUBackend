@@ -3,6 +3,7 @@ package com.app.datadistribution.repository.specification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.UUID;
 
 import org.springframework.data.jpa.domain.Specification;
@@ -42,6 +43,25 @@ public class FollowUpSpecification {
 
     public static Specification<LeadFollowUp> hasStatus(FollowUpStatus status) {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    public static Specification<LeadFollowUp> hasLeadStatusId(UUID leadStatusId) {
+        return (root, query, cb) -> cb.and(
+            cb.equal(root.get("lead").get("currentStatus").get("id"), leadStatusId),
+            cb.equal(root.get("lead").get("currentStatus").get("isDeleted"), false)
+        );
+    }
+
+    public static Specification<LeadFollowUp> hasLeadStatusIds(Collection<UUID> leadStatusIds) {
+        return (root, query, cb) -> {
+            if (leadStatusIds == null || leadStatusIds.isEmpty()) {
+                return cb.conjunction();
+            }
+            return cb.and(
+                root.get("lead").get("currentStatus").get("id").in(leadStatusIds),
+                cb.equal(root.get("lead").get("currentStatus").get("isDeleted"), false)
+            );
+        };
     }
 
     public static Specification<LeadFollowUp> isCompleted(Boolean completed) {

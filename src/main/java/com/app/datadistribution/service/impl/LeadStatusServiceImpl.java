@@ -57,6 +57,9 @@ public class LeadStatusServiceImpl implements ILeadStatusService {
         if (request.getSentimentCategory() != null) {
             leadStatus.setSentimentCategory(request.getSentimentCategory());
         }
+        if (request.getIsFollowUpStatus() != null) {
+            leadStatus.setFollowUpStatus(request.getIsFollowUpStatus());
+        }
 
         LeadStatus saved = leadStatusRepository.save(leadStatus);
         log.info("Created lead status: {} with code {}", saved.getName(), saved.getCode());
@@ -92,6 +95,9 @@ public class LeadStatusServiceImpl implements ILeadStatusService {
         }
         if (request.getSentimentCategory() != null) {
             status.setSentimentCategory(request.getSentimentCategory());
+        }
+        if (request.getIsFollowUpStatus() != null) {
+            status.setFollowUpStatus(request.getIsFollowUpStatus());
         }
 
         LeadStatus updated = leadStatusRepository.save(status);

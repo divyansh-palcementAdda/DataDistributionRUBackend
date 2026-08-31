@@ -5,6 +5,7 @@ import com.app.datadistribution.dto.department.DepartmentRequest;
 import com.app.datadistribution.dto.department.DepartmentResponse;
 import com.app.datadistribution.dto.department.DepartmentSummaryDTO;
 import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.RoleType;
@@ -247,7 +248,7 @@ public class DepartmentServiceImpl implements IDepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
+    public List<UserSummaryResponse> getDepartmentUsers(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
         Department dept = departmentRepository.findById(departmentId)
                 .filter(d -> !d.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + departmentId));
@@ -258,25 +259,34 @@ public class DepartmentServiceImpl implements IDepartmentService {
                 .filter(u -> !u.isDeleted() && u.getDepartments() != null && u.getDepartments().contains(dept))
                 .collect(Collectors.toList());
 
-        return users.stream().map(userMapper::toDto).collect(Collectors.toList());
+        return users.stream().map(userMapper::toSummaryDto).collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
-        List<UserResponse> allUsers = getDepartmentUsers(departmentId);
-        return allUsers.stream()
-                .filter(u -> u.getRoles() != null && u.getRoles().stream().anyMatch(r -> RoleType.HOD.name().equalsIgnoreCase(r) || r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD")))
+    public List<UserSummaryResponse> getDepartmentHods(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
+        Department dept = departmentRepository.findById(departmentId)
+                .filter(d -> !d.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + departmentId));
+        validateUserAccessToDepartment(dept.getId());
+        return userRepository.findAll().stream()
+                .filter(u -> !u.isDeleted() && u.getDepartments() != null && u.getDepartments().contains(dept))
+                .filter(this::isHODUser)
+                .map(userMapper::toSummaryDto)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
-        List<UserResponse> allUsers = getDepartmentUsers(departmentId);
-        return allUsers.stream()
-                .filter(u -> u.getRoles() != null && (u.getRoles().stream().anyMatch(r -> RoleType.COUNSELOR.name().equalsIgnoreCase(r) || "USER".equalsIgnoreCase(r))
-                        || u.getRoles().stream().noneMatch(r -> RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r) || RoleType.ADMIN.name().equalsIgnoreCase(r) || RoleType.HOD.name().equalsIgnoreCase(r) || r.toUpperCase().contains("HOD") || r.toUpperCase().contains("HEAD"))))
+    public List<UserSummaryResponse> getDepartmentCounsellors(UUID departmentId) throws ResourcesNotFoundException, UnauthorizedException, BadRequestException {
+        Department dept = departmentRepository.findById(departmentId)
+                .filter(d -> !d.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Department not found: " + departmentId));
+        validateUserAccessToDepartment(dept.getId());
+        return userRepository.findAll().stream()
+                .filter(u -> !u.isDeleted() && u.getDepartments() != null && u.getDepartments().contains(dept))
+                .filter(u -> !isAdminUser(u) && !isHODUser(u))
+                .map(userMapper::toSummaryDto)
                 .collect(Collectors.toList());
     }
 
@@ -285,14 +295,14 @@ public class DepartmentServiceImpl implements IDepartmentService {
                 .filter(u -> !u.isDeleted() && u.getDepartments() != null && u.getDepartments().stream().anyMatch(d -> d.getId().equals(dept.getId())))
                 .collect(Collectors.toList());
 
-        List<UserResponse> hods = assignedUsers.stream()
+        List<UserSummaryResponse> hods = assignedUsers.stream()
                 .filter(u -> isHODUser(u))
-                .map(userMapper::toDto)
+                .map(userMapper::toSummaryDto)
                 .collect(Collectors.toList());
 
-        List<UserResponse> counsellors = assignedUsers.stream()
+        List<UserSummaryResponse> counsellors = assignedUsers.stream()
                 .filter(u -> !isAdminUser(u) && !isHODUser(u))
-                .map(userMapper::toDto)
+                .map(userMapper::toSummaryDto)
                 .collect(Collectors.toList());
 
         return DepartmentResponse.builder()

@@ -51,7 +51,8 @@ public class LeadDataScopeServiceImpl implements ILeadDataScopeService {
 
         if (scope.getScopeType() == ScopeType.DEPARTMENT) {
             boolean isAssignedToHod = lead.getAssignedTo() != null && lead.getAssignedTo().getId().equals(scope.getUserId());
-            boolean isDeptLead = lead.getDepartment() != null
+            boolean isDeptLead = lead.getAssignedTo() != null     // HODs must NEVER see unallocated leads
+                    && lead.getDepartment() != null
                     && scope.getDepartmentIds() != null
                     && scope.getDepartmentIds().contains(lead.getDepartment().getId());
             boolean isDeptUser = lead.getAssignedTo() != null
@@ -105,7 +106,11 @@ public class LeadDataScopeServiceImpl implements ILeadDataScopeService {
                     cb.equal(root.get("assignedTo").get("id"), scope.getUserId())
             );
             if (scope.getDepartmentIds() != null && !scope.getDepartmentIds().isEmpty()) {
-                Predicate deptLead = root.get("department").get("id").in(scope.getDepartmentIds());
+                // deptLead: must be assigned (not null) AND belong to HOD's department
+                Predicate deptLead = cb.and(
+                        cb.isNotNull(root.get("assignedTo")),
+                        root.get("department").get("id").in(scope.getDepartmentIds())
+                );
                 Predicate deptUser = (scope.getDepartmentUserIds() != null && !scope.getDepartmentUserIds().isEmpty())
                         ? root.get("assignedTo").get("id").in(scope.getDepartmentUserIds())
                         : cb.disjunction();

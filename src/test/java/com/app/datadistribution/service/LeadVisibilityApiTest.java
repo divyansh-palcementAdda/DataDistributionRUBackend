@@ -204,7 +204,7 @@ class LeadVisibilityApiTest {
     }
 
     @Test
-    void testCounselor_CannotAssignLeadToAnotherUser() throws Exception {
+    void testCounselor_AutoAssignsToSelfWhenCreatingLead() throws Exception {
         mockSecurityContext(counselor1);
 
         LeadRequest request = LeadRequest.builder()
@@ -218,10 +218,17 @@ class LeadVisibilityApiTest {
                 .scopeType(ScopeType.SELF)
                 .build();
         when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        when(userRepository.findById(counselor2.getId())).thenReturn(Optional.of(counselor2));
+        when(leadMapper.toEntity(request)).thenReturn(new Lead());
+        when(leadStatusRepository.findByCodeIgnoreCase(anyString())).thenReturn(Optional.of(LeadStatus.builder().name("New").active(true).build()));
+        when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(leadMapper.toDto(any(Lead.class))).thenReturn(LeadResponse.builder().build());
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
-        assertTrue(ex.getMessage().contains("Counselors can only assign leads to themselves"));
+        LeadResponse response = leadService.create(request);
+        assertNotNull(response);
+
+        org.mockito.ArgumentCaptor<Lead> captor = org.mockito.ArgumentCaptor.forClass(Lead.class);
+        verify(leadRepository).save(captor.capture());
+        assertEquals(counselor1, captor.getValue().getAssignedTo());
     }
 
     @Test

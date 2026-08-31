@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.app.datadistribution.dto.lead.LeadStatusResponse;
-import com.app.datadistribution.dto.user.UserResponse;
+import com.app.datadistribution.dto.user.UserSummaryResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +24,7 @@ public class FeedbackResponseDTO {
     private String leadFullName;
     private String feedback;
     private LeadStatusResponse statusAtTime;
-    private UserResponse createdBy;
+    private UserSummaryResponse createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

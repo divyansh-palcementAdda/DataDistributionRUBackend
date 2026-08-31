@@ -22,6 +22,7 @@ public class InfoPanelResponseDTO {
     private String leadCode;
     private String leadFullName;
     private CourseSummaryDTO course;
+    private List<CourseSummaryDTO> courses;
     private CourseTemplateResponseDTO template;
     private CourseImageDTO activeImage;
     private String renderedSubject;

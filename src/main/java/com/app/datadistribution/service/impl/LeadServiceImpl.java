@@ -66,6 +66,7 @@ import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+import com.app.datadistribution.service.util.LeadDepartmentResolver;
 
 import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -94,6 +95,7 @@ public class LeadServiceImpl implements ILeadService {
     private final CourseRepository courseRepository;
     private final IUserDataScopeService dataScopeService;
     private final ILeadDataScopeService leadDataScopeService;
+    private final com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -112,7 +114,12 @@ public class LeadServiceImpl implements ILeadService {
         Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
 
         User assignedTo = null;
-        if (request.getAssignedToUserId() != null) {
+        if (dataScope.isSelfScope()) {
+            // BUSINESS RULE: Counselor-created leads are always auto-assigned to the creator.
+            // The request's assignedToUserId is ignored to prevent unassigned leads
+            // from entering the pool.
+            assignedTo = currentUser;
+        } else if (request.getAssignedToUserId() != null) {
             assignedTo = userRepository.findById(request.getAssignedToUserId())
                     .filter(u -> !u.isDeleted())
                     .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + request.getAssignedToUserId()));
@@ -129,9 +136,6 @@ public class LeadServiceImpl implements ILeadService {
             validateLeadAssignmentDepartment(assignedTo, department);
         }
 
-        if (dataScope.isSelfScope() && request.getAssignedToUserId() != null && !request.getAssignedToUserId().equals(currentUser.getId())) {
-            throw new BadRequestException("Counselors can only assign leads to themselves or leave unassigned.");
-        }
         if (dataScope.isDepartmentScope()) {
             if (department != null && dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().contains(department.getId())) {
                 throw new BadRequestException("HOD can only create leads within their assigned department(s).");
@@ -140,6 +144,9 @@ public class LeadServiceImpl implements ILeadService {
                 throw new BadRequestException("HOD can only assign leads to members of their assigned department(s).");
             }
         }
+
+        // Synchronize Department with assigned user (Source of Truth)
+        department = LeadDepartmentResolver.resolveDepartmentForUser(assignedTo, department);
 
         String leadCode = request.getLeadCode();
         if (leadCode == null || leadCode.isBlank()) {
@@ -298,9 +305,9 @@ public class LeadServiceImpl implements ILeadService {
         lead.setCourse(course);
         lead.setBoard(board);
         lead.setGrade(grade);
-        if (department != null) {
-            lead.setDepartment(department);
-        }
+        // Synchronize Department with assigned user (Source of Truth)
+        department = LeadDepartmentResolver.resolveDepartmentForUser(assignedTo, department != null ? department : lead.getDepartment());
+        lead.setDepartment(department);
         lead.setActive(request.isActive());
         if (request.getNextFollowUpDate() != null) {
             lead.setNextFollowUpDate(request.getNextFollowUpDate());
@@ -343,7 +350,7 @@ public class LeadServiceImpl implements ILeadService {
                         UserMapper userMapper = org.mapstruct.factory.Mappers.getMapper(UserMapper.class);
                         dto.setAvailed(true);
                         dto.setAvailedAt(la.getAvailedAt());
-                        dto.setAvailedBy(userMapper.toDto(la.getAvailedByUser()));
+                        dto.setAvailedBy(userMapper.toSummaryDto(la.getAvailedByUser()));
                     });
         }
         return dto;
@@ -352,13 +359,19 @@ public class LeadServiceImpl implements ILeadService {
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
-        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, null, null, null, null, null, null, null, null, null);
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, Boolean availed) throws UnauthorizedException, BadRequestException {
-        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, availed, null, null, null, null, null, null, null, null);
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, availed, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, List<UUID> courseTypeIds, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, List<UUID> departmentIds, List<UUID> assignedUserIds, Boolean allotted, Boolean availed, UUID availedByUserId, List<UUID> availedByUserIds, java.time.LocalDate availedFrom, java.time.LocalDate availedTo, java.time.LocalDate startDate, java.time.LocalDate endDate, java.time.LocalDate updatedFrom, java.time.LocalDate updatedTo) throws UnauthorizedException, BadRequestException {
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, courseTypeIds, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, departmentIds, assignedUserIds, allotted, availed, availedByUserId, availedByUserIds, availedFrom, availedTo, startDate, endDate, updatedFrom, updatedTo, null, null, null);
     }
 
     @Override
@@ -389,7 +402,10 @@ public class LeadServiceImpl implements ILeadService {
             LocalDate startDate,
             LocalDate endDate,
             LocalDate updatedFrom,
-            LocalDate updatedTo
+            LocalDate updatedTo,
+            UUID leadStatusHistoryId,
+            List<UUID> leadStatusHistoryIds,
+            String leadStatusHistory
     ) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
 
@@ -460,6 +476,13 @@ public class LeadServiceImpl implements ILeadService {
         if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
             spec = andSpec(spec, searchLeads(pageRequest.getSearch()));
         }
+        List<UUID> resolvedHistoryStatusIds = resolveStatusHistoryIds(leadStatusHistoryId, leadStatusHistoryIds, leadStatusHistory);
+        if (!resolvedHistoryStatusIds.isEmpty()) {
+            spec = andSpec(spec, filterByStatusHistory(resolvedHistoryStatusIds));
+        } else if (leadStatusHistory != null && !leadStatusHistory.trim().isEmpty()) {
+            // User provided a history filter string that resolved to 0 valid statuses -> match nothing
+            spec = andSpec(spec, (root, query, cb) -> cb.disjunction());
+        }
 
         Page<Lead> page = leadRepository.findAll(spec, pageable);
         List<Lead> leads = page.getContent();
@@ -488,7 +511,7 @@ public class LeadServiceImpl implements ILeadService {
                             LeadAvailed la = userMap.get(lead.getAssignedTo().getId());
                             leadDto.setAvailed(true);
                             leadDto.setAvailedAt(la.getAvailedAt());
-                            leadDto.setAvailedBy(userMapper.toDto(la.getAvailedByUser()));
+                            leadDto.setAvailedBy(userMapper.toSummaryDto(la.getAvailedByUser()));
                         }
                     }
                     return leadDto;
@@ -547,6 +570,43 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
+    public LeadResponse updateLeadCourses(UUID leadId, com.app.datadistribution.dto.lead.LeadCoursesUpdateRequest request) throws UnauthorizedException, BadRequestException {
+        if (leadId == null) {
+            throw new BadRequestException("Lead ID is required");
+        }
+        if (request == null || request.getCourseIds() == null) {
+            throw new BadRequestException("Course IDs list is required");
+        }
+
+        Lead lead = leadRepository.findById(leadId)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        Set<Course> resolvedCourses = new HashSet<>();
+        for (UUID courseId : request.getCourseIds()) {
+            if (courseId == null) {
+                throw new BadRequestException("Course ID cannot be null");
+            }
+            Course course = courseRepository.findById(courseId)
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + courseId));
+            if (!course.isActive()) {
+                throw new BadRequestException("Cannot select inactive course: " + course.getCourseName());
+            }
+            resolvedCourses.add(course);
+        }
+
+        lead.setInterestedCourses(resolvedCourses);
+        Lead updated = leadRepository.save(lead);
+        log.info("Updated courses for lead {}: {} courses assigned", lead.getLeadCode(), resolvedCourses.size());
+        return leadMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
     public LeadResponse registerCourse(UUID leadId, UUID courseId) throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
@@ -597,49 +657,7 @@ public class LeadServiceImpl implements ILeadService {
      */
     @Transactional
     public Lead changeLeadStatusInternal(Lead lead, LeadStatus newStatus, User currentUser, String feedbackOrRemarks) throws BadRequestException {
-        if (lead == null || lead.isDeleted()) {
-            throw new BadRequestException("Lead must exist and not be deleted.");
-        }
-        if (newStatus == null || newStatus.isDeleted()) {
-            throw new BadRequestException("New lead status is required and must exist.");
-        }
-        if (!newStatus.isActive()) {
-            throw new BadRequestException("Cannot assign inactive lead status: " + newStatus.getName());
-        }
-
-        LeadStatus oldStatus = lead.getCurrentStatus();
-        boolean statusChanged = (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()));
-
-        if (!statusChanged) {
-            log.info("No status transition for lead {}. Current status is already {}.",
-                    lead.getLeadCode(), oldStatus != null ? oldStatus.getName() : "null");
-            return lead;
-        }
-
-        lead.setCurrentStatus(newStatus);
-        Lead updatedLead = leadRepository.save(lead);
-
-        LeadStatusHistory history = LeadStatusHistory.builder()
-                .lead(updatedLead)
-                .previousStatus(oldStatus)
-                .newStatus(newStatus)
-                .changedByUser(currentUser)
-                .feedback(feedbackOrRemarks != null && !feedbackOrRemarks.isBlank() ? feedbackOrRemarks : "Lead status updated.")
-                .build();
-
-        LeadStatusHistory savedHistory = leadStatusHistoryRepository.save(history);
-
-        if (updatedLead.getStatusHistories() != null) {
-            updatedLead.getStatusHistories().add(savedHistory);
-        }
-
-        log.info("Recorded status change history for lead {}: {} -> {} (changed by: {})",
-                updatedLead.getLeadCode(),
-                oldStatus != null ? oldStatus.getName() : "null",
-                newStatus.getName(),
-                currentUser != null ? currentUser.getUsername() : "SYSTEM");
-
-        return updatedLead;
+        return leadStatusTransitionService.executeStatusTransition(lead, newStatus, currentUser, feedbackOrRemarks);
     }
 
     @Override
@@ -978,6 +996,54 @@ public class LeadServiceImpl implements ILeadService {
 
     private Specification<Lead> filterByStatusIds(List<UUID> statusIds) {
         return (root, query, cb) -> root.get("currentStatus").get("id").in(statusIds);
+    }
+
+    private List<UUID> resolveStatusHistoryIds(UUID leadStatusHistoryId, List<UUID> leadStatusHistoryIds, String leadStatusHistory) {
+        Set<UUID> resolvedIds = new HashSet<>();
+        if (leadStatusHistoryIds != null) {
+            for (UUID id : leadStatusHistoryIds) {
+                if (id != null) resolvedIds.add(id);
+            }
+        }
+        if (leadStatusHistoryId != null) {
+            resolvedIds.add(leadStatusHistoryId);
+        }
+        if (leadStatusHistory != null && !leadStatusHistory.trim().isEmpty()) {
+            String[] tokens = leadStatusHistory.split(",");
+            for (String token : tokens) {
+                String trimmed = token.trim();
+                if (trimmed.isEmpty()) continue;
+                try {
+                    resolvedIds.add(UUID.fromString(trimmed));
+                } catch (IllegalArgumentException e) {
+                    leadStatusRepository.findByCodeIgnoreCase(trimmed)
+                            .ifPresentOrElse(
+                                    s -> resolvedIds.add(s.getId()),
+                                    () -> leadStatusRepository.findByNameIgnoreCase(trimmed)
+                                            .ifPresent(s -> resolvedIds.add(s.getId()))
+                            );
+                }
+            }
+        }
+        return new ArrayList<>(resolvedIds);
+    }
+
+    private Specification<Lead> filterByStatusHistory(List<UUID> statusIds) {
+        return (root, query, cb) -> {
+            if (statusIds == null || statusIds.isEmpty()) {
+                return cb.conjunction();
+            }
+            jakarta.persistence.criteria.Subquery<Integer> subquery = query.subquery(Integer.class);
+            jakarta.persistence.criteria.Root<LeadStatusHistory> historyRoot = subquery.from(LeadStatusHistory.class);
+            subquery.select(cb.literal(1));
+
+            jakarta.persistence.criteria.Predicate leadMatches = cb.equal(historyRoot.get("lead").get("id"), root.get("id"));
+            jakarta.persistence.criteria.Predicate notDeleted = cb.isFalse(historyRoot.get("isDeleted"));
+            jakarta.persistence.criteria.Predicate statusMatches = historyRoot.get("newStatus").get("id").in(statusIds);
+
+            subquery.where(cb.and(leadMatches, notDeleted, statusMatches));
+            return cb.exists(subquery);
+        };
     }
 
     private Specification<Lead> filterByBoard(UUID boardId) {

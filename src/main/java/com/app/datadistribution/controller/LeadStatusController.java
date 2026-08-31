@@ -23,6 +23,15 @@ import org.springframework.web.bind.annotation.*;
 public class LeadStatusController {
 
     private final ILeadStatusService leadStatusService;
+    private final com.app.datadistribution.service.interfaces.IDropdownService dropdownService;
+
+    @GetMapping("/follow-up/dropdown")
+    @PreAuthorize("hasAuthority('LEAD_STATUS_VIEW') or hasAuthority('DROPDOWN_STATUS_VIEW') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get lead statuses configured as follow-up statuses for scheduling")
+    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.dropdown.LeadStatusDropdownResponse>>> getFollowUpLeadStatusesDropdown() {
+        java.util.List<com.app.datadistribution.dto.dropdown.LeadStatusDropdownResponse> response = dropdownService.getFollowUpLeadStatusesDropdown();
+        return ResponseEntity.ok(ApiResponse.success("Follow-up lead statuses dropdown retrieved successfully", response, HttpStatus.OK.value()));
+    }
 
     @PostMapping
     @PreAuthorize("hasAuthority('LEAD_STATUS_CREATE')")

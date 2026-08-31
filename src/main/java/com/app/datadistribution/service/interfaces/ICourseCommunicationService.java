@@ -13,4 +13,5 @@ public interface ICourseCommunicationService {
     InfoPanelResponseDTO getInfoPanelForLead(UUID leadId, UUID courseId);
     void sendCourseEmail(UUID leadId, SendCommunicationRequestDTO request) throws BadRequestException, UnauthorizedException;
     void sendCourseWhatsApp(UUID leadId, SendCommunicationRequestDTO request) throws BadRequestException, UnauthorizedException;
+    com.app.datadistribution.dto.communication.WhatsAppPreviewResponseDTO previewWhatsApp(UUID leadId, com.app.datadistribution.dto.communication.WhatsAppPreviewRequestDTO request) throws BadRequestException, UnauthorizedException;
 }

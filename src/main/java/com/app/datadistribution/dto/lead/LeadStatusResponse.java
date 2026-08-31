@@ -23,6 +23,7 @@ public class LeadStatusResponse {
     private String status;
     private Integer displayOrder;
     private SentimentCategory sentimentCategory;
+    private boolean isFollowUpStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
