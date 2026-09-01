@@ -54,22 +54,7 @@ public class LeadResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    @JsonProperty("isAvailed")
-    public boolean isAvailed() {
-        return isAvailed;
-    }
 
-    public void setAvailed(boolean availed) {
-        this.isAvailed = availed;
-    }
-
-    public boolean getIsAvailed() {
-        return isAvailed;
-    }
-
-    public void setIsAvailed(boolean isAvailed) {
-        this.isAvailed = isAvailed;
-    }
 
     @JsonProperty("lastConnected")
     public LocalDateTime getLastConnected() {
