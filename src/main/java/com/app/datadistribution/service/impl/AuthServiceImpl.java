@@ -55,6 +55,7 @@ public class AuthServiceImpl implements IAuthService {
     private final UserMapper userMapper;
     private final RefreshTokenService refreshTokenService;
     private final IActivityLogService activityLogService;
+    private final com.app.datadistribution.service.interfaces.IUserActivityService userActivityService;
 
     @Override
     @Transactional
@@ -110,6 +111,11 @@ public class AuthServiceImpl implements IAuthService {
 
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
+
+        // Record User Login Activity Session
+        if (userActivityService != null) {
+            userActivityService.recordLogin(user, clientIp, deviceInfo, user.getTokenVersion());
+        }
 
         log.info("LOGIN SUCCESS | User: {} | ID: {} | IP: {}", user.getEmail(), user.getId(), clientIp);
 
@@ -176,6 +182,12 @@ public class AuthServiceImpl implements IAuthService {
     @Override
     @Transactional
     public void logout(String refreshToken) {
+        logout(refreshToken, com.app.datadistribution.enums.LogoutReason.MANUAL_LOGOUT);
+    }
+
+    @Override
+    @Transactional
+    public void logout(String refreshToken, com.app.datadistribution.enums.LogoutReason logoutReason) {
         if (StringUtils.hasText(refreshToken)) {
             refreshTokenService.findByRefreshToken(refreshToken).ifPresent(rt -> {
                 User user = rt.getUser();
@@ -183,11 +195,16 @@ public class AuthServiceImpl implements IAuthService {
                 String clientIp = rt.getClientIp();
 
                 refreshTokenService.revokeByRefreshToken(refreshToken);
-                log.info("LOGOUT SUCCESS | Refresh token revoked");
+
+                if (userActivityService != null && user != null) {
+                    userActivityService.recordLogout(user.getId(), refreshToken, logoutReason != null ? logoutReason : com.app.datadistribution.enums.LogoutReason.MANUAL_LOGOUT);
+                }
+
+                log.info("LOGOUT SUCCESS | Refresh token revoked | Reason: {}", logoutReason);
 
                 activityLogService.logActivity(
                         ActivityType.LOGOUT,
-                        String.format("Logout from device. IP: %s, Browser: %s, OS: %s, Device: %s", clientIp, RefreshTokenService.getBrowser(deviceInfo), RefreshTokenService.getOs(deviceInfo), RefreshTokenService.getDevice(deviceInfo)),
+                        String.format("Logout from device (%s). IP: %s, Browser: %s, OS: %s, Device: %s", logoutReason, clientIp, RefreshTokenService.getBrowser(deviceInfo), RefreshTokenService.getOs(deviceInfo), RefreshTokenService.getDevice(deviceInfo)),
                         user.getEmail()
                 );
             });
@@ -205,6 +222,11 @@ public class AuthServiceImpl implements IAuthService {
             userRepository.save(user);
 
             refreshTokenService.revokeAllByUserId(userId);
+
+            if (userActivityService != null) {
+                userActivityService.recordLogout(userId, null, com.app.datadistribution.enums.LogoutReason.SYSTEM_LOGOUT);
+            }
+
             log.info("GLOBAL LOGOUT SUCCESS | All sessions revoked for userId={}", userId);
 
             activityLogService.logActivity(ActivityType.GLOBAL_LOGOUT,

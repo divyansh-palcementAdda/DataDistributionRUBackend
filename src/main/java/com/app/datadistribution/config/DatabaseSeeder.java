@@ -129,7 +129,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		Set<Permission> adminPermissions = filterPermissions(allPermissions,
 				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
 				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "FOLLOWUP_",
-				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_");
+				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_");
 		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
 		// 3. HOD Role (Department-level Operational & Management Access)
@@ -167,6 +167,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DASHBOARD_USERS_NOT_LOGGED_IN_READ.name())
 							|| n.equals(PermissionType.DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_VIEW.name())
 							|| n.equals(PermissionType.DASHBOARD_FOLLOWUP_USERS_NOT_LOGGED_IN_11AM_READ.name())
+							|| n.startsWith("DATA_SEGREGATION_")
+							|| n.startsWith("USER_ACTIVITY_")
 							|| n.equals(PermissionType.DEPARTMENT_VIEW.name())
 							|| n.equals(PermissionType.DEPARTMENT_USER_VIEW.name())
 							|| n.equals(PermissionType.DEPARTMENT_HOD_VIEW.name())
@@ -220,6 +222,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.COURSE_USP_VIEW.name())
 							|| n.equals(PermissionType.DEPARTMENT_VIEW.name())
 							|| n.equals(PermissionType.USER_READ.name())
+							|| n.equals(PermissionType.USER_ACTIVITY_VIEW.name())
 							|| n.equals(PermissionType.AUTH_READ.name())
 							|| n.equals(PermissionType.LEAD_STATUS_VIEW.name())
 							|| n.equals(PermissionType.LEAD_STATUS_HISTORY_VIEW.name())

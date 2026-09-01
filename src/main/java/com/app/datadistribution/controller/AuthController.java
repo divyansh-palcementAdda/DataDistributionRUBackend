@@ -86,7 +86,14 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Refresh token is required in body", HttpStatus.BAD_REQUEST.value()));
         }
-        authService.logout(refreshToken);
+        String reasonStr = requestBody.get("logoutReason");
+        com.app.datadistribution.enums.LogoutReason reason = com.app.datadistribution.enums.LogoutReason.MANUAL_LOGOUT;
+        if (reasonStr != null && !reasonStr.isBlank()) {
+            try {
+                reason = com.app.datadistribution.enums.LogoutReason.valueOf(reasonStr.trim());
+            } catch (IllegalArgumentException ignored) {}
+        }
+        authService.logout(refreshToken, reason);
         return ResponseEntity.ok(ApiResponse.success("Logout successful", null, HttpStatus.OK.value()));
     }
 

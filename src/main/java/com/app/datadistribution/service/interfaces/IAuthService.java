@@ -23,6 +23,8 @@ public interface IAuthService {
 
     void logout(String refreshToken) throws BadRequestException;
 
+    void logout(String refreshToken, com.app.datadistribution.enums.LogoutReason logoutReason) throws BadRequestException;
+
     void logoutAll(UUID userId) throws BadRequestException;
 
     UserResponse register(RegisterRequest request) throws BadRequestException, AccessDeniedException;
