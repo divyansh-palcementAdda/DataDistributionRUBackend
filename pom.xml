@@ -186,6 +186,13 @@
 
                     <annotationProcessorPaths>
 
+                        <!-- Lombok MapStruct Binding -->
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>0.2.0</version>
+                        </path>
+
                         <!-- Lombok -->
                         <path>
                             <groupId>org.projectlombok</groupId>

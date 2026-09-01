@@ -4,10 +4,15 @@ import com.app.datadistribution.dto.lead.CancelFollowUpRequest;
 import com.app.datadistribution.dto.lead.CompleteFollowUpRequest;
 import com.app.datadistribution.dto.lead.LeadFollowUpRequest;
 import com.app.datadistribution.dto.lead.LeadFollowUpResponse;
+import com.app.datadistribution.dto.lead.RescheduleFollowUpRequest;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.FollowUpStatus;
+import com.app.datadistribution.event.FollowUpCancelledEvent;
+import com.app.datadistribution.event.FollowUpCompletedEvent;
+import com.app.datadistribution.event.FollowUpRescheduledEvent;
+import com.app.datadistribution.event.FollowUpScheduledEvent;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
@@ -24,6 +29,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -40,6 +46,7 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final ILeadDataScopeService leadDataScopeService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -127,6 +134,19 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         log.info("Follow-up {} scheduled for lead {} on {} by user {}",
                 saved.getId(), lead.getLeadCode(), saved.getFollowUpDate(), currentUser.getUsername());
 
+        // Publish event for transaction-safe email notification after commit
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(FollowUpScheduledEvent.builder()
+                    .followUpId(saved.getId())
+                    .leadId(lead.getId())
+                    .assignedUserId(lead.getAssignedTo() != null ? lead.getAssignedTo().getId() : null)
+                    .followUpDate(saved.getFollowUpDate())
+                    .remarks(saved.getRemarks())
+                    .followUpStatus(saved.getStatus() != null ? saved.getStatus().getDisplayName() : "Pending")
+                    .scheduledByUserId(currentUser.getId())
+                    .build());
+        }
+
         return leadMapper.toDto(saved);
     }
 
@@ -150,6 +170,73 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         return leadFollowUpRepository.findByLeadIdOrderByFollowUpDateDesc(leadId).stream()
                 .map(leadMapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public LeadFollowUpResponse rescheduleFollowUp(UUID followUpId, RescheduleFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+        if (followUpId == null) {
+            throw new BadRequestException("Follow-up ID is required for rescheduling.");
+        }
+        if (request == null || request.getNewFollowUpDate() == null) {
+            throw new BadRequestException("New follow-up date and time is required.");
+        }
+        if (request.getRemarks() == null || request.getRemarks().trim().isEmpty()) {
+            throw new BadRequestException("Remarks/reason is required when rescheduling a follow-up.");
+        }
+
+        LeadFollowUp followUp = leadFollowUpRepository.findById(followUpId)
+                .filter(f -> !f.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Follow-up not found with id: " + followUpId));
+
+        Lead lead = followUp.getLead();
+        if (lead != null) {
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+        }
+
+        if (followUp.isCompleted() || followUp.getStatus() == FollowUpStatus.COMPLETED || followUp.getStatus() == FollowUpStatus.CANCELLED) {
+            throw new BadRequestException("Cannot reschedule a completed or cancelled follow-up.");
+        }
+
+        LocalDateTime previousDate = followUp.getFollowUpDate();
+        LocalDateTime newDate = request.getNewFollowUpDate();
+
+        followUp.setFollowUpDate(newDate);
+        String currentRemarks = followUp.getRemarks();
+        String updatedRemarks = (currentRemarks != null && !currentRemarks.isBlank())
+                ? currentRemarks + " | Rescheduled: " + request.getRemarks().trim()
+                : request.getRemarks().trim();
+        followUp.setRemarks(updatedRemarks);
+
+        LeadFollowUp saved = leadFollowUpRepository.save(followUp);
+
+        if (lead != null) {
+            LocalDateTime nextActiveDate = leadFollowUpRepository.findEarliestActiveFollowUpDateByLeadId(lead.getId());
+            lead.setNextFollowUpDate(nextActiveDate);
+            leadRepository.save(lead);
+        }
+
+        User currentUser = getCurrentUserEntity();
+        log.info("Follow-up {} rescheduled from {} to {} by user {}",
+                followUpId, previousDate, newDate, currentUser.getUsername());
+
+        // Publish event for transaction-safe email notification after commit
+        if (eventPublisher != null) {
+            User assigned = followUp.getAssignedTo() != null ? followUp.getAssignedTo() : (lead != null ? lead.getAssignedTo() : null);
+            eventPublisher.publishEvent(FollowUpRescheduledEvent.builder()
+                    .followUpId(saved.getId())
+                    .leadId(lead != null ? lead.getId() : null)
+                    .assignedUserId(assigned != null ? assigned.getId() : null)
+                    .previousFollowUpDate(previousDate)
+                    .newFollowUpDate(newDate)
+                    .remarks(request.getRemarks().trim())
+                    .followUpStatus(saved.getStatus() != null ? saved.getStatus().getDisplayName() : "Pending")
+                    .rescheduledByUserId(currentUser.getId())
+                    .build());
+        }
+
+        return leadMapper.toDto(saved);
     }
 
     @Override
@@ -183,8 +270,11 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             throw new BadRequestException("Only PENDING or UPCOMING follow-ups can be marked as completed. Current status: " + followUp.getStatus());
         }
 
+        LocalDateTime scheduledDate = followUp.getFollowUpDate();
+        LocalDateTime completedAt = LocalDateTime.now();
+
         followUp.setCompleted(true);
-        followUp.setCompletedAt(LocalDateTime.now());
+        followUp.setCompletedAt(completedAt);
         followUp.setStatus(FollowUpStatus.COMPLETED);
 
         String currentRemarks = followUp.getRemarks();
@@ -202,7 +292,24 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             leadRepository.save(lead);
         }
 
+        User currentUser = getCurrentUserEntity();
         log.info("Follow-up {} marked completed with feedback: {}", followUpId, remarks.trim());
+
+        // Publish event for transaction-safe email notification after commit
+        if (eventPublisher != null) {
+            User assigned = followUp.getAssignedTo() != null ? followUp.getAssignedTo() : (lead != null ? lead.getAssignedTo() : null);
+            eventPublisher.publishEvent(FollowUpCompletedEvent.builder()
+                    .followUpId(saved.getId())
+                    .leadId(lead != null ? lead.getId() : null)
+                    .assignedUserId(assigned != null ? assigned.getId() : null)
+                    .scheduledDate(scheduledDate)
+                    .completedAt(completedAt)
+                    .remarks(remarks.trim())
+                    .finalStatus("COMPLETED")
+                    .completedByUserId(currentUser.getId())
+                    .build());
+        }
+
         return leadMapper.toDto(saved);
     }
 
@@ -237,8 +344,11 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             throw new BadRequestException("Only PENDING or UPCOMING follow-ups can be cancelled. Current status: " + followUp.getStatus());
         }
 
+        LocalDateTime scheduledDate = followUp.getFollowUpDate();
+        LocalDateTime cancelledAt = LocalDateTime.now();
+
         followUp.setStatus(FollowUpStatus.CANCELLED);
-        followUp.setCancelledAt(LocalDateTime.now());
+        followUp.setCancelledAt(cancelledAt);
         followUp.setCancellationRemarks(remarks.trim());
 
         String currentRemarks = followUp.getRemarks();
@@ -256,7 +366,24 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             leadRepository.save(lead);
         }
 
+        User currentUser = getCurrentUserEntity();
         log.info("Follow-up {} marked cancelled with feedback: {}", followUpId, remarks.trim());
+
+        // Publish event for transaction-safe email notification after commit
+        if (eventPublisher != null) {
+            User assigned = followUp.getAssignedTo() != null ? followUp.getAssignedTo() : (lead != null ? lead.getAssignedTo() : null);
+            eventPublisher.publishEvent(FollowUpCancelledEvent.builder()
+                    .followUpId(saved.getId())
+                    .leadId(lead != null ? lead.getId() : null)
+                    .assignedUserId(assigned != null ? assigned.getId() : null)
+                    .scheduledDate(scheduledDate)
+                    .cancelledAt(cancelledAt)
+                    .remarks(followUp.getRemarks())
+                    .cancellationRemarks(remarks.trim())
+                    .cancelledByUserId(currentUser.getId())
+                    .build());
+        }
+
         return leadMapper.toDto(saved);
     }
 
@@ -270,3 +397,4 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
     }
 }
+

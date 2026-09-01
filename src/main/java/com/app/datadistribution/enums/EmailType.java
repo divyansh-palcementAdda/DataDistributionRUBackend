@@ -1,0 +1,13 @@
+package com.app.datadistribution.enums;
+
+public enum EmailType {
+    FOLLOWUP_SCHEDULED,
+    FOLLOWUP_RESCHEDULED,
+    FOLLOWUP_COMPLETED,
+    FOLLOWUP_CANCELLED,
+    DAILY_FOLLOWUP_REMINDER,
+    DATA_ALLOCATED,
+    DATA_REASSIGNED,
+    CUSTOM_EMAIL,
+    TEST_EMAIL
+}

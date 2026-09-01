@@ -48,6 +48,7 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
     private final UserRepository userRepository;
     private final LeadFollowUpRepository leadFollowUpRepository;
     private final LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Value("${app.lead-distribution.max-daily-followups:30}")
     private int maxDailyFollowups;
@@ -86,6 +87,7 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
         int remainingLeadPoolSize = (int) totalAvailableCount;
         int totalAssignedInBatch = 0;
         int leadPointer = 0;
+        String batchId = UUID.randomUUID().toString();
 
         for (UUID userId : uniqueUserIds) {
             Optional<User> userOpt = userRepository.findById(userId).filter(u -> !u.isDeleted());
@@ -187,6 +189,21 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
                             .remarks("Manual rule-based batch lead distribution")
                             .build();
                     leadAssignmentHistoryRepository.save(history);
+                }
+
+                String deptName = (user.getDepartments() != null && !user.getDepartments().isEmpty())
+                        ? user.getDepartments().iterator().next().getName()
+                        : "General Department";
+
+                if (eventPublisher != null) {
+                    eventPublisher.publishEvent(com.app.datadistribution.event.LeadAllocatedEvent.builder()
+                            .targetUserId(user.getId())
+                            .allocatedByUserId(currentUser != null ? currentUser.getId() : null)
+                            .allocatedCount(assignCountForUser)
+                            .departmentName(deptName)
+                            .allocationTime(LocalDateTime.now())
+                            .batchId(batchId)
+                            .build());
                 }
             }
 

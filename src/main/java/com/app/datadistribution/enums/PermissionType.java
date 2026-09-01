@@ -159,5 +159,12 @@ public enum PermissionType {
 
     // User Activity & Session Permissions
     USER_ACTIVITY_VIEW,
-    USER_ACTIVITY_DETAILS
+    USER_ACTIVITY_DETAILS,
+
+    // Email & Notification Permissions
+    EMAIL_SEND,
+    EMAIL_LOG_VIEW,
+    EMAIL_CONFIG_VIEW,
+    EMAIL_CONFIG_TEST
 }
+

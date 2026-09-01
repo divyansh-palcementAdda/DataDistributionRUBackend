@@ -117,6 +117,26 @@ public class FollowUpController {
         return ResponseEntity.ok(ApiResponse.success("Follow-up marked cancelled successfully", response, HttpStatus.OK.value()));
     }
 
+    @PatchMapping("/{id}/reschedule")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Reschedule a follow-up (PATCH)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> rescheduleFollowUpPatch(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody com.app.datadistribution.dto.lead.RescheduleFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+        LeadFollowUpResponse response = leadFollowUpService.rescheduleFollowUp(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up rescheduled successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/reschedule")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Reschedule a follow-up (POST)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> rescheduleFollowUpPost(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody com.app.datadistribution.dto.lead.RescheduleFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+        LeadFollowUpResponse response = leadFollowUpService.rescheduleFollowUp(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up rescheduled successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('FOLLOWUP_VIEW')")
     @Operation(summary = "Get all follow-ups with search, pagination, and dynamic filtering")

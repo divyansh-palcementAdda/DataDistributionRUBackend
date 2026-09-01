@@ -44,5 +44,21 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
 
     @Query("SELECT MIN(f.followUpDate) FROM LeadFollowUp f WHERE f.isDeleted = false AND f.lead.id = :leadId AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING)")
     LocalDateTime findEarliestActiveFollowUpDateByLeadId(@Param("leadId") UUID leadId);
+
+    @Query("SELECT f FROM LeadFollowUp f "
+         + "JOIN FETCH f.lead l "
+         + "LEFT JOIN FETCH l.currentStatus "
+         + "LEFT JOIN FETCH l.course "
+         + "LEFT JOIN FETCH f.assignedTo "
+         + "LEFT JOIN FETCH l.assignedTo "
+         + "WHERE f.isDeleted = false AND l.isDeleted = false "
+         + "AND f.completed = false "
+         + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "ORDER BY f.followUpDate ASC")
+    List<LeadFollowUp> findActiveFollowUpsForDateRangeWithDetails(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay);
 }
+
 

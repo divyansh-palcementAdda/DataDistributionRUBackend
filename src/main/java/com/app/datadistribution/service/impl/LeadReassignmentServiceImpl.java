@@ -77,6 +77,7 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
     private final IActivityLogService activityLogService;
     private final IUserDataScopeService dataScopeService;
     private final EntityManager entityManager;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Value("${app.lead-distribution.max-daily-followups:30}")
     private int maxDailyFollowUps;
@@ -389,6 +390,24 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
                     .count(followUpsToReassign.size())
                     .build());
 
+            String deptName = (targetUser.getDepartments() != null && !targetUser.getDepartments().isEmpty())
+                    ? targetUser.getDepartments().iterator().next().getName()
+                    : "Department";
+
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(com.app.datadistribution.event.LeadReassignedEvent.builder()
+                        .targetUserId(targetUser.getId())
+                        .sourceUserId(sourceUser.getId())
+                        .sourceUserName((sourceUser.getFirstName() + " " + sourceUser.getLastName()).trim())
+                        .reassignedByUserId(currentUser.getId())
+                        .reassignedCount(followUpsToReassign.size())
+                        .departmentName(deptName)
+                        .reason(reason)
+                        .reassignmentTime(LocalDateTime.now())
+                        .batchId(UUID.randomUUID().toString())
+                        .build());
+            }
+
             totalReassignedCount += followUpsToReassign.size();
         }
 
@@ -636,6 +655,24 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
                     .count(leadsToReassign.size())
                     .pendingFollowUpsCount(pendingFollowUpCountForUser)
                     .build());
+
+            String deptName = (targetUser.getDepartments() != null && !targetUser.getDepartments().isEmpty())
+                    ? targetUser.getDepartments().iterator().next().getName()
+                    : "Department";
+
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(com.app.datadistribution.event.LeadReassignedEvent.builder()
+                        .targetUserId(targetUser.getId())
+                        .sourceUserId(sourceUser.getId())
+                        .sourceUserName((sourceUser.getFirstName() + " " + sourceUser.getLastName()).trim())
+                        .reassignedByUserId(currentUser.getId())
+                        .reassignedCount(leadsToReassign.size())
+                        .departmentName(deptName)
+                        .reason(reason)
+                        .reassignmentTime(LocalDateTime.now())
+                        .batchId(UUID.randomUUID().toString())
+                        .build());
+            }
 
             totalReassignedLeads += leadsToReassign.size();
             totalReassignedFollowUps += pendingFollowUpCountForUser;

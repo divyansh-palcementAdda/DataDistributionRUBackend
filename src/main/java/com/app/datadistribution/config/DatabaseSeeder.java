@@ -129,7 +129,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		Set<Permission> adminPermissions = filterPermissions(allPermissions,
 				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
 				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "FOLLOWUP_",
-				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_");
+				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_", "EMAIL_");
 		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
 		// 3. HOD Role (Department-level Operational & Management Access)
