@@ -35,9 +35,13 @@ public class GradeServiceImpl implements IGradeService {
     private final GradeRepository gradeRepository;
     private final LeadMapper leadMapper;
     private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
+    private final com.app.datadistribution.service.interfaces.IUserDataScopeService dataScopeService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "id", "name", "code", "description", "active", "displayOrder", "createdAt", "updatedAt"
+            "id", "name", "gradename", "code", "gradecode", "description", "active", "status", "displayOrder", "display_order",
+            "createdAt", "created_at", "updatedAt", "updated_at", "totalData", "total_data",
+            "totalAllottedData", "total_allotted_data", "totalUnallottedData", "total_unallotted_data",
+            "totalAvailedData", "total_availed_data"
     );
 
     @Override
@@ -111,36 +115,13 @@ public class GradeServiceImpl implements IGradeService {
     @Override
     @Transactional(readOnly = true)
     public GradePageResponse getAll(PageRequestDTO pageRequest, String status) {
-        String sortBy = pageRequest.getSortBy();
-        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
-            sortBy = "displayOrder";
+        try {
+            com.app.datadistribution.service.dto.UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+            return gradeRepository.fetchGradesWithLeadStats(pageRequest, status, dataScope);
+        } catch (Exception e) {
+            log.error("Failed to retrieve user data scope for grades, falling back to default", e);
+            throw new RuntimeException("Failed to resolve user data scope", e);
         }
-        Sort.Direction direction = Sort.Direction.fromString(
-                pageRequest.getSortDirection() != null ? pageRequest.getSortDirection() : "ASC"
-        );
-        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, sortBy));
-
-        Specification<Grade> spec = Specification.where(isNotDeleted());
-        if (status != null && !status.isBlank()) {
-            spec = spec.and(filterByStatus(status));
-        }
-        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
-            spec = spec.and(searchGrades(pageRequest.getSearch()));
-        }
-
-        Page<Grade> page = gradeRepository.findAll(spec, pageable);
-        List<GradeResponse> content = page.getContent().stream()
-                .map(leadMapper::toDto)
-                .collect(Collectors.toList());
-
-        return GradePageResponse.builder()
-                .content(content)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
     }
 
     @Override

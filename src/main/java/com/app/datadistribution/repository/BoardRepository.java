@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface BoardRepository extends JpaRepository<Board, UUID>, JpaSpecificationExecutor<Board> {
+public interface BoardRepository extends JpaRepository<Board, UUID>, JpaSpecificationExecutor<Board>, BoardRepositoryCustom {
     Optional<Board> findByNameIgnoreCase(String name);
     Optional<Board> findByCodeIgnoreCase(String code);
     Optional<Board> findByCode(String code);

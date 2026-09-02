@@ -23,4 +23,16 @@ public class GradeResponse {
     private Integer displayOrder;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Builder.Default
+    private Long totalData = 0L;
+
+    @Builder.Default
+    private Long totalAllottedData = 0L;
+
+    @Builder.Default
+    private Long totalUnallottedData = 0L;
+
+    @Builder.Default
+    private Long totalAvailedData = 0L;
 }

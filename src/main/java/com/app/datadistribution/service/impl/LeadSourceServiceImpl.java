@@ -35,9 +35,12 @@ public class LeadSourceServiceImpl implements ILeadSourceService {
     private final LeadSourceRepository leadSourceRepository;
     private final LeadMapper leadMapper;
     private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
+    private final com.app.datadistribution.service.interfaces.IUserDataScopeService dataScopeService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "id", "name", "code", "description", "active", "createdAt", "updatedAt"
+            "id", "name", "code", "description", "active", "status", "createdAt", "created_at",
+            "updatedAt", "updated_at", "totalData", "total_data", "totalAllottedData", "total_allotted_data",
+            "totalAvailedData", "total_availed_data"
     );
 
     @Override
@@ -102,36 +105,13 @@ public class LeadSourceServiceImpl implements ILeadSourceService {
     @Override
     @Transactional(readOnly = true)
     public LeadSourcePageResponse getAll(PageRequestDTO pageRequest, String status) {
-        String sortBy = pageRequest.getSortBy();
-        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
-            sortBy = "createdAt";
+        try {
+            com.app.datadistribution.service.dto.UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+            return leadSourceRepository.fetchLeadSourcesWithLeadStats(pageRequest, status, dataScope);
+        } catch (Exception e) {
+            log.error("Failed to retrieve user data scope for lead sources, falling back to default", e);
+            throw new RuntimeException("Failed to resolve user data scope", e);
         }
-        Sort.Direction direction = Sort.Direction.fromString(
-                pageRequest.getSortDirection() != null ? pageRequest.getSortDirection() : "ASC"
-        );
-        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, sortBy));
-
-        Specification<LeadSource> spec = Specification.where(isNotDeleted());
-        if (status != null && !status.isBlank()) {
-            spec = spec.and(filterByStatus(status));
-        }
-        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
-            spec = spec.and(searchLeadSources(pageRequest.getSearch()));
-        }
-
-        Page<LeadSource> page = leadSourceRepository.findAll(spec, pageable);
-        List<LeadSourceResponse> content = page.getContent().stream()
-                .map(leadMapper::toDto)
-                .collect(Collectors.toList());
-
-        return LeadSourcePageResponse.builder()
-                .content(content)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
     }
 
     @Override

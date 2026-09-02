@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface LeadSourceRepository extends JpaRepository<LeadSource, UUID>, JpaSpecificationExecutor<LeadSource> {
+public interface LeadSourceRepository extends JpaRepository<LeadSource, UUID>, JpaSpecificationExecutor<LeadSource>, LeadSourceRepositoryCustom {
     Optional<LeadSource> findByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);
