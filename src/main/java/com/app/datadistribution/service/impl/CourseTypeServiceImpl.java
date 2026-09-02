@@ -6,11 +6,15 @@ import com.app.datadistribution.dto.course.CourseTypeRequestDTO;
 import com.app.datadistribution.dto.course.CourseTypeResponseDTO;
 import com.app.datadistribution.entity.CourseType;
 import com.app.datadistribution.enums.Status;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.DuplicateResourceException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
+import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.mapper.CourseMapper;
 import com.app.datadistribution.repository.CourseTypeRepository;
+import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ICourseTypeService;
+import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +35,7 @@ public class CourseTypeServiceImpl implements ICourseTypeService {
 
     private final CourseTypeRepository courseTypeRepository;
     private final CourseMapper courseMapper;
+    private final IUserDataScopeService dataScopeService;
 
     @Override
     @Transactional
@@ -75,21 +80,9 @@ public class CourseTypeServiceImpl implements ICourseTypeService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponseDTO<CourseTypeResponseDTO> getAll(PageRequestDTO pageRequest) {
-        Sort.Direction direction = Sort.Direction.fromString(pageRequest.getSortDirection());
-        Pageable pageable = PageRequest.of(pageRequest.getPage(), pageRequest.getSize(), Sort.by(direction, pageRequest.getSortBy()));
-
-        Specification<CourseType> spec = Specification.where(isNotDeleted());
-        if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
-            spec = spec.and(searchCourseTypes(pageRequest.getSearch()));
-        }
-
-        Page<CourseType> page = courseTypeRepository.findAll(spec, pageable);
-        List<CourseTypeResponseDTO> content = page.getContent().stream()
-                .map(courseMapper::toDto)
-                .collect(Collectors.toList());
-
-        return PageResponseDTO.of(content, page);
+    public PageResponseDTO<CourseTypeResponseDTO> getAll(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return courseTypeRepository.fetchCourseTypesWithLeadStats(pageRequest, dataScope);
     }
 
     @Override

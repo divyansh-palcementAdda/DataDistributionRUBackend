@@ -5,6 +5,8 @@ import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.common.PageResponseDTO;
 import com.app.datadistribution.dto.course.CourseTypeRequestDTO;
 import com.app.datadistribution.dto.course.CourseTypeResponseDTO;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.service.interfaces.ICourseTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,7 +62,7 @@ public class CourseTypeController {
             @RequestParam(value = "size", defaultValue = "10") int size,
             @RequestParam(value = "sortBy", defaultValue = "id") String sortBy,
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
-            @RequestParam(value = "search", required = false) String search) {
+            @RequestParam(value = "search", required = false) String search) throws UnauthorizedException, BadRequestException {
 
         PageRequestDTO pageRequest = PageRequestDTO.builder()
                 .page(page)

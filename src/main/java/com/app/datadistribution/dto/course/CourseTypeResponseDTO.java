@@ -21,4 +21,16 @@ public class CourseTypeResponseDTO {
     private Status status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Builder.Default
+    private long totalData = 0L;
+
+    @Builder.Default
+    private long totalAllottedData = 0L;
+
+    @Builder.Default
+    private long totalUnallottedData = 0L;
+
+    @Builder.Default
+    private long totalAvailedData = 0L;
 }

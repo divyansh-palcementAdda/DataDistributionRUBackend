@@ -56,19 +56,21 @@ class LowDataUsersTest {
         adminUser = User.builder().username("admin").active(true).roles(Set.of(adminRole)).build();
         adminUser.setId(UUID.randomUUID());
 
-        userZero = User.builder().username("user0").firstName("User").lastName("Zero").email("u0@test.com").active(true)
+        Role counselorRole = Role.builder().name(RoleType.COUNSELOR.name()).build();
+
+        userZero = User.builder().username("user0").firstName("User").lastName("Zero").email("u0@test.com").active(true).roles(Set.of(counselorRole))
                 .build();
         userZero.setId(UUID.randomUUID());
 
-        userNine = User.builder().username("user9").firstName("User").lastName("Nine").email("u9@test.com").active(true)
+        userNine = User.builder().username("user9").firstName("User").lastName("Nine").email("u9@test.com").active(true).roles(Set.of(counselorRole))
                 .build();
         userNine.setId(UUID.randomUUID());
 
-        userTen = User.builder().username("user10").firstName("User").lastName("Ten").email("u10@test.com").active(true)
+        userTen = User.builder().username("user10").firstName("User").lastName("Ten").email("u10@test.com").active(true).roles(Set.of(counselorRole))
                 .build();
         userTen.setId(UUID.randomUUID());
 
-        userInactive = User.builder().username("userInactive").active(false).build();
+        userInactive = User.builder().username("userInactive").active(false).roles(Set.of(counselorRole)).build();
         userInactive.setId(UUID.randomUUID());
 
         com.app.datadistribution.service.dto.UserDataScope systemScope = com.app.datadistribution.service.dto.UserDataScope.builder()
@@ -133,5 +135,33 @@ class LowDataUsersTest {
 
         assertEquals(userNine.getId(), response.getContent().get(1).getUserId());
         assertEquals(9, response.getContent().get(1).getRemainingDataCount());
+    }
+
+    @Test
+    void testGetLowDataUsers_ExcludesAdminAndSuperAdmin() throws UnauthorizedException, BadRequestException {
+        Role superAdminRole = Role.builder().name(RoleType.SUPER_ADMIN.name()).build();
+        User superAdmin = User.builder().username("superadmin").firstName("Super").lastName("Admin").email("superadmin@test.com").active(true).roles(Set.of(superAdminRole)).build();
+        superAdmin.setId(UUID.randomUUID());
+
+        Role adminRole = Role.builder().name(RoleType.ADMIN.name()).build();
+        User stdAdmin = User.builder().username("adminUser").firstName("Std").lastName("Admin").email("admin@test.com").active(true).roles(Set.of(adminRole)).build();
+        stdAdmin.setId(UUID.randomUUID());
+
+        lenient().when(userRepository.findAll()).thenReturn(List.of(superAdmin, stdAdmin, userZero));
+        lenient().when(leadRepository.findUnavailedLeadCountsGroupedByUser()).thenReturn(List.of(
+                new Object[]{superAdmin.getId(), 0L},
+                new Object[]{stdAdmin.getId(), 0L},
+                new Object[]{userZero.getId(), 0L}
+        ));
+        lenient().when(leadRepository.findAllottedLeadCountsGroupedByUser()).thenReturn(List.of());
+
+        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+        LowDataUserPageResponseDTO response = dashboardService.getLowDataUsers(pageRequest);
+
+        assertNotNull(response);
+        assertEquals(1, response.getTotalElements());
+        assertEquals(userZero.getId(), response.getContent().get(0).getUserId());
+        assertFalse(response.getContent().stream().anyMatch(u -> u.getUserId().equals(superAdmin.getId())));
+        assertFalse(response.getContent().stream().anyMatch(u -> u.getUserId().equals(stdAdmin.getId())));
     }
 }

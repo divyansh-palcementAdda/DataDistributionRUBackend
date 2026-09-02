@@ -968,66 +968,50 @@ public class DashboardServiceImpl implements IDashboardService {
         return entityManager.createQuery(query).getSingleResult();
     }
 
+    private boolean isEligibleOperationalUser(User user) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
+            return false;
+        }
+        boolean hasAdminRole = user.getRoles().stream()
+                .anyMatch(r -> r.getName() != null && (
+                        r.getName().equalsIgnoreCase(RoleType.SUPER_ADMIN.name())
+                        || r.getName().equalsIgnoreCase(RoleType.ADMIN.name())
+                        || r.getName().equalsIgnoreCase("SUPER_ADMIN")
+                        || r.getName().equalsIgnoreCase("ADMIN")
+                        || r.getName().equalsIgnoreCase("ROLE_SUPER_ADMIN")
+                        || r.getName().equalsIgnoreCase("ROLE_ADMIN")
+                ));
+        if (hasAdminRole) {
+            return false;
+        }
+        return user.getRoles().stream()
+                .anyMatch(r -> {
+                    if (r.getName() == null) return false;
+                    String upper = r.getName().toUpperCase();
+                    return upper.equals(RoleType.COUNSELOR.name())
+                            || upper.equals(RoleType.HOD.name())
+                            || upper.equals(RoleType.USER.name())
+                            || upper.contains("COUNSELOR")
+                            || upper.contains("COUNSELLOR")
+                            || upper.contains("HOD")
+                            || upper.contains("HEAD");
+                });
+    }
+
     private long countCounsellorsLoggedTodayInScope(UserDataScope dataScope) {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            User u = dataScope.getCurrentUser();
-            if (u != null && u.getLastLogin() != null && !u.getLastLogin().isBefore(startOfDay)) {
-                return 1L;
-            }
-            return 0L;
-        }
-
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> query = cb.createQuery(Long.class);
-        Root<User> root = query.from(User.class);
-
-        List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.equal(root.get("active"), true));
-        predicates.add(cb.equal(root.get("isDeleted"), false));
-        predicates.add(cb.greaterThanOrEqualTo(root.get("lastLogin"), startOfDay));
-
-        if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            if (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty()) {
-                predicates.add(root.get("id").in(dataScope.getDepartmentUserIds()));
-            } else {
-                return 0L;
-            }
-        }
-
-        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
-        return entityManager.createQuery(query).getSingleResult();
+        List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
+        return activeUsers.stream()
+                .filter(u -> u.getLastLogin() != null && !u.getLastLogin().isBefore(startOfDay))
+                .count();
     }
 
     private long countCounsellorsWorkingInScope(UserDataScope dataScope) {
         LocalDateTime eightHoursAgo = LocalDateTime.now().minusHours(8);
-        if (dataScope.getScopeType() == ScopeType.SELF) {
-            User u = dataScope.getCurrentUser();
-            if (u != null && u.isActive() && !u.isDeleted() && u.getLastLogin() != null && !u.getLastLogin().isBefore(eightHoursAgo)) {
-                return 1L;
-            }
-            return 0L;
-        }
-
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> query = cb.createQuery(Long.class);
-        Root<User> root = query.from(User.class);
-
-        List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.equal(root.get("active"), true));
-        predicates.add(cb.equal(root.get("isDeleted"), false));
-        predicates.add(cb.greaterThanOrEqualTo(root.get("lastLogin"), eightHoursAgo));
-
-        if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {
-            if (dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().isEmpty()) {
-                predicates.add(root.get("id").in(dataScope.getDepartmentUserIds()));
-            } else {
-                return 0L;
-            }
-        }
-
-        query.select(cb.countDistinct(root.get("id"))).where(predicates.toArray(new Predicate[0]));
-        return entityManager.createQuery(query).getSingleResult();
+        List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
+        return activeUsers.stream()
+                .filter(u -> u.getLastLogin() != null && !u.getLastLogin().isBefore(eightHoursAgo))
+                .count();
     }
 
     private String formatSectionName(String sectionCode) {
@@ -1054,16 +1038,20 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
     private List<User> getActiveMonitoredUsersInScope(UserDataScope dataScope) {
+        if (dataScope == null) {
+            return Collections.emptyList();
+        }
+
         if (dataScope.getScopeType() == ScopeType.SELF) {
             User current = dataScope.getCurrentUser();
-            if (current != null && current.isActive() && !current.isDeleted()) {
+            if (current != null && current.isActive() && !current.isDeleted() && isEligibleOperationalUser(current)) {
                 return List.of(current);
             }
             return Collections.emptyList();
         }
 
         List<User> activeUsers = userRepository.findAll().stream()
-                .filter(u -> u.isActive() && !u.isDeleted())
+                .filter(u -> u.isActive() && !u.isDeleted() && isEligibleOperationalUser(u))
                 .collect(Collectors.toList());
 
         if (dataScope.getScopeType() == ScopeType.DEPARTMENT) {

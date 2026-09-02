@@ -4,6 +4,9 @@ import com.app.datadistribution.common.PageRequestDTO;
 import com.app.datadistribution.common.PageResponseDTO;
 import com.app.datadistribution.dto.course.CourseTypeRequestDTO;
 import com.app.datadistribution.dto.course.CourseTypeResponseDTO;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.exception.UnauthorizedException;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -11,7 +14,7 @@ public interface ICourseTypeService {
     CourseTypeResponseDTO create(CourseTypeRequestDTO request);
     CourseTypeResponseDTO update(UUID id, CourseTypeRequestDTO request);
     CourseTypeResponseDTO getById(UUID id);
-    PageResponseDTO<CourseTypeResponseDTO> getAll(PageRequestDTO pageRequest);
+    PageResponseDTO<CourseTypeResponseDTO> getAll(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
     List<CourseTypeResponseDTO> getAllActive();
     void delete(UUID id);
     CourseTypeResponseDTO toggleActive(UUID id);

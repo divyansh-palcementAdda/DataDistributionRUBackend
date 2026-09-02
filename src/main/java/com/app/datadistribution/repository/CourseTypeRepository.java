@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface CourseTypeRepository extends JpaRepository<CourseType, UUID>, JpaSpecificationExecutor<CourseType> {
+public interface CourseTypeRepository extends JpaRepository<CourseType, UUID>, JpaSpecificationExecutor<CourseType>, CourseTypeRepositoryCustom {
     Optional<CourseType> findByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);

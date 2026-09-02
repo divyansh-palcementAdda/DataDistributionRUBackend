@@ -73,16 +73,18 @@ class UserLoginDashboardCardsTest {
         adminUser = User.builder().username("admin").active(true).roles(Set.of(adminRole)).build();
         adminUser.setId(UUID.randomUUID());
 
-        userLoggedInEarly = User.builder().username("early").firstName("Early").lastName("User").email("early@test.com").active(true).build();
+        Role counselorRole = Role.builder().name(RoleType.COUNSELOR.name()).build();
+
+        userLoggedInEarly = User.builder().username("early").firstName("Early").lastName("User").email("early@test.com").active(true).roles(Set.of(counselorRole)).build();
         userLoggedInEarly.setId(UUID.randomUUID());
 
-        userLoggedInLate = User.builder().username("late").firstName("Late").lastName("User").email("late@test.com").active(true).build();
+        userLoggedInLate = User.builder().username("late").firstName("Late").lastName("User").email("late@test.com").active(true).roles(Set.of(counselorRole)).build();
         userLoggedInLate.setId(UUID.randomUUID());
 
-        userNotLoggedInWithFollowUp = User.builder().username("nologin_fu").firstName("NoLogin").lastName("FollowUp").email("nologin_fu@test.com").active(true).build();
+        userNotLoggedInWithFollowUp = User.builder().username("nologin_fu").firstName("NoLogin").lastName("FollowUp").email("nologin_fu@test.com").active(true).roles(Set.of(counselorRole)).build();
         userNotLoggedInWithFollowUp.setId(UUID.randomUUID());
 
-        userNotLoggedInNoFollowUp = User.builder().username("nologin_nofu").firstName("NoLogin").lastName("NoFollowUp").email("nologin_nofu@test.com").active(true).build();
+        userNotLoggedInNoFollowUp = User.builder().username("nologin_nofu").firstName("NoLogin").lastName("NoFollowUp").email("nologin_nofu@test.com").active(true).roles(Set.of(counselorRole)).build();
         userNotLoggedInNoFollowUp.setId(UUID.randomUUID());
 
         com.app.datadistribution.service.dto.UserDataScope systemScope = com.app.datadistribution.service.dto.UserDataScope.builder()
@@ -124,6 +126,29 @@ class UserLoginDashboardCardsTest {
         assertTrue(response.getContent().stream().anyMatch(u -> u.getUserId().equals(userNotLoggedInWithFollowUp.getId())));
         assertTrue(response.getContent().stream().anyMatch(u -> u.getUserId().equals(userNotLoggedInNoFollowUp.getId())));
         assertFalse(response.getContent().stream().anyMatch(u -> u.getUserId().equals(userLoggedInEarly.getId())));
+    }
+
+    @Test
+    void testUsersNotLoggedInToday_ExcludesAdminAndSuperAdmin() throws UnauthorizedException, BadRequestException {
+        Role superAdminRole = Role.builder().name(RoleType.SUPER_ADMIN.name()).build();
+        User superAdmin = User.builder().username("superadmin").firstName("Super").lastName("Admin").email("superadmin@test.com").active(true).roles(Set.of(superAdminRole)).build();
+        superAdmin.setId(UUID.randomUUID());
+
+        Role standardAdminRole = Role.builder().name(RoleType.ADMIN.name()).build();
+        User standardAdmin = User.builder().username("stdadmin").firstName("Standard").lastName("Admin").email("stdadmin@test.com").active(true).roles(Set.of(standardAdminRole)).build();
+        standardAdmin.setId(UUID.randomUUID());
+
+        lenient().when(userRepository.findAll()).thenReturn(List.of(superAdmin, standardAdmin, userNotLoggedInWithFollowUp));
+        lenient().when(activityLogRepository.findDailyLoginStatsGroupedByPerformedBy(any(), any())).thenReturn(new ArrayList<>());
+
+        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+        UserNotLoggedInPageResponseDTO response = dashboardService.getUsersNotLoggedInToday(pageRequest);
+
+        assertNotNull(response);
+        assertEquals(1, response.getTotalElements());
+        assertEquals(userNotLoggedInWithFollowUp.getId(), response.getContent().get(0).getUserId());
+        assertFalse(response.getContent().stream().anyMatch(u -> u.getUserId().equals(superAdmin.getId())));
+        assertFalse(response.getContent().stream().anyMatch(u -> u.getUserId().equals(standardAdmin.getId())));
     }
 
     @Test
