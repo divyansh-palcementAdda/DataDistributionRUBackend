@@ -28,6 +28,10 @@ import com.app.datadistribution.dto.user.UserResponse;
 import com.app.datadistribution.dto.user.UserUpdateRequest;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.dto.user.UserPerformanceFilterRequest;
+import com.app.datadistribution.dto.user.UserPerformancePageResponse;
+import com.app.datadistribution.service.interfaces.IUserPerformanceService;
 import com.app.datadistribution.service.interfaces.IUserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +46,39 @@ import lombok.RequiredArgsConstructor;
 public class UserController {
 
     private final IUserService userService;
+    private final IUserPerformanceService userPerformanceService;
+
+    @GetMapping("/performance")
+    @PreAuthorize("hasAnyAuthority('USER_READ', 'DEPARTMENT_COUNSELLOR_VIEW', 'USER_ACTIVITY_VIEW', 'DASHBOARD_VIEW')")
+    @Operation(summary = "Get consolidated user performance and operational analytics")
+    public ResponseEntity<ApiResponse<UserPerformancePageResponse>> getUserPerformance(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "sortBy", defaultValue = "userName") String sortBy,
+            @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "role", required = false) String role,
+            @RequestParam(value = "roles", required = false) List<String> roles,
+            @RequestParam(value = "departmentId", required = false) UUID departmentId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "currentlyWorking", required = false) Boolean currentlyWorking) throws UnauthorizedException, BadRequestException {
+
+        UserPerformanceFilterRequest filterRequest = UserPerformanceFilterRequest.builder()
+                .page(page)
+                .size(size)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .search(search)
+                .role(role)
+                .roles(roles)
+                .departmentId(departmentId)
+                .status(status)
+                .currentlyWorking(currentlyWorking)
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success("User performance retrieved successfully", response, HttpStatus.OK.value()));
+    }
 
     @GetMapping
     @PreAuthorize("hasAuthority('USER_READ')")
