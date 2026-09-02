@@ -293,4 +293,24 @@ class CourseTypeLeadStatsTest {
         repositoryCustomImpl.fetchCourseTypesWithLeadStats(request, counselorScope);
         verify(dataQuery, atLeastOnce()).setParameter("scopeUserId", counselorUserId);
     }
+
+    @Test
+    @DisplayName("I. Course Type Visibility: Non-admin scopes generate INNER JOIN with stats.total_data > 0")
+    void testCourseTypeVisibility_NonAdminUsesInnerJoin() {
+        Query countQuery = mock(Query.class);
+        when(countQuery.getSingleResult()).thenReturn(1L);
+
+        Query dataQuery = mock(Query.class);
+        when(dataQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        when(entityManager.createNativeQuery(contains("INNER JOIN")))
+                .thenReturn(countQuery)
+                .thenReturn(dataQuery);
+
+        PageRequestDTO request = PageRequestDTO.builder().page(0).size(10).build();
+        repositoryCustomImpl.fetchCourseTypesWithLeadStats(request, hodScope);
+
+        verify(entityManager, times(1)).createNativeQuery(contains("SELECT COUNT(ct.id) FROM course_types ct INNER JOIN"));
+        verify(entityManager, times(1)).createNativeQuery(contains("SELECT ct.id AS id, ct.name AS name, ct.description AS description, ct.status AS status, ct.created_at AS created_at, ct.updated_at AS updated_at, COALESCE(stats.total_data, 0) AS total_data, COALESCE(stats.total_allotted_data, 0) AS total_allotted_data, COALESCE(stats.total_unallotted_data, 0) AS total_unallotted_data, COALESCE(stats.total_availed_data, 0) AS total_availed_data FROM course_types ct INNER JOIN"));
+    }
 }

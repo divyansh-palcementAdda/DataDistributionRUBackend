@@ -37,11 +37,14 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                 ? pageRequest.getSearch().trim()
                 : null;
 
-        // 1. Build Scope Clause and Parameters for Leads
+        // 1. Determine Scope Type
+        boolean isSystemScope = dataScope == null || dataScope.getScopeType() == ScopeType.SYSTEM;
+
+        // 2. Build Scope Clause and Parameters for Leads
         StringBuilder scopeClause = new StringBuilder();
         Map<String, Object> scopeParams = new HashMap<>();
 
-        if (dataScope == null || dataScope.getScopeType() == ScopeType.SYSTEM) {
+        if (isSystemScope) {
             scopeClause.append("1=1");
         } else if (dataScope.getScopeType() == ScopeType.SELF) {
             scopeClause.append("l.assigned_to_id = :scopeUserId");
@@ -52,12 +55,12 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
             UUID userId = dataScope.getUserId();
 
             if (deptIds != null && !deptIds.isEmpty() && deptUserIds != null && !deptUserIds.isEmpty()) {
-                scopeClause.append("(l.assigned_to_id = :scopeUserId OR (l.department_id IN (:scopeDeptIds) AND l.assigned_to_id IS NOT NULL) OR l.assigned_to_id IN (:scopeDeptUserIds))");
+                scopeClause.append("(l.assigned_to_id = :scopeUserId OR l.department_id IN (:scopeDeptIds) OR l.assigned_to_id IN (:scopeDeptUserIds))");
                 scopeParams.put("scopeUserId", userId);
                 scopeParams.put("scopeDeptIds", deptIds);
                 scopeParams.put("scopeDeptUserIds", deptUserIds);
             } else if (deptIds != null && !deptIds.isEmpty()) {
-                scopeClause.append("(l.assigned_to_id = :scopeUserId OR (l.department_id IN (:scopeDeptIds) AND l.assigned_to_id IS NOT NULL))");
+                scopeClause.append("(l.assigned_to_id = :scopeUserId OR l.department_id IN (:scopeDeptIds))");
                 scopeParams.put("scopeUserId", userId);
                 scopeParams.put("scopeDeptIds", deptIds);
             } else {
@@ -66,14 +69,66 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
             }
         }
 
-        // 2. Count Total Matching Course Types
+        // 3. Build Stats Subquery SQL
+        String statsSubquerySql =
+                "  SELECT " +
+                "    lct.course_type_id, " +
+                "    COUNT(DISTINCT lct.lead_id) AS total_data, " +
+                "    COUNT(DISTINCT CASE WHEN lct.assigned_to_id IS NOT NULL THEN lct.lead_id END) AS total_allotted_data, " +
+                "    COUNT(DISTINCT CASE WHEN lct.assigned_to_id IS NULL THEN lct.lead_id END) AS total_unallotted_data, " +
+                "    COUNT(DISTINCT CASE WHEN lct.is_availed = 1 THEN lct.lead_id END) AS total_availed_data " +
+                "  FROM (" +
+                "    SELECT DISTINCT " +
+                "      l.id AS lead_id, " +
+                "      c.course_type_id AS course_type_id, " +
+                "      l.assigned_to_id AS assigned_to_id, " +
+                "      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (" +
+                "        SELECT 1 FROM lead_availed la " +
+                "        WHERE la.lead_id = l.id " +
+                "          AND la.availed_by_user_id = l.assigned_to_id " +
+                "          AND la.is_deleted = false" +
+                "      ) THEN 1 ELSE 0 END AS is_availed " +
+                "    FROM leads l " +
+                "    JOIN courses c ON l.course_id = c.id AND c.is_deleted = false " +
+                "    WHERE l.is_deleted = false AND " + scopeClause + " " +
+                "    UNION " +
+                "    SELECT DISTINCT " +
+                "      l.id AS lead_id, " +
+                "      c.course_type_id AS course_type_id, " +
+                "      l.assigned_to_id AS assigned_to_id, " +
+                "      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (" +
+                "        SELECT 1 FROM lead_availed la " +
+                "        WHERE la.lead_id = l.id " +
+                "          AND la.availed_by_user_id = l.assigned_to_id " +
+                "          AND la.is_deleted = false" +
+                "      ) THEN 1 ELSE 0 END AS is_availed " +
+                "    FROM leads l " +
+                "    JOIN lead_interested_courses lic ON lic.lead_id = l.id " +
+                "    JOIN courses c ON lic.course_id = c.id AND c.is_deleted = false " +
+                "    WHERE l.is_deleted = false AND " + scopeClause + " " +
+                "  ) lct " +
+                "  GROUP BY lct.course_type_id ";
+
+        // 4. Count Total Matching Course Types
         StringBuilder countSql = new StringBuilder();
-        countSql.append("SELECT COUNT(ct.id) FROM course_types ct WHERE ct.is_deleted = false ");
+        if (isSystemScope) {
+            countSql.append("SELECT COUNT(ct.id) FROM course_types ct WHERE ct.is_deleted = false ");
+        } else {
+            countSql.append("SELECT COUNT(ct.id) FROM course_types ct ")
+                    .append("INNER JOIN (").append(statsSubquerySql).append(") stats ON ct.id = stats.course_type_id ")
+                    .append("WHERE ct.is_deleted = false AND stats.total_data > 0 ");
+        }
+
         if (search != null) {
             countSql.append("AND (LOWER(ct.name) LIKE :searchPattern OR LOWER(ct.description) LIKE :searchPattern) ");
         }
 
         Query countQuery = entityManager.createNativeQuery(countSql.toString());
+        if (!isSystemScope) {
+            for (Map.Entry<String, Object> entry : scopeParams.entrySet()) {
+                countQuery.setParameter(entry.getKey(), entry.getValue());
+            }
+        }
         if (search != null) {
             countQuery.setParameter("searchPattern", "%" + search.toLowerCase() + "%");
         }
@@ -93,7 +148,7 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                     .build();
         }
 
-        // 3. Determine Server-Side Sorting Column
+        // 5. Determine Server-Side Sorting Column
         String sortBy = pageRequest.getSortBy() != null ? pageRequest.getSortBy().trim() : "name";
         String sortDir = "DESC".equalsIgnoreCase(pageRequest.getSortDirection()) ? "DESC" : "ASC";
 
@@ -142,7 +197,7 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
 
         String orderByClause = "ORDER BY " + orderCol + " " + sortDir + ", ct.name ASC, ct.id ASC";
 
-        // 4. Build Main Query with CTE / Pre-aggregated subquery
+        // 6. Build Main Data Query
         StringBuilder dataSql = new StringBuilder();
         dataSql.append("SELECT ")
                 .append("ct.id AS id, ")
@@ -155,47 +210,15 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                 .append("COALESCE(stats.total_allotted_data, 0) AS total_allotted_data, ")
                 .append("COALESCE(stats.total_unallotted_data, 0) AS total_unallotted_data, ")
                 .append("COALESCE(stats.total_availed_data, 0) AS total_availed_data ")
-                .append("FROM course_types ct ")
-                .append("LEFT JOIN (")
-                .append("  SELECT ")
-                .append("    lct.course_type_id, ")
-                .append("    COUNT(DISTINCT lct.lead_id) AS total_data, ")
-                .append("    COUNT(DISTINCT CASE WHEN lct.assigned_to_id IS NOT NULL THEN lct.lead_id END) AS total_allotted_data, ")
-                .append("    COUNT(DISTINCT CASE WHEN lct.assigned_to_id IS NULL THEN lct.lead_id END) AS total_unallotted_data, ")
-                .append("    COUNT(DISTINCT CASE WHEN lct.is_availed = 1 THEN lct.lead_id END) AS total_availed_data ")
-                .append("  FROM (")
-                .append("    SELECT DISTINCT ")
-                .append("      l.id AS lead_id, ")
-                .append("      c.course_type_id AS course_type_id, ")
-                .append("      l.assigned_to_id AS assigned_to_id, ")
-                .append("      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (")
-                .append("        SELECT 1 FROM lead_availed la ")
-                .append("        WHERE la.lead_id = l.id ")
-                .append("          AND la.availed_by_user_id = l.assigned_to_id ")
-                .append("          AND la.is_deleted = false")
-                .append("      ) THEN 1 ELSE 0 END AS is_availed ")
-                .append("    FROM leads l ")
-                .append("    JOIN courses c ON l.course_id = c.id AND c.is_deleted = false ")
-                .append("    WHERE l.is_deleted = false AND ").append(scopeClause).append(" ")
-                .append("    UNION ")
-                .append("    SELECT DISTINCT ")
-                .append("      l.id AS lead_id, ")
-                .append("      c.course_type_id AS course_type_id, ")
-                .append("      l.assigned_to_id AS assigned_to_id, ")
-                .append("      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (")
-                .append("        SELECT 1 FROM lead_availed la ")
-                .append("        WHERE la.lead_id = l.id ")
-                .append("          AND la.availed_by_user_id = l.assigned_to_id ")
-                .append("          AND la.is_deleted = false")
-                .append("      ) THEN 1 ELSE 0 END AS is_availed ")
-                .append("    FROM leads l ")
-                .append("    JOIN lead_interested_courses lic ON lic.lead_id = l.id ")
-                .append("    JOIN courses c ON lic.course_id = c.id AND c.is_deleted = false ")
-                .append("    WHERE l.is_deleted = false AND ").append(scopeClause).append(" ")
-                .append("  ) lct ")
-                .append("  GROUP BY lct.course_type_id ")
-                .append(") stats ON ct.id = stats.course_type_id ")
-                .append("WHERE ct.is_deleted = false ");
+                .append("FROM course_types ct ");
+
+        if (isSystemScope) {
+            dataSql.append("LEFT JOIN (").append(statsSubquerySql).append(") stats ON ct.id = stats.course_type_id ")
+                    .append("WHERE ct.is_deleted = false ");
+        } else {
+            dataSql.append("INNER JOIN (").append(statsSubquerySql).append(") stats ON ct.id = stats.course_type_id ")
+                    .append("WHERE ct.is_deleted = false AND stats.total_data > 0 ");
+        }
 
         if (search != null) {
             dataSql.append("AND (LOWER(ct.name) LIKE :searchPattern OR LOWER(ct.description) LIKE :searchPattern) ");
