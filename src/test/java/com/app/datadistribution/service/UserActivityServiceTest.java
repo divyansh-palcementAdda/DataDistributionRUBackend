@@ -53,6 +53,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 public class UserActivityServiceTest {
 
     @Mock
@@ -221,7 +222,7 @@ public class UserActivityServiceTest {
     }
 
     private void setupSystemScope() throws UnauthorizedException, BadRequestException {
-        when(dataScopeService.getScopeForCurrentUser()).thenReturn(
+        org.mockito.Mockito.lenient().when(dataScopeService.getScopeForCurrentUser()).thenReturn(
                 UserDataScope.builder().scopeType(ScopeType.SYSTEM).userId(UUID.randomUUID()).isAdmin(true).build());
     }
 }

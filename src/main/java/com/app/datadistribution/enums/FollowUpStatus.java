@@ -5,7 +5,8 @@ public enum FollowUpStatus {
     UPCOMING("Upcoming"),
     COMPLETED("Completed"),
     CANCELLED("Cancelled"),
-    MISSED("Missed");
+    MISSED("Missed"),
+    NOT_CONNECTED("Not Connected");
 
     private final String displayName;
 

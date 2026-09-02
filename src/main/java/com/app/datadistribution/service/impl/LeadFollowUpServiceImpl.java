@@ -35,6 +35,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.app.datadistribution.dto.lead.FollowUpStatusUpdateRequest;
+import com.app.datadistribution.dto.lead.NotConnectedFollowUpRequest;
+import com.app.datadistribution.service.interfaces.ILeadStatusTransitionService;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -46,6 +50,7 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final ILeadDataScopeService leadDataScopeService;
+    private final ILeadStatusTransitionService leadStatusTransitionService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -385,6 +390,112 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         }
 
         return leadMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public LeadFollowUpResponse markNotConnected(UUID followUpId, NotConnectedFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+        if (request == null || request.getRemarks() == null || request.getRemarks().trim().isEmpty()) {
+            throw new BadRequestException("Remarks/feedback is required when marking a follow-up as not connected.");
+        }
+        return markNotConnected(followUpId, request.getRemarks());
+    }
+
+    @Override
+    @Transactional
+    public LeadFollowUpResponse markNotConnected(UUID followUpId, String remarks) throws UnauthorizedException, BadRequestException {
+        if (followUpId == null) {
+            throw new BadRequestException("Follow-up ID is required.");
+        }
+        if (remarks == null || remarks.trim().isEmpty()) {
+            throw new BadRequestException("Remarks/feedback is required when marking a follow-up as not connected.");
+        }
+
+        LeadFollowUp followUp = leadFollowUpRepository.findById(followUpId)
+                .filter(f -> !f.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Follow-up not found with id: " + followUpId));
+
+        Lead lead = followUp.getLead();
+        if (lead == null || lead.isDeleted()) {
+            throw new ResourcesNotFoundException("Associated lead not found or deleted for follow-up: " + followUpId);
+        }
+
+        // Validate user data scope and lead write permissions
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        // State Machine validation: Only PENDING or UPCOMING can be marked NOT_CONNECTED
+        if (followUp.getStatus() != FollowUpStatus.PENDING && followUp.getStatus() != FollowUpStatus.UPCOMING) {
+            throw new BadRequestException("Only PENDING or UPCOMING follow-ups can be marked as not connected. Current status: " + followUp.getStatus());
+        }
+
+        if (followUp.isCompleted() || followUp.getStatus() == FollowUpStatus.COMPLETED || followUp.getStatus() == FollowUpStatus.CANCELLED || followUp.getStatus() == FollowUpStatus.NOT_CONNECTED) {
+            throw new BadRequestException("Cannot change status of a closed or not connected follow-up.");
+        }
+
+        User currentUser = getCurrentUserEntity();
+
+        // Strict Assigned User / Role Verification
+        boolean isAssignedUser = (lead.getAssignedTo() != null && currentUser != null && lead.getAssignedTo().getId().equals(currentUser.getId()))
+                || (followUp.getAssignedTo() != null && currentUser != null && followUp.getAssignedTo().getId().equals(currentUser.getId()));
+        boolean isPrivileged = dataScope != null && (dataScope.isAdmin() || dataScope.isHod());
+        if (!isAssignedUser && !isPrivileged) {
+            throw new UnauthorizedException("Only the assigned user or department head can mark this follow-up as not connected.");
+        }
+
+        // 1. Update Followup
+        followUp.setStatus(FollowUpStatus.NOT_CONNECTED);
+        followUp.setCompleted(false);
+
+        String currentRemarks = followUp.getRemarks();
+        String updatedRemarks = (currentRemarks != null && !currentRemarks.isBlank())
+                ? currentRemarks + " | Not Connected: " + remarks.trim()
+                : remarks.trim();
+        followUp.setRemarks(updatedRemarks);
+
+        LeadFollowUp savedFollowUp = leadFollowUpRepository.save(followUp);
+
+        // 2. Sync Lead Next Follow Up Date
+        LocalDateTime nextActiveDate = leadFollowUpRepository.findEarliestActiveFollowUpDateByLeadId(lead.getId());
+        lead.setNextFollowUpDate(nextActiveDate);
+
+        // 3. Resolve Dynamic Lead Status for NOT_CONNECTED
+        com.app.datadistribution.entity.LeadStatus notConnectedStatus = leadStatusRepository.findByCodeIgnoreCase("NOT_CONNECTED")
+                .filter(s -> !s.isDeleted())
+                .orElseThrow(() -> new BadRequestException("Dynamic lead status 'NOT_CONNECTED' is not configured or is inactive in the system."));
+
+        if (!notConnectedStatus.isActive()) {
+            throw new BadRequestException("Dynamic lead status 'NOT_CONNECTED' is inactive in the system.");
+        }
+
+        // 4. Canonical Lead Status Transition (atomic within this transaction, creates LeadStatusHistory)
+        leadStatusTransitionService.executeStatusTransition(lead, notConnectedStatus, currentUser, remarks.trim());
+
+        log.info("Follow-up {} marked NOT_CONNECTED and associated lead {} transitioned to NOT_CONNECTED by user {}",
+                followUpId, lead.getLeadCode(), currentUser != null ? currentUser.getUsername() : "SYSTEM");
+
+        return leadMapper.toDto(savedFollowUp);
+    }
+
+    @Override
+    @Transactional
+    public LeadFollowUpResponse updateFollowUpStatus(UUID followUpId, FollowUpStatusUpdateRequest request) throws UnauthorizedException, BadRequestException {
+        if (request == null || request.getStatus() == null) {
+            throw new BadRequestException("Target follow-up status is required.");
+        }
+        FollowUpStatus target = request.getStatus();
+        String effectiveRemarks = request.getEffectiveRemarks();
+
+        switch (target) {
+            case COMPLETED:
+                return completeFollowUp(followUpId, effectiveRemarks);
+            case CANCELLED:
+                return cancelFollowUp(followUpId, effectiveRemarks);
+            case NOT_CONNECTED:
+                return markNotConnected(followUpId, effectiveRemarks);
+            default:
+                throw new BadRequestException("Unsupported status update transition to " + target);
+        }
     }
 
     private User getCurrentUserEntity() throws UnauthorizedException {

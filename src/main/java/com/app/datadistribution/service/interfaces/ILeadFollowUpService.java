@@ -20,5 +20,8 @@ public interface ILeadFollowUpService {
     LeadFollowUpResponse completeFollowUp(UUID followUpId, CompleteFollowUpRequest request) throws UnauthorizedException, BadRequestException;
     LeadFollowUpResponse cancelFollowUp(UUID followUpId, String remarks) throws UnauthorizedException, BadRequestException;
     LeadFollowUpResponse cancelFollowUp(UUID followUpId, CancelFollowUpRequest request) throws UnauthorizedException, BadRequestException;
+    LeadFollowUpResponse markNotConnected(UUID followUpId, String remarks) throws UnauthorizedException, BadRequestException;
+    LeadFollowUpResponse markNotConnected(UUID followUpId, com.app.datadistribution.dto.lead.NotConnectedFollowUpRequest request) throws UnauthorizedException, BadRequestException;
+    LeadFollowUpResponse updateFollowUpStatus(UUID followUpId, com.app.datadistribution.dto.lead.FollowUpStatusUpdateRequest request) throws UnauthorizedException, BadRequestException;
 }
 

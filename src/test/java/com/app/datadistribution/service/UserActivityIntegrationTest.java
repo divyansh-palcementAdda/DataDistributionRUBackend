@@ -26,7 +26,7 @@ import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.service.interfaces.IUserActivityService;
 
-@SpringBootTest
+@SpringBootTest(classes = com.app.datadistribution.Application.class)
 @Transactional
 public class UserActivityIntegrationTest {
 

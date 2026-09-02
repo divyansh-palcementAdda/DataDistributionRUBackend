@@ -137,6 +137,44 @@ public class FollowUpController {
         return ResponseEntity.ok(ApiResponse.success("Follow-up rescheduled successfully", response, HttpStatus.OK.value()));
     }
 
+    @PatchMapping("/{id}/not-connected")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as not connected and synchronize lead status (PATCH)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> markNotConnectedPatch(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) com.app.datadistribution.dto.lead.NotConnectedFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null && !request.getRemarks().isBlank())
+                ? request.getRemarks()
+                : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.markNotConnected(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked as not connected successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/not-connected")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Mark a follow-up as not connected and synchronize lead status (POST)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> markNotConnectedPost(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) com.app.datadistribution.dto.lead.NotConnectedFollowUpRequest request,
+            @RequestParam(value = "remarks", required = false) String paramRemarks) throws UnauthorizedException, BadRequestException {
+        String feedback = (request != null && request.getRemarks() != null && !request.getRemarks().isBlank())
+                ? request.getRemarks()
+                : paramRemarks;
+        LeadFollowUpResponse response = leadFollowUpService.markNotConnected(id, feedback);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up marked as not connected successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
+    @Operation(summary = "Update follow-up status dynamically (PATCH)")
+    public ResponseEntity<ApiResponse<LeadFollowUpResponse>> updateFollowUpStatus(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody com.app.datadistribution.dto.lead.FollowUpStatusUpdateRequest request) throws UnauthorizedException, BadRequestException {
+        LeadFollowUpResponse response = leadFollowUpService.updateFollowUpStatus(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up status updated successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('FOLLOWUP_VIEW')")
     @Operation(summary = "Get all follow-ups with search, pagination, and dynamic filtering")
