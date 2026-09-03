@@ -162,4 +162,31 @@ public class Lead extends BaseEntity {
     @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<LeadAvailed> availedRecords = new ArrayList<>();
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "registration_status", length = 50)
+    @Builder.Default
+    private com.app.datadistribution.enums.RegistrationStatus registrationStatus = com.app.datadistribution.enums.RegistrationStatus.NONE;
+
+    @Column(name = "enrollment_id", length = 100)
+    private String enrollmentId;
+
+    @Column(name = "registration_failure_reason", columnDefinition = "TEXT")
+    private String registrationCheckFailureReason;
+
+    @Column(name = "registration_checked_at")
+    private LocalDateTime registrationCheckedAt;
+
+    @Column(name = "registration_approved_at")
+    private LocalDateTime registrationApprovedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "registration_approved_by_id")
+    private User registrationApprovedByUser;
+
+    @Column(name = "cms_match_score")
+    private Integer cmsMatchScore;
+
+    @Column(name = "cms_matched_data", columnDefinition = "TEXT")
+    private String cmsMatchedStudentData;
 }

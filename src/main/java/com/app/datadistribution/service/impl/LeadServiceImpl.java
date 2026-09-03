@@ -96,6 +96,7 @@ public class LeadServiceImpl implements ILeadService {
     private final IUserDataScopeService dataScopeService;
     private final ILeadDataScopeService leadDataScopeService;
     private final com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
+    private final com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -660,11 +661,169 @@ public class LeadServiceImpl implements ILeadService {
         return leadStatusTransitionService.executeStatusTransition(lead, newStatus, currentUser, feedbackOrRemarks);
     }
 
+    private boolean isRegisteredStatus(LeadStatus status) {
+        if (status == null) return false;
+        return "REGISTERED".equalsIgnoreCase(status.getCode())
+                || "Registered".equalsIgnoreCase(status.getName());
+    }
+
     @Override
     @Transactional
     public LeadResponse changeStatus(UUID id, LeadStatusChangeRequest request) throws BadRequestException, UnauthorizedException {
-        if (request.getFeedback() == null || request.getFeedback().isBlank()) {
-            throw new BadRequestException("Feedback is required when changing lead status.");
+        log.info("[changeStatus] Received request for lead ID: {}, request: {}", id, request);
+        try {
+            Lead lead = leadRepository.findById(id)
+                    .filter(l -> !l.isDeleted())
+                    .orElseThrow(() -> {
+                        log.warn("[changeStatus] Lead not found or deleted with ID: {}", id);
+                        return new ResourcesNotFoundException("Lead not found with id: " + id);
+                    });
+
+            log.info("[changeStatus] Found lead: {} ({}), currentStatus: {}",
+                    lead.getFullName(), lead.getLeadCode(),
+                    lead.getCurrentStatus() != null ? lead.getCurrentStatus().getName() + " [ID: " + lead.getCurrentStatus().getId() + "]" : "null");
+
+            UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+            log.info("[changeStatus] Validating lead write access for user scope: {}", dataScope);
+            leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+            LeadStatus newStatus = resolveNewStatus(request);
+            log.info("[changeStatus] Resolved target status: {} [ID: {}, Code: {}]",
+                    newStatus.getName(), newStatus.getId(), newStatus.getCode());
+
+            User currentUser = getCurrentUserEntity();
+            log.info("[changeStatus] Executing user: {} [ID: {}]",
+                    currentUser != null ? currentUser.getUsername() : "null",
+                    currentUser != null ? currentUser.getId() : "null");
+
+            LeadStatus oldStatus = lead.getCurrentStatus();
+            boolean statusChanged = (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()));
+            log.info("[changeStatus] Status transition check: oldStatus={}, newStatus={}, statusChanged={}",
+                    oldStatus != null ? oldStatus.getName() + " (" + oldStatus.getId() + ")" : "null",
+                    newStatus != null ? newStatus.getName() + " (" + newStatus.getId() + ")" : "null",
+                    statusChanged);
+
+            String effectiveFeedback = (request.getFeedback() != null && !request.getFeedback().isBlank())
+                    ? request.getFeedback().trim()
+                    : "Lead status changed to " + newStatus.getName();
+
+            // CRITICAL BUSINESS GATE: If requested status is REGISTERED, execute CMS student verification first
+            if (isRegisteredStatus(newStatus)) {
+                if (!statusChanged && lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED) {
+                    log.info("[changeStatus] Lead {} is already REGISTERED and verified. Idempotent return.", lead.getLeadCode());
+                    return leadMapper.toDto(lead);
+                }
+
+                com.app.datadistribution.integration.cms.dto.StudentVerificationRequest verificationReq =
+                        com.app.datadistribution.integration.cms.dto.StudentVerificationRequest.builder()
+                                .leadId(lead.getId())
+                                .studentName(lead.getFullName())
+                                .mobile(lead.getPhoneNumber())
+                                .alternateMobile(lead.getAlternatePhoneNumber())
+                                .email(lead.getEmail())
+                                .city(lead.getCity())
+                                .state(lead.getState())
+                                .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : lead.getCourseInterested())
+                                .enrollmentId(lead.getEnrollmentId())
+                                .build();
+
+                if (!verificationReq.hasIdentifyingFields()) {
+                    lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
+                    lead.setRegistrationCheckFailureReason("Insufficient identifying student data provided (mobile, email, or student name required for CMS check).");
+                    lead.setRegistrationCheckedAt(LocalDateTime.now());
+                    leadRepository.save(lead);
+                    throw new BadRequestException("Student registration check failed: Insufficient identifying information. Registration is pending admin review.");
+                }
+
+                log.info("[changeStatus] Triggering CMS verification for lead {} before REGISTERED transition", lead.getLeadCode());
+                com.app.datadistribution.integration.cms.dto.StudentVerificationResponse verificationResp =
+                        studentVerificationService.verifyStudent(verificationReq);
+
+                boolean isMatchSuccess = verificationResp.isVerified() && (
+                        verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.MATCH_CONFIRMED
+                                || verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.FULL_MATCH
+                                || verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.HIGH_CONFIDENCE_MATCH);
+
+                if (isMatchSuccess) {
+                    log.info("[changeStatus] CMS verification SUCCESS for lead {}. Match score: {}", lead.getLeadCode(), verificationResp.getConfidenceScore());
+                    // Sync student data from CMS if available
+                    if (verificationResp.getMatchedStudents() != null && !verificationResp.getMatchedStudents().isEmpty()) {
+                        com.app.datadistribution.integration.cms.dto.MatchedStudentDTO primaryMatch = verificationResp.getMatchedStudents().get(0);
+                        if (primaryMatch.getEnrollmentNumber() != null && !primaryMatch.getEnrollmentNumber().isBlank()) {
+                            lead.setEnrollmentId(primaryMatch.getEnrollmentNumber().trim());
+                        }
+                        if (primaryMatch.getStudentName() != null && !primaryMatch.getStudentName().isBlank()) {
+                            lead.setFullName(primaryMatch.getStudentName().trim());
+                        }
+                        if ((lead.getEmail() == null || lead.getEmail().isBlank()) && primaryMatch.getEmail() != null && !primaryMatch.getEmail().isBlank()) {
+                            lead.setEmail(primaryMatch.getEmail().trim());
+                        }
+                    }
+                    lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED);
+                    lead.setCmsMatchScore(verificationResp.getConfidenceScore());
+                    lead.setRegistrationCheckedAt(LocalDateTime.now());
+                    lead.setRegistrationCheckFailureReason(null);
+                } else if (verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.ERROR) {
+                    log.warn("[changeStatus] CMS verification encountered service error for lead {}: {}", lead.getLeadCode(), verificationResp.getMessage());
+                    lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_PENDING);
+                    lead.setRegistrationCheckFailureReason(verificationResp.getMessage() != null ? verificationResp.getMessage() : "CMS service temporarily unavailable.");
+                    lead.setRegistrationCheckedAt(LocalDateTime.now());
+                    leadRepository.save(lead);
+                    throw new BadRequestException("CMS verification service temporarily unavailable. Registration marked as check pending for admin review.");
+                } else {
+                    log.warn("[changeStatus] CMS verification NOT FULL_MATCH for lead {}. Match status: {}, Message: {}",
+                            lead.getLeadCode(), verificationResp.getMatchStatus(), verificationResp.getMessage());
+                    lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
+                    String reason = verificationResp.getMessage() != null && !verificationResp.getMessage().isBlank()
+                            ? verificationResp.getMessage()
+                            : "Student not matched in CMS (" + (verificationResp.getMatchStatus() != null ? verificationResp.getMatchStatus().name() : "NO_MATCH") + ")";
+                    lead.setRegistrationCheckFailureReason(reason);
+                    lead.setCmsMatchScore(verificationResp.getConfidenceScore());
+                    lead.setRegistrationCheckedAt(LocalDateTime.now());
+                    leadRepository.save(lead);
+                    throw new BadRequestException("Student registration check failed: " + reason + ". Registration is pending admin review.");
+                }
+            }
+
+            Lead updated;
+            if (statusChanged) {
+                log.info("[changeStatus] Invoking changeLeadStatusInternal for lead {}", lead.getLeadCode());
+                updated = changeLeadStatusInternal(lead, newStatus, currentUser, effectiveFeedback);
+                log.info("[changeStatus] changeLeadStatusInternal completed successfully. New lead currentStatus is: {}",
+                        updated.getCurrentStatus() != null ? updated.getCurrentStatus().getName() : "null");
+            } else {
+                log.info("[changeStatus] Status is unchanged. Skipping status transition for lead {}", lead.getLeadCode());
+                updated = leadRepository.save(lead);
+            }
+
+            LeadFeedback feedback = LeadFeedback.builder()
+                    .lead(updated)
+                    .createdByUser(currentUser)
+                    .feedback(effectiveFeedback)
+                    .statusAtTime(newStatus)
+                    .build();
+            LeadFeedback savedFeedback = leadFeedbackRepository.save(feedback);
+            log.info("[changeStatus] Saved LeadFeedback [ID: {}] for lead {}",
+                    savedFeedback != null ? savedFeedback.getId() : "persisted", lead.getLeadCode());
+
+            LeadResponse response = leadMapper.toDto(updated);
+            log.info("[changeStatus] Successfully completed status change for lead {}. Returned DTO status: {}",
+                    lead.getLeadCode(), (response != null && response.getCurrentStatus() != null) ? response.getCurrentStatus().getName() : "null");
+            return response;
+        } catch (Exception e) {
+            log.error("[changeStatus] ERROR changing status for lead ID: {}. Request: {}. Reason: {}",
+                    id, request, e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse manualApproveRegistration(UUID id, com.app.datadistribution.dto.lead.ManualRegistrationApprovalRequest request) throws UnauthorizedException, BadRequestException {
+        User currentUser = getCurrentUserEntity();
+        if (currentUser.getRoles() == null || currentUser.getRoles().stream().noneMatch(r ->
+                RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) || RoleType.ADMIN.name().equalsIgnoreCase(r.getName()))) {
+            throw new UnauthorizedException("Only Admin or Super Admin can manually approve lead registration.");
         }
 
         Lead lead = leadRepository.findById(id)
@@ -674,28 +833,130 @@ public class LeadServiceImpl implements ILeadService {
         UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
 
-        LeadStatus newStatus = resolveNewStatus(request);
-        User currentUser = getCurrentUserEntity();
-
-        LeadStatus oldStatus = lead.getCurrentStatus();
-        boolean statusChanged = (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()));
-
-        Lead updated;
-        if (statusChanged) {
-            updated = changeLeadStatusInternal(lead, newStatus, currentUser, request.getFeedback());
-        } else {
-            updated = lead;
+        if (request.getRegisteredCourseId() != null) {
+            Course course = courseRepository.findById(request.getRegisteredCourseId())
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + request.getRegisteredCourseId()));
+            if (!course.isActive()) {
+                throw new BadRequestException("Cannot assign inactive course: " + course.getCourseName());
+            }
+            lead.setCourse(course);
+            if (lead.getInterestedCourses() == null) {
+                lead.setInterestedCourses(new HashSet<>());
+            }
+            lead.getInterestedCourses().add(course);
+        } else if (lead.getCourse() == null) {
+            throw new BadRequestException("Registered course is required to approve registration.");
         }
 
-        LeadFeedback feedback = LeadFeedback.builder()
+        if (request.getEnrollmentId() != null && !request.getEnrollmentId().isBlank()) {
+            lead.setEnrollmentId(request.getEnrollmentId().trim());
+        }
+
+        lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.MANUALLY_APPROVED);
+        lead.setRegistrationApprovedAt(LocalDateTime.now());
+        lead.setRegistrationApprovedByUser(currentUser);
+        lead.setRegistrationCheckFailureReason(null);
+
+        LeadStatus registeredStatus = leadStatusRepository.findByCodeIgnoreCase("REGISTERED")
+                .filter(s -> !s.isDeleted() && s.isActive())
+                .or(() -> leadStatusRepository.findByNameIgnoreCase("Registered").filter(s -> !s.isDeleted() && s.isActive()))
+                .orElseThrow(() -> new ResourcesNotFoundException("REGISTERED lead status not configured in database"));
+
+        String feedback = request.getRemarks() != null && !request.getRemarks().isBlank()
+                ? request.getRemarks().trim()
+                : "Registration manually approved by " + currentUser.getUsername();
+
+        Lead updated = changeLeadStatusInternal(lead, registeredStatus, currentUser, feedback);
+
+        LeadFeedback fb = LeadFeedback.builder()
                 .lead(updated)
                 .createdByUser(currentUser)
-                .feedback(request.getFeedback())
-                .statusAtTime(newStatus)
+                .feedback(feedback)
+                .statusAtTime(registeredStatus)
                 .build();
-        leadFeedbackRepository.save(feedback);
+        leadFeedbackRepository.save(fb);
 
+        log.info("Lead {} registration manually approved by user {}", lead.getLeadCode(), currentUser.getUsername());
         return leadMapper.toDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse retryCmsVerification(UUID id) throws UnauthorizedException, BadRequestException {
+        User currentUser = getCurrentUserEntity();
+        Lead lead = leadRepository.findById(id)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        com.app.datadistribution.integration.cms.dto.StudentVerificationRequest verificationReq =
+                com.app.datadistribution.integration.cms.dto.StudentVerificationRequest.builder()
+                        .leadId(lead.getId())
+                        .studentName(lead.getFullName())
+                        .mobile(lead.getPhoneNumber())
+                        .alternateMobile(lead.getAlternatePhoneNumber())
+                        .email(lead.getEmail())
+                        .city(lead.getCity())
+                        .state(lead.getState())
+                        .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : lead.getCourseInterested())
+                        .enrollmentId(lead.getEnrollmentId())
+                        .build();
+
+        if (!verificationReq.hasIdentifyingFields()) {
+            lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
+            lead.setRegistrationCheckFailureReason("Insufficient identifying information (phone, email, or student name required for CMS check).");
+            lead.setRegistrationCheckedAt(LocalDateTime.now());
+            leadRepository.save(lead);
+            throw new BadRequestException("Student verification failed: Insufficient student identifying information.");
+        }
+
+        com.app.datadistribution.integration.cms.dto.StudentVerificationResponse verificationResp =
+                studentVerificationService.verifyStudent(verificationReq);
+
+        boolean isMatchSuccess = verificationResp.isVerified() && (
+                verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.MATCH_CONFIRMED
+                        || verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.FULL_MATCH
+                        || verificationResp.getMatchStatus() == com.app.datadistribution.integration.cms.enums.MatchStatus.HIGH_CONFIDENCE_MATCH);
+
+        if (isMatchSuccess) {
+            if (verificationResp.getMatchedStudents() != null && !verificationResp.getMatchedStudents().isEmpty()) {
+                com.app.datadistribution.integration.cms.dto.MatchedStudentDTO primaryMatch = verificationResp.getMatchedStudents().get(0);
+                if (primaryMatch.getEnrollmentNumber() != null && !primaryMatch.getEnrollmentNumber().isBlank()) {
+                    lead.setEnrollmentId(primaryMatch.getEnrollmentNumber().trim());
+                }
+                if (primaryMatch.getStudentName() != null && !primaryMatch.getStudentName().isBlank()) {
+                    lead.setFullName(primaryMatch.getStudentName().trim());
+                }
+                if ((lead.getEmail() == null || lead.getEmail().isBlank()) && primaryMatch.getEmail() != null && !primaryMatch.getEmail().isBlank()) {
+                    lead.setEmail(primaryMatch.getEmail().trim());
+                }
+            }
+            lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED);
+            lead.setCmsMatchScore(verificationResp.getConfidenceScore());
+            lead.setRegistrationCheckedAt(LocalDateTime.now());
+            lead.setRegistrationCheckFailureReason(null);
+
+            LeadStatus registeredStatus = leadStatusRepository.findByCodeIgnoreCase("REGISTERED")
+                    .filter(s -> !s.isDeleted() && s.isActive())
+                    .or(() -> leadStatusRepository.findByNameIgnoreCase("Registered").filter(s -> !s.isDeleted() && s.isActive()))
+                    .orElseThrow(() -> new ResourcesNotFoundException("REGISTERED status not found"));
+
+            Lead updated = changeLeadStatusInternal(lead, registeredStatus, currentUser, "Student verified with CMS on retry.");
+            return leadMapper.toDto(updated);
+        } else {
+            lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
+            String reason = verificationResp.getMessage() != null && !verificationResp.getMessage().isBlank()
+                    ? verificationResp.getMessage()
+                    : "Student not matched in CMS (" + (verificationResp.getMatchStatus() != null ? verificationResp.getMatchStatus().name() : "NO_MATCH") + ")";
+            lead.setRegistrationCheckFailureReason(reason);
+            lead.setCmsMatchScore(verificationResp.getConfidenceScore());
+            lead.setRegistrationCheckedAt(LocalDateTime.now());
+            leadRepository.save(lead);
+            throw new BadRequestException("Student verification failed: " + reason);
+        }
     }
 
     @Override
@@ -969,6 +1230,25 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private LeadStatus resolveNewStatus(LeadStatusChangeRequest request) throws BadRequestException {
+        if (request.getStatusCode() != null && !request.getStatusCode().isBlank()) {
+            String codeOrName = request.getStatusCode().trim();
+            Optional<LeadStatus> byCode = leadStatusRepository.findByCodeIgnoreCase(codeOrName).filter(s -> !s.isDeleted());
+            if (byCode.isPresent()) {
+                LeadStatus status = byCode.get();
+                if (!status.isActive()) {
+                    throw new BadRequestException("Cannot assign inactive lead status: " + status.getName());
+                }
+                return status;
+            }
+            Optional<LeadStatus> byName = leadStatusRepository.findByNameIgnoreCase(codeOrName).filter(s -> !s.isDeleted());
+            if (byName.isPresent()) {
+                LeadStatus status = byName.get();
+                if (!status.isActive()) {
+                    throw new BadRequestException("Cannot assign inactive lead status: " + status.getName());
+                }
+                return status;
+            }
+        }
         if (request.getNewStatusId() != null) {
             LeadStatus status = leadStatusRepository.findById(request.getNewStatusId())
                     .filter(s -> !s.isDeleted())
@@ -979,13 +1259,7 @@ public class LeadServiceImpl implements ILeadService {
             return status;
         }
         if (request.getStatusCode() != null && !request.getStatusCode().isBlank()) {
-            LeadStatus status = leadStatusRepository.findByCodeIgnoreCase(request.getStatusCode().trim())
-                    .filter(s -> !s.isDeleted())
-                    .orElseThrow(() -> new ResourcesNotFoundException("Lead status not found with code: " + request.getStatusCode()));
-            if (!status.isActive()) {
-                throw new BadRequestException("Cannot assign inactive lead status: " + status.getName());
-            }
-            return status;
+            throw new ResourcesNotFoundException("Lead status not found with code: " + request.getStatusCode());
         }
         throw new BadRequestException("newStatusId or statusCode is required to change lead status");
     }

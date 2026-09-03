@@ -74,6 +74,8 @@ class LeadDepartmentSyncAndStatusTest {
     private ILeadDataScopeService leadDataScopeService;
     @Mock
     private com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
+    @Mock
+    private com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
 
     @InjectMocks
     private LeadServiceImpl leadService;
@@ -127,6 +129,13 @@ class LeadDepartmentSyncAndStatusTest {
         when(leadStatusRepository.findById(statusContacted.getId())).thenReturn(Optional.of(statusContacted));
         when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
         when(leadMapper.toDto(any(Lead.class))).thenReturn(LeadResponse.builder().build());
+        lenient().when(studentVerificationService.verifyStudent(any())).thenReturn(
+                com.app.datadistribution.integration.cms.dto.StudentVerificationResponse.builder()
+                        .verified(true)
+                        .matchStatus(com.app.datadistribution.integration.cms.enums.MatchStatus.FULL_MATCH)
+                        .confidenceScore(100)
+                        .build()
+        );
         when(leadStatusTransitionService.executeStatusTransition(any(Lead.class), any(LeadStatus.class), any(User.class), any()))
                 .thenAnswer(inv -> {
                     Lead l = inv.getArgument(0);

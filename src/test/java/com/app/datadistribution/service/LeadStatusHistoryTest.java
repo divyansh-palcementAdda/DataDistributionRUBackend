@@ -102,6 +102,8 @@ class LeadStatusHistoryTest {
     @Mock
     private com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
     @Mock
+    private com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
+    @Mock
     private LeadMapper leadMapper;
 
     @InjectMocks
@@ -179,6 +181,25 @@ class LeadStatusHistoryTest {
                     leadStatusHistoryRepository.save(h);
                     return l;
                 });
+
+        lenient().when(studentVerificationService.verifyStudent(any())).thenReturn(
+                com.app.datadistribution.integration.cms.dto.StudentVerificationResponse.builder()
+                        .verified(true)
+                        .matchStatus(com.app.datadistribution.integration.cms.enums.MatchStatus.FULL_MATCH)
+                        .confidenceScore(100)
+                        .build()
+        );
+        lenient().when(leadMapper.toDto(any(Lead.class))).thenAnswer(inv -> {
+            Lead l = inv.getArgument(0);
+            return LeadResponse.builder()
+                    .id(l.getId())
+                    .currentStatus(l.getCurrentStatus() != null ? com.app.datadistribution.dto.lead.LeadStatusResponse.builder()
+                            .id(l.getCurrentStatus().getId())
+                            .name(l.getCurrentStatus().getName())
+                            .code(l.getCurrentStatus().getCode())
+                            .build() : null)
+                    .build();
+        });
     }
 
     private void mockSecurityContext(User user) {

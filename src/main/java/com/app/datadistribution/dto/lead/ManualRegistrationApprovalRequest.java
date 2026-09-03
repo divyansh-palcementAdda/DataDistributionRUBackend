@@ -1,5 +1,6 @@
 package com.app.datadistribution.dto.lead;
 
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,9 +15,11 @@ import lombok.ToString;
 @ToString
 @NoArgsConstructor
 @AllArgsConstructor
-public class LeadStatusChangeRequest {
+public class ManualRegistrationApprovalRequest {
 
-    private UUID newStatusId;
-    private String statusCode;
-    private String feedback;
+    @NotNull(message = "Registered course ID is required for registration approval")
+    private UUID registeredCourseId;
+
+    private String enrollmentId;
+    private String remarks;
 }

@@ -54,6 +54,15 @@ public class LeadResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    private com.app.datadistribution.enums.RegistrationStatus registrationStatus;
+    private String enrollmentId;
+    private String registrationCheckFailureReason;
+    private LocalDateTime registrationCheckedAt;
+    private LocalDateTime registrationApprovedAt;
+    private UserSummaryResponse registrationApprovedBy;
+    private Integer cmsMatchScore;
+    private String cmsMatchedStudentData;
+
 
 
     @JsonProperty("lastConnected")

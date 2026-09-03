@@ -210,12 +210,31 @@ public class LeadController {
 
     @PostMapping("/{id}/change-status")
     @PreAuthorize("hasAuthority('LEAD_STATUS_CHANGE')")
-    @Operation(summary = "Change status of a lead (feedback is mandatory)")
+    @Operation(summary = "Change status of a lead")
     public ResponseEntity<ApiResponse<LeadResponse>> changeStatus(
             @PathVariable("id") UUID id,
             @Valid @RequestBody LeadStatusChangeRequest request) throws BadRequestException, UnauthorizedException {
         LeadResponse response = leadService.changeStatus(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead status changed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/manual-approve-registration")
+    @PreAuthorize("hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_STATUS_CHANGE')")
+    @Operation(summary = "Manually approve lead registration by Admin without CMS verification")
+    public ResponseEntity<ApiResponse<LeadResponse>> manualApproveRegistration(
+            @PathVariable("id") UUID id,
+            @Valid @RequestBody com.app.datadistribution.dto.lead.ManualRegistrationApprovalRequest request) throws BadRequestException, UnauthorizedException {
+        LeadResponse response = leadService.manualApproveRegistration(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Lead registration manually approved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping("/{id}/retry-cms-verification")
+    @PreAuthorize("hasAuthority('LEAD_STATUS_CHANGE') or hasAuthority('LEAD_UPDATE')")
+    @Operation(summary = "Retry CMS student verification for a lead")
+    public ResponseEntity<ApiResponse<LeadResponse>> retryCmsVerification(
+            @PathVariable("id") UUID id) throws BadRequestException, UnauthorizedException {
+        LeadResponse response = leadService.retryCmsVerification(id);
+        return ResponseEntity.ok(ApiResponse.success("CMS verification retried successfully", response, HttpStatus.OK.value()));
     }
 
     @PostMapping("/{id}/avail")

@@ -63,4 +63,6 @@ public interface ILeadService {
     com.app.datadistribution.dto.lead.LeadStatusHistoryPageResponse getStatusHistoryByLeadId(UUID leadId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException;
     List<LeadSourceStatsResponse> getSourceWiseStats() throws UnauthorizedException, BadRequestException;
     Map<String, Long> getStatusWiseStats() throws UnauthorizedException, BadRequestException;
+    LeadResponse manualApproveRegistration(UUID id, com.app.datadistribution.dto.lead.ManualRegistrationApprovalRequest request) throws UnauthorizedException, BadRequestException;
+    LeadResponse retryCmsVerification(UUID id) throws UnauthorizedException, BadRequestException;
 }

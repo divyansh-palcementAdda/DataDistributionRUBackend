@@ -173,6 +173,14 @@ public interface LeadMapper {
                 .nextFollowUpDate(lead.getNextFollowUpDate())
                 .createdAt(lead.getCreatedAt())
                 .updatedAt(lead.getUpdatedAt())
+                .registrationStatus(lead.getRegistrationStatus())
+                .enrollmentId(lead.getEnrollmentId())
+                .registrationCheckFailureReason(lead.getRegistrationCheckFailureReason())
+                .registrationCheckedAt(lead.getRegistrationCheckedAt())
+                .registrationApprovedAt(lead.getRegistrationApprovedAt())
+                .registrationApprovedBy(userMapper.toSummaryDto(lead.getRegistrationApprovedByUser()))
+                .cmsMatchScore(lead.getCmsMatchScore())
+                .cmsMatchedStudentData(lead.getCmsMatchedStudentData())
                 .build();
     }
 
