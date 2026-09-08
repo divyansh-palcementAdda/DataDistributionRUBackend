@@ -150,7 +150,7 @@ class LeadFollowUpBusinessRulesTest {
         LeadFollowUpResponse response = followUpService.createFollowUp(lead1.getId(), request);
 
         assertNotNull(response);
-        assertEquals(FollowUpStatus.PENDING, response.getStatus());
+        assertEquals(FollowUpStatus.UPCOMING, response.getStatus());
         assertEquals("Student requested fee structure discussion on Wednesday", response.getRemarks());
         assertEquals(scheduledDate, lead1.getNextFollowUpDate());
     }
@@ -239,7 +239,7 @@ class LeadFollowUpBusinessRulesTest {
 
         LeadFollowUpResponse response = followUpService.createFollowUp(lead2.getId(), request);
         assertNotNull(response);
-        assertEquals(FollowUpStatus.PENDING, response.getStatus());
+        assertEquals(FollowUpStatus.UPCOMING, response.getStatus());
     }
 
     @Test

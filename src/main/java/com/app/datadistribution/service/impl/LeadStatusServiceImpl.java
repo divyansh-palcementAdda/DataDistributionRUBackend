@@ -90,6 +90,7 @@ public class LeadStatusServiceImpl implements ILeadStatusService {
         status.setCode(code);
         status.setDescription(request.getDescription());
         status.setActive(request.isActive());
+        status.setFollowUpStatus(request.getIsFollowUpStatus());
         if (request.getDisplayOrder() != null) {
             status.setDisplayOrder(request.getDisplayOrder());
         }

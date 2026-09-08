@@ -41,4 +41,6 @@ public interface IDropdownService {
     List<DropdownOptionResponse> getPermissionsDropdown(String search);
     List<com.app.datadistribution.dto.dropdown.FollowUpStatusDropdownResponse> getFollowUpStatusesDropdown();
     List<LeadStatusDropdownResponse> getFollowUpLeadStatusesDropdown();
+    List<DropdownOptionResponse> getStatesDropdown(String search);
+    List<DropdownOptionResponse> getCitiesDropdown(String state, String search);
 }

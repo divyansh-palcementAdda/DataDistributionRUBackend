@@ -118,7 +118,15 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             lead.setLeadStatus(status);
         }
 
-        FollowUpStatus initialStatus = (request.getStatus() == FollowUpStatus.UPCOMING)
+        java.time.ZoneId businessZone = java.time.ZoneId.of("Asia/Kolkata");
+        java.time.LocalDate today = java.time.LocalDate.now(businessZone);
+        java.time.LocalDate scheduledDate = request.getFollowUpDate().toLocalDate();
+
+        if (scheduledDate.isBefore(today)) {
+            throw new BadRequestException("Follow-up date cannot be in the past.");
+        }
+
+        FollowUpStatus initialStatus = scheduledDate.isAfter(today)
                 ? FollowUpStatus.UPCOMING
                 : FollowUpStatus.PENDING;
 
@@ -207,7 +215,20 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         LocalDateTime previousDate = followUp.getFollowUpDate();
         LocalDateTime newDate = request.getNewFollowUpDate();
 
+        java.time.ZoneId businessZone = java.time.ZoneId.of("Asia/Kolkata");
+        java.time.LocalDate today = java.time.LocalDate.now(businessZone);
+        java.time.LocalDate newScheduledDate = newDate.toLocalDate();
+
+        if (newScheduledDate.isBefore(today)) {
+            throw new BadRequestException("New follow-up date cannot be in the past.");
+        }
+
         followUp.setFollowUpDate(newDate);
+        FollowUpStatus updatedStatus = newScheduledDate.isAfter(today)
+                ? FollowUpStatus.UPCOMING
+                : FollowUpStatus.PENDING;
+        followUp.setStatus(updatedStatus);
+
         String currentRemarks = followUp.getRemarks();
         String updatedRemarks = (currentRemarks != null && !currentRemarks.isBlank())
                 ? currentRemarks + " | Rescheduled: " + request.getRemarks().trim()

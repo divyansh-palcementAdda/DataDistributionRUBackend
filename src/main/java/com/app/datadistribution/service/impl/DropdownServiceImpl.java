@@ -77,6 +77,7 @@ public class DropdownServiceImpl implements IDropdownService {
 
     private final IUserDataScopeService userDataScopeService;
     private final ILeadDataScopeService leadDataScopeService;
+    private final com.app.datadistribution.service.interfaces.ILocationService locationService;
 
     @Override
     public List<UserDropdownResponse> getUsersDropdown(UUID departmentId, String role, String search)
@@ -490,6 +491,43 @@ public class DropdownServiceImpl implements IDropdownService {
                         .id(p.getId())
                         .name(p.getName())
                         .code(null)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DropdownOptionResponse> getStatesDropdown(String search) {
+        List<String> states = locationService.getStates();
+        if (search != null && !search.isBlank()) {
+            String pattern = search.trim().toLowerCase();
+            states = states.stream()
+                    .filter(s -> s.toLowerCase().contains(pattern))
+                    .collect(Collectors.toList());
+        }
+        return states.stream()
+                .map(stateName -> DropdownOptionResponse.builder()
+                        .name(stateName)
+                        .code(stateName)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DropdownOptionResponse> getCitiesDropdown(String state, String search) {
+        if (state == null || state.isBlank()) {
+            return Collections.emptyList();
+        }
+        List<String> cities = locationService.getCitiesByState(state);
+        if (search != null && !search.isBlank()) {
+            String pattern = search.trim().toLowerCase();
+            cities = cities.stream()
+                    .filter(c -> c.toLowerCase().contains(pattern))
+                    .collect(Collectors.toList());
+        }
+        return cities.stream()
+                .map(cityName -> DropdownOptionResponse.builder()
+                        .name(cityName)
+                        .code(cityName)
                         .build())
                 .collect(Collectors.toList());
     }

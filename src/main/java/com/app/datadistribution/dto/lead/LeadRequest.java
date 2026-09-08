@@ -4,7 +4,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -45,6 +47,20 @@ public class LeadRequest {
 
     @Size(max = 100, message = "Country must be less than 100 characters")
     private String country;
+
+    @Size(max = 100, message = "Preferred study state must be less than 100 characters")
+    private String preferredStudyState;
+
+    @Size(max = 100, message = "Preferred study city must be less than 100 characters")
+    private String preferredStudyCity;
+
+    private Boolean planningToVisitUniversity;
+
+    private LocalDate visitDate;
+
+    private LocalTime visitTime;
+
+    private String visitRemarks;
 
     private List<UUID> leadSourceIds;
 

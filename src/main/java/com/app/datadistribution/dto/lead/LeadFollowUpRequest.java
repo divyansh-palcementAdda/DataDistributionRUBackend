@@ -26,6 +26,9 @@ public class LeadFollowUpRequest {
     @jakarta.validation.constraints.NotBlank(message = "Remarks/feedback is required while scheduling a follow-up")
     private String remarks;
 
-    @Builder.Default
-    private FollowUpStatus status = FollowUpStatus.PENDING;
+    /**
+     * @deprecated Initial status is automatically determined by the backend based on the scheduled date.
+     * Any client-supplied value is ignored on creation.
+     */
+    private FollowUpStatus status;
 }

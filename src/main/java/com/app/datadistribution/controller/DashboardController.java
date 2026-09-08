@@ -107,6 +107,16 @@ public class DashboardController {
                 .ok(ApiResponse.success("Availed leads count retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping({ "/followups/today/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of today's scheduled follow-ups matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardFollowUpCountResponseDTO>> getTodayFollowUpsCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardFollowUpCountResponseDTO result = dashboardService.getTodayFollowUpsCount(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Today's follow-ups count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/lead-status")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get lead status breakdown count for current user scope with dynamic filters")

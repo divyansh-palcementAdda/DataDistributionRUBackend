@@ -12,7 +12,9 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.JoinTable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +63,25 @@ public class Lead extends BaseEntity {
 
     @Column(length = 100)
     private String country;
+
+    @Column(name = "preferred_study_state", length = 100)
+    private String preferredStudyState;
+
+    @Column(name = "preferred_study_city", length = 100)
+    private String preferredStudyCity;
+
+    @Column(name = "planning_to_visit_university")
+    @Builder.Default
+    private Boolean planningToVisitUniversity = false;
+
+    @Column(name = "visit_date")
+    private LocalDate visitDate;
+
+    @Column(name = "visit_time")
+    private LocalTime visitTime;
+
+    @Column(name = "visit_remarks", columnDefinition = "TEXT")
+    private String visitRemarks;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

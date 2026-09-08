@@ -97,6 +97,7 @@ public class LeadServiceImpl implements ILeadService {
     private final ILeadDataScopeService leadDataScopeService;
     private final com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
     private final com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
+    private final com.app.datadistribution.service.interfaces.ILocationService locationService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -178,6 +179,8 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("Grade not found with id: " + request.getGradeId()));
         }
 
+        validatePreferredStudyPlace(request.getPreferredStudyState(), request.getPreferredStudyCity());
+
         LeadStatus initialStatus = resolveInitialStatus(request.getStatusId());
 
         Lead lead = leadMapper.toEntity(request);
@@ -191,6 +194,9 @@ public class LeadServiceImpl implements ILeadService {
         lead.setGrade(grade);
         lead.setDepartment(department);
         lead.setCurrentStatus(initialStatus);
+        lead.setPreferredStudyState(request.getPreferredStudyState() != null && !request.getPreferredStudyState().isBlank() ? request.getPreferredStudyState().trim() : null);
+        lead.setPreferredStudyCity(request.getPreferredStudyCity() != null && !request.getPreferredStudyCity().isBlank() ? request.getPreferredStudyCity().trim() : null);
+        validateAndApplyVisitPlanning(lead, request.getPlanningToVisitUniversity(), request.getVisitDate(), request.getVisitTime(), request.getVisitRemarks());
         lead.setActive(true);
 
         Lead saved = leadRepository.save(lead);
@@ -232,6 +238,8 @@ public class LeadServiceImpl implements ILeadService {
                 throw new BadRequestException("HOD can only assign leads to members of their assigned department(s).");
             }
         }
+
+        validatePreferredStudyPlace(request.getPreferredStudyState(), request.getPreferredStudyCity());
 
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
 
@@ -298,6 +306,9 @@ public class LeadServiceImpl implements ILeadService {
         lead.setCity(request.getCity());
         lead.setState(request.getState());
         lead.setCountry(request.getCountry());
+        lead.setPreferredStudyState(request.getPreferredStudyState() != null && !request.getPreferredStudyState().isBlank() ? request.getPreferredStudyState().trim() : null);
+        lead.setPreferredStudyCity(request.getPreferredStudyCity() != null && !request.getPreferredStudyCity().isBlank() ? request.getPreferredStudyCity().trim() : null);
+        validateAndApplyVisitPlanning(lead, request.getPlanningToVisitUniversity(), request.getVisitDate(), request.getVisitTime(), request.getVisitRemarks());
         lead.setLeadSources(sources);
         lead.setSourceDetails(request.getSourceDetails());
         lead.setCourseInterested(request.getCourseInterested());
@@ -1462,5 +1473,53 @@ public class LeadServiceImpl implements ILeadService {
                 return cb.not(cb.exists(subquery));
             }
         };
+    }
+
+    private void validatePreferredStudyPlace(String preferredState, String preferredCity) throws BadRequestException {
+        if ((preferredState == null || preferredState.isBlank()) && (preferredCity == null || preferredCity.isBlank())) {
+            return;
+        }
+        if (preferredState != null && !preferredState.isBlank()) {
+            if (!locationService.isValidState(preferredState)) {
+                throw new BadRequestException("Invalid preferred study state: " + preferredState);
+            }
+            if (preferredCity != null && !preferredCity.isBlank()) {
+                if (!locationService.isValidStateAndCity(preferredState, preferredCity)) {
+                    throw new BadRequestException("Selected preferred city '" + preferredCity + "' does not belong to state '" + preferredState + "'");
+                }
+            }
+        } else {
+            if (preferredCity != null && !preferredCity.isBlank()) {
+                throw new BadRequestException("Preferred study state is required when preferred study city is specified");
+            }
+        }
+    }
+
+    private void validateAndApplyVisitPlanning(Lead lead, Boolean planningToVisit, LocalDate visitDate, LocalTime visitTime, String visitRemarks) throws BadRequestException {
+        if (Boolean.TRUE.equals(planningToVisit)) {
+            if (visitDate == null) {
+                throw new BadRequestException("Visit date is required when planning a university visit");
+            }
+            if (visitTime == null) {
+                throw new BadRequestException("Visit time is required when planning a university visit");
+            }
+            if (visitRemarks == null || visitRemarks.trim().isBlank()) {
+                throw new BadRequestException("Visit remarks are required when planning a university visit");
+            }
+            lead.setPlanningToVisitUniversity(true);
+            lead.setVisitDate(visitDate);
+            lead.setVisitTime(visitTime);
+            lead.setVisitRemarks(visitRemarks.trim());
+        } else if (planningToVisit != null && !planningToVisit) {
+            lead.setPlanningToVisitUniversity(false);
+            lead.setVisitDate(null);
+            lead.setVisitTime(null);
+            lead.setVisitRemarks(null);
+        } else if (planningToVisit == null && lead.getPlanningToVisitUniversity() == null) {
+            lead.setPlanningToVisitUniversity(false);
+            lead.setVisitDate(null);
+            lead.setVisitTime(null);
+            lead.setVisitRemarks(null);
+        }
     }
 }

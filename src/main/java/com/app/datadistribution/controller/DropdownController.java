@@ -166,4 +166,25 @@ public class DropdownController {
         List<DropdownOptionResponse> data = dropdownService.getPermissionsDropdown(search);
         return ResponseEntity.ok(ApiResponse.success("Permissions dropdown retrieved successfully", data, 200));
     }
+
+    @GetMapping("/states")
+    @PreAuthorize("hasAuthority('DROPDOWN_VIEW') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ') or isAuthenticated()")
+    @Operation(summary = "Get States Dropdown", description = "Retrieves available states for preferred place of study and address dropdowns")
+    public ResponseEntity<ApiResponse<List<DropdownOptionResponse>>> getStatesDropdown(
+            @RequestParam(required = false) String search) {
+
+        List<DropdownOptionResponse> data = dropdownService.getStatesDropdown(search);
+        return ResponseEntity.ok(ApiResponse.success("States dropdown retrieved successfully", data, 200));
+    }
+
+    @GetMapping("/cities")
+    @PreAuthorize("hasAuthority('DROPDOWN_VIEW') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ') or isAuthenticated()")
+    @Operation(summary = "Get Cities Dropdown", description = "Retrieves cities for a specific state")
+    public ResponseEntity<ApiResponse<List<DropdownOptionResponse>>> getCitiesDropdown(
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String search) {
+
+        List<DropdownOptionResponse> data = dropdownService.getCitiesDropdown(state, search);
+        return ResponseEntity.ok(ApiResponse.success("Cities dropdown retrieved successfully", data, 200));
+    }
 }

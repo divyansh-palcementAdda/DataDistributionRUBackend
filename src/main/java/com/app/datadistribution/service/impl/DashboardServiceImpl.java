@@ -26,6 +26,7 @@ import com.app.datadistribution.dto.dashboard.CardOrderUpdateRequest;
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
 import com.app.datadistribution.dto.dashboard.DashboardAnalyticsResponseDTO;
 import com.app.datadistribution.dto.dashboard.DashboardCardDTO;
+import com.app.datadistribution.dto.dashboard.DashboardFollowUpCountResponseDTO;
 import com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO;
 import com.app.datadistribution.dto.dashboard.DashboardSectionDTO;
 import com.app.datadistribution.dto.dashboard.DashboardSummaryDTO;
@@ -38,6 +39,7 @@ import com.app.datadistribution.entity.LeadStatusHistory;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.entity.UserDashboardCardPreference;
 import com.app.datadistribution.enums.DashboardGroupBy;
+import com.app.datadistribution.enums.FollowUpStatus;
 import com.app.datadistribution.enums.PermissionType;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.BadRequestException;
@@ -189,6 +191,19 @@ public class DashboardServiceImpl implements IDashboardService {
         return DashboardLeadCountResponseDTO.builder()
                 .type("AVAILED")
                 .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardFollowUpCountResponseDTO getTodayFollowUpsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = countFollowUpsTodayInScope(dataScope, filterRequest);
+        return DashboardFollowUpCountResponseDTO.builder()
+                .type("TodayFollowUps")
+                .count(count)
+                .date(LocalDate.now(IST_ZONE))
                 .build();
     }
 
@@ -685,6 +700,7 @@ public class DashboardServiceImpl implements IDashboardService {
                     filter.setIsAvailed(null);
                     break;
                 case "TOTAL_FOLLOWUPS_TODAY":
+                case "TODAY_FOLLOW_UPS":
                     card.setValue(countFollowUpsTodayInScope(dataScope, filter));
                     break;
                 case "TOTAL_COUNSELLORS_LOGGED_TODAY":
@@ -891,9 +907,12 @@ public class DashboardServiceImpl implements IDashboardService {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.equal(root.get("isDeleted"), false));
         predicates.add(cb.equal(root.get("lead").get("isDeleted"), false));
+        predicates.add(cb.equal(root.get("completed"), false));
+        predicates.add(root.get("status").in(FollowUpStatus.PENDING, FollowUpStatus.UPCOMING));
 
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
+        LocalDate today = LocalDate.now(IST_ZONE);
+        LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
         predicates.add(cb.between(root.get("followUpDate"), todayStart, todayEnd));
 
         if (dataScope.getScopeType() == ScopeType.SELF) {
