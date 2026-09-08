@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
+import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
 import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
@@ -19,6 +20,7 @@ import com.app.datadistribution.repository.DataSegregationRepository;
 import com.app.datadistribution.repository.GradeRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
+import com.app.datadistribution.service.interfaces.IDataSegregationPermissionService;
 import com.app.datadistribution.service.interfaces.IDataSegregationService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 
@@ -32,14 +34,21 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
 
     private final DataSegregationRepository segregationRepository;
     private final IUserDataScopeService dataScopeService;
+    private final IDataSegregationPermissionService segregationPermissionService;
     private final CourseTypeRepository courseTypeRepository;
     private final LeadSourceRepository leadSourceRepository;
     private final BoardRepository boardRepository;
     private final GradeRepository gradeRepository;
 
     @Override
+    public DataSegregationCapabilitiesDTO getCapabilities() {
+        return segregationPermissionService.getCapabilities();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<CourseTypeSegregationDTO> getCourseTypesSummary() throws UnauthorizedException, BadRequestException {
+        segregationPermissionService.validateCourseTypeAccess();
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         return segregationRepository.fetchCourseTypeSummary(dataScope);
     }
@@ -52,10 +61,12 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
             throw new BadRequestException("courseTypeId is required for data segregation matrix.");
         }
 
+        segregationPermissionService.validateMatrixAccess(courseTypeId, leadSourceId, boardId, gradeId);
         validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
 
+        DataSegregationCapabilitiesDTO capabilities = segregationPermissionService.getCapabilities();
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId, dataScope);
+        return segregationRepository.fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId, dataScope, capabilities);
     }
 
     @Override
@@ -69,6 +80,7 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
             throw new BadRequestException("leadSourceId is required for user analytics.");
         }
 
+        segregationPermissionService.validateUserAnalyticsAccess(courseTypeId, leadSourceId, boardId, gradeId);
         validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
@@ -86,6 +98,7 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
             throw new BadRequestException("leadSourceId is required for lead status analytics.");
         }
 
+        segregationPermissionService.validateLeadStatusAnalyticsAccess(courseTypeId, leadSourceId, boardId, gradeId);
         validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();

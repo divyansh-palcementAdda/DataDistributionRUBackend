@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import com.app.datadistribution.dto.segregation.BoardNodeDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
+import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.GradeNodeDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusColumnDTO;
@@ -102,6 +103,24 @@ public class DataSegregationRepository {
      * Fetch hierarchical segregation matrix for the given Course Type, Lead Source, Board, and Grade.
      */
     public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, UserDataScope dataScope) {
+        DataSegregationCapabilitiesDTO defaultCaps = DataSegregationCapabilitiesDTO.builder()
+                .canView(true)
+                .canViewFullFlow(true)
+                .canViewCourseType(true)
+                .canViewSource(true)
+                .canViewBoard(true)
+                .canViewGrade(true)
+                .canViewUserAnalytics(true)
+                .canViewLeadStatusAnalytics(true)
+                .build();
+        return fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId, dataScope, defaultCaps);
+    }
+
+    /**
+     * Fetch hierarchical segregation matrix with explicit granular flow capability enforcement.
+     */
+    public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                              UserDataScope dataScope, DataSegregationCapabilitiesDTO capabilities) {
         CourseType courseType = courseTypeRepository.findById(courseTypeId).orElse(null);
         String courseTypeName = courseType != null ? courseType.getName() : "Unknown";
 
@@ -127,7 +146,24 @@ public class DataSegregationRepository {
         long unallottedOverall = summaryTuple.get("unallotted", Long.class);
         long availedOverall = summaryTuple.get("availed", Long.class);
 
-        // 2. Fetch grouped breakdown rows (Source -> Board -> Grade)
+        // If user cannot view source breakdown, return summary without child sources
+        if (capabilities != null && !capabilities.isCanViewSource()) {
+            return SegregationMatrixResponseDTO.builder()
+                    .courseTypeId(courseTypeId)
+                    .courseTypeName(courseTypeName)
+                    .totalLeads(totalOverall)
+                    .allottedLeads(allottedOverall)
+                    .unallottedLeads(unallottedOverall)
+                    .availedLeads(availedOverall)
+                    .capabilities(capabilities)
+                    .sources(new ArrayList<>())
+                    .build();
+        }
+
+        boolean canViewBoard = capabilities == null || capabilities.isCanViewBoard();
+        boolean canViewGrade = capabilities == null || capabilities.isCanViewGrade();
+
+        // 2. Fetch grouped breakdown rows according to permitted depth
         CriteriaQuery<Tuple> matrixQuery = cb.createTupleQuery();
         Root<Lead> root = matrixQuery.from(Lead.class);
 
@@ -136,31 +172,46 @@ public class DataSegregationRepository {
         SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", JoinType.INNER);
         preds.add(cb.equal(sourceJoin.get("isDeleted"), false));
 
-        Join<Lead, Board> bJoin = root.join("board", JoinType.LEFT);
-        Join<Lead, Grade> gJoin = root.join("grade", JoinType.LEFT);
-
         Subquery<UUID> matrixAvailedSubquery = buildAvailedSubquery(cb, matrixQuery, root);
 
-        matrixQuery.multiselect(
-                sourceJoin.get("id").alias("sourceId"),
-                sourceJoin.get("name").alias("sourceName"),
-                sourceJoin.get("code").alias("sourceCode"),
-                bJoin.get("id").alias("boardId"),
-                bJoin.get("name").alias("boardName"),
-                bJoin.get("code").alias("boardCode"),
-                gJoin.get("id").alias("gradeId"),
-                gJoin.get("name").alias("gradeName"),
-                gJoin.get("code").alias("gradeCode"),
-                cb.countDistinct(root.get("id")).alias("total"),
-                cb.countDistinct(cb.selectCase().when(cb.isNotNull(root.get("assignedTo")), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("allotted"),
-                cb.countDistinct(cb.selectCase().when(cb.isNull(root.get("assignedTo")), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("unallotted"),
-                cb.countDistinct(cb.selectCase().when(cb.and(cb.isNotNull(root.get("assignedTo")), cb.exists(matrixAvailedSubquery)), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("availed")
-        ).where(preds.toArray(new Predicate[0]))
-        .groupBy(
-                sourceJoin.get("id"), sourceJoin.get("name"), sourceJoin.get("code"),
-                bJoin.get("id"), bJoin.get("name"), bJoin.get("code"),
-                gJoin.get("id"), gJoin.get("name"), gJoin.get("code")
-        );
+        List<jakarta.persistence.criteria.Selection<?>> selections = new ArrayList<>();
+        selections.add(sourceJoin.get("id").alias("sourceId"));
+        selections.add(sourceJoin.get("name").alias("sourceName"));
+        selections.add(sourceJoin.get("code").alias("sourceCode"));
+
+        List<jakarta.persistence.criteria.Expression<?>> groupBys = new ArrayList<>();
+        groupBys.add(sourceJoin.get("id"));
+        groupBys.add(sourceJoin.get("name"));
+        groupBys.add(sourceJoin.get("code"));
+
+        Join<Lead, Board> bJoin = null;
+        if (canViewBoard) {
+            bJoin = root.join("board", JoinType.LEFT);
+            selections.add(bJoin.get("id").alias("boardId"));
+            selections.add(bJoin.get("name").alias("boardName"));
+            selections.add(bJoin.get("code").alias("boardCode"));
+            groupBys.add(bJoin.get("id"));
+            groupBys.add(bJoin.get("name"));
+            groupBys.add(bJoin.get("code"));
+        }
+
+        Join<Lead, Grade> gJoin = null;
+        if (canViewBoard && canViewGrade) {
+            gJoin = root.join("grade", JoinType.LEFT);
+            selections.add(gJoin.get("id").alias("gradeId"));
+            selections.add(gJoin.get("name").alias("gradeName"));
+            selections.add(gJoin.get("code").alias("gradeCode"));
+            groupBys.add(gJoin.get("id"));
+            groupBys.add(gJoin.get("name"));
+            groupBys.add(gJoin.get("code"));
+        }
+
+        selections.add(cb.countDistinct(root.get("id")).alias("total"));
+        selections.add(cb.countDistinct(cb.selectCase().when(cb.isNotNull(root.get("assignedTo")), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("allotted"));
+        selections.add(cb.countDistinct(cb.selectCase().when(cb.isNull(root.get("assignedTo")), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("unallotted"));
+        selections.add(cb.countDistinct(cb.selectCase().when(cb.and(cb.isNotNull(root.get("assignedTo")), cb.exists(matrixAvailedSubquery)), root.get("id")).otherwise(cb.nullLiteral(UUID.class))).alias("availed"));
+
+        matrixQuery.multiselect(selections).where(preds.toArray(new Predicate[0])).groupBy(groupBys);
 
         List<Tuple> tuples = entityManager.createQuery(matrixQuery).getResultList();
 
@@ -172,14 +223,6 @@ public class DataSegregationRepository {
             UUID sId = t.get("sourceId", UUID.class);
             String sName = t.get("sourceName", String.class);
             String sCode = t.get("sourceCode", String.class);
-
-            UUID bId = t.get("boardId", UUID.class);
-            String bName = t.get("boardName", String.class);
-            String bCode = t.get("boardCode", String.class);
-
-            UUID grId = t.get("gradeId", UUID.class);
-            String grName = t.get("gradeName", String.class);
-            String grCode = t.get("gradeCode", String.class);
 
             long countTotal = t.get("total", Long.class);
             long countAllotted = t.get("allotted", Long.class);
@@ -203,42 +246,54 @@ public class DataSegregationRepository {
             sourceNode.setUnallotted(sourceNode.getUnallotted() + countUnallotted);
             sourceNode.setAvailed(sourceNode.getAvailed() + countAvailed);
 
-            // Board Node (if board present)
-            if (bId != null || bName != null) {
-                UUID safeBoardId = bId != null ? bId : UUID.fromString("00000000-0000-0000-0000-000000000000");
-                Map<UUID, BoardNodeDTO> boardMap = boardMapBySource.computeIfAbsent(sId, k -> new LinkedHashMap<>());
-                BoardNodeDTO boardNode = boardMap.computeIfAbsent(safeBoardId, id -> {
-                    BoardNodeDTO node = BoardNodeDTO.builder()
-                            .boardId(bId)
-                            .boardName(bName != null ? bName : "Other Board")
-                            .boardCode(bCode)
-                            .total(0)
-                            .allotted(0)
-                            .unallotted(0)
-                            .availed(0)
-                            .grades(new ArrayList<>())
-                            .build();
-                    sourceNode.getBoards().add(node);
-                    return node;
-                });
+            // Board Node (if board permitted and present)
+            if (canViewBoard) {
+                UUID bId = t.get("boardId", UUID.class);
+                String bName = t.get("boardName", String.class);
+                String bCode = t.get("boardCode", String.class);
 
-                boardNode.setTotal(boardNode.getTotal() + countTotal);
-                boardNode.setAllotted(boardNode.getAllotted() + countAllotted);
-                boardNode.setUnallotted(boardNode.getUnallotted() + countUnallotted);
-                boardNode.setAvailed(boardNode.getAvailed() + countAvailed);
+                if (bId != null || bName != null) {
+                    UUID safeBoardId = bId != null ? bId : UUID.fromString("00000000-0000-0000-0000-000000000000");
+                    Map<UUID, BoardNodeDTO> boardMap = boardMapBySource.computeIfAbsent(sId, k -> new LinkedHashMap<>());
+                    BoardNodeDTO boardNode = boardMap.computeIfAbsent(safeBoardId, id -> {
+                        BoardNodeDTO node = BoardNodeDTO.builder()
+                                .boardId(bId)
+                                .boardName(bName != null ? bName : "Other Board")
+                                .boardCode(bCode)
+                                .total(0)
+                                .allotted(0)
+                                .unallotted(0)
+                                .availed(0)
+                                .grades(new ArrayList<>())
+                                .build();
+                        sourceNode.getBoards().add(node);
+                        return node;
+                    });
 
-                // Grade Node (if grade present)
-                if (grId != null || grName != null) {
-                    GradeNodeDTO gradeNode = GradeNodeDTO.builder()
-                            .gradeId(grId)
-                            .gradeName(grName != null ? grName : "Other Grade")
-                            .gradeCode(grCode)
-                            .total(countTotal)
-                            .allotted(countAllotted)
-                            .unallotted(countUnallotted)
-                            .availed(countAvailed)
-                            .build();
-                    boardNode.getGrades().add(gradeNode);
+                    boardNode.setTotal(boardNode.getTotal() + countTotal);
+                    boardNode.setAllotted(boardNode.getAllotted() + countAllotted);
+                    boardNode.setUnallotted(boardNode.getUnallotted() + countUnallotted);
+                    boardNode.setAvailed(boardNode.getAvailed() + countAvailed);
+
+                    // Grade Node (if grade permitted and present)
+                    if (canViewGrade) {
+                        UUID grId = t.get("gradeId", UUID.class);
+                        String grName = t.get("gradeName", String.class);
+                        String grCode = t.get("gradeCode", String.class);
+
+                        if (grId != null || grName != null) {
+                            GradeNodeDTO gradeNode = GradeNodeDTO.builder()
+                                    .gradeId(grId)
+                                    .gradeName(grName != null ? grName : "Other Grade")
+                                    .gradeCode(grCode)
+                                    .total(countTotal)
+                                    .allotted(countAllotted)
+                                    .unallotted(countUnallotted)
+                                    .availed(countAvailed)
+                                    .build();
+                            boardNode.getGrades().add(gradeNode);
+                        }
+                    }
                 }
             }
         }
@@ -253,6 +308,7 @@ public class DataSegregationRepository {
                 .allottedLeads(allottedOverall)
                 .unallottedLeads(unallottedOverall)
                 .availedLeads(availedOverall)
+                .capabilities(capabilities)
                 .sources(sourceNodes)
                 .build();
     }

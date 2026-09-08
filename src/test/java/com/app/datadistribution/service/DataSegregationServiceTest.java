@@ -55,6 +55,9 @@ public class DataSegregationServiceTest {
     @Mock
     private GradeRepository gradeRepository;
 
+    @Mock
+    private com.app.datadistribution.service.interfaces.IDataSegregationPermissionService segregationPermissionService;
+
     @InjectMocks
     private DataSegregationServiceImpl segregationService;
 
@@ -122,7 +125,7 @@ public class DataSegregationServiceTest {
                 .availedLeads(15)
                 .build();
 
-        when(segregationRepository.fetchSegregationMatrix(eq(courseTypeId), eq(null), eq(null), eq(null), eq(testScope)))
+        when(segregationRepository.fetchSegregationMatrix(eq(courseTypeId), eq(null), eq(null), eq(null), eq(testScope), any()))
                 .thenReturn(mockResponse);
 
         SegregationMatrixResponseDTO result = segregationService.getSegregationMatrix(courseTypeId, null, null, null);

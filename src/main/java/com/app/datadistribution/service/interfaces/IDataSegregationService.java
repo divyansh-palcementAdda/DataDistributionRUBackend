@@ -10,7 +10,11 @@ import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 
+import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
+
 public interface IDataSegregationService {
+
+    DataSegregationCapabilitiesDTO getCapabilities();
 
     List<CourseTypeSegregationDTO> getCourseTypesSummary() throws UnauthorizedException, BadRequestException;
 

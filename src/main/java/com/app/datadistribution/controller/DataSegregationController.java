@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
@@ -32,8 +33,16 @@ public class DataSegregationController {
 
     private final IDataSegregationService segregationService;
 
+    @GetMapping("/capabilities")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
+    @Operation(summary = "Get resolved flow visibility capabilities for current authenticated user")
+    public ResponseEntity<ApiResponse<DataSegregationCapabilitiesDTO>> getCapabilities() {
+        DataSegregationCapabilitiesDTO response = segregationService.getCapabilities();
+        return ResponseEntity.ok(ApiResponse.success("Data segregation capabilities retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/course-types")
-    @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW') or hasAuthority('DATA_SEGREGATION_COURSE_TYPE_VIEW')")
     @Operation(summary = "Get active course types with total lead counts within data scope")
     public ResponseEntity<ApiResponse<List<CourseTypeSegregationDTO>>> getCourseTypes()
             throws UnauthorizedException, BadRequestException {
@@ -42,7 +51,7 @@ public class DataSegregationController {
     }
 
     @GetMapping("/matrix")
-    @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
     @Operation(summary = "Get hierarchical lead segregation matrix (Course Type -> Source -> Board -> Grade)")
     public ResponseEntity<ApiResponse<SegregationMatrixResponseDTO>> getMatrix(
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
@@ -55,7 +64,7 @@ public class DataSegregationController {
     }
 
     @GetMapping("/user-analytics")
-    @PreAuthorize("hasAuthority('DATA_SEGREGATION_USER_ANALYTICS') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_USER_ANALYTICS') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
     @Operation(summary = "Get user-level breakdown and dynamic lead status counts for a selected segregation scope")
     public ResponseEntity<ApiResponse<UserSegregationAnalyticsDTO>> getUserAnalytics(
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
@@ -68,7 +77,7 @@ public class DataSegregationController {
     }
 
     @GetMapping("/lead-status-analytics")
-    @PreAuthorize("hasAuthority('DATA_SEGREGATION_LEAD_STATUS_ANALYTICS') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_LEAD_STATUS_ANALYTICS') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
     @Operation(summary = "Get dynamic lead status analytics matrix for a selected segregation scope")
     public ResponseEntity<ApiResponse<List<LeadStatusAnalyticsDTO>>> getLeadStatusAnalytics(
             @RequestParam(name = "courseTypeId") UUID courseTypeId,

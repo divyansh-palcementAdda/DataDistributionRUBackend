@@ -1,9 +1,12 @@
 package com.app.datadistribution.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
 import com.app.datadistribution.entity.CourseType;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.CourseTypeRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.UserRepository;
@@ -43,23 +47,52 @@ public class DataSegregationIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
-    private void authenticateAsAdmin() {
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        authenticateAsAdmin();
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateWithAuthorities(String... authorities) {
         User admin = userRepository.findByUsername("superadmin")
                 .or(() -> userRepository.findByUsername("admin"))
-                .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+                .orElseGet(() -> {
+                    User u = User.builder()
+                            .username("superadmin")
+                            .email("superadmin@test.com")
+                            .password("password")
+                            .active(true)
+                            .emailVerified(true)
+                            .build();
+                    return userRepository.save(u);
+                });
 
-        if (admin != null) {
-            UserDetailsImpl userDetails = UserDetailsImpl.build(admin);
-            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                    userDetails, null, List.of(
-                            new SimpleGrantedAuthority("DATA_SEGREGATION_VIEW"),
-                            new SimpleGrantedAuthority("DATA_SEGREGATION_USER_ANALYTICS"),
-                            new SimpleGrantedAuthority("DATA_SEGREGATION_LEAD_STATUS_ANALYTICS"),
-                            new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")
-                    )
-            );
-            SecurityContextHolder.getContext().setAuthentication(auth);
-        }
+        UserDetailsImpl userDetails = UserDetailsImpl.build(admin);
+        List<SimpleGrantedAuthority> authList = java.util.Arrays.stream(authorities)
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                userDetails, null, authList
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private void authenticateAsAdmin() {
+        authenticateWithAuthorities(
+                "DATA_SEGREGATION_VIEW",
+                "DATA_SEGREGATION_FULL_FLOW_VIEW",
+                "DATA_SEGREGATION_COURSE_TYPE_VIEW",
+                "DATA_SEGREGATION_SOURCE_VIEW",
+                "DATA_SEGREGATION_BOARD_VIEW",
+                "DATA_SEGREGATION_GRADE_VIEW",
+                "DATA_SEGREGATION_USER_ANALYTICS",
+                "DATA_SEGREGATION_LEAD_STATUS_ANALYTICS",
+                "ROLE_SUPER_ADMIN"
+        );
     }
 
     @Test
@@ -72,7 +105,7 @@ public class DataSegregationIntegrationTest {
     }
 
     @Test
-    @DisplayName("Integration: getSegregationMatrix with valid courseType returns non-null matrix")
+    @DisplayName("Integration: getSegregationMatrix with valid courseType returns non-null matrix with full flow")
     void testGetSegregationMatrixIntegration() throws Exception {
         authenticateAsAdmin();
 
@@ -82,7 +115,41 @@ public class DataSegregationIntegrationTest {
             SegregationMatrixResponseDTO matrix = segregationService.getSegregationMatrix(ct.getId(), null, null, null);
             assertNotNull(matrix);
             assertNotNull(matrix.getSources());
+            assertNotNull(matrix.getCapabilities());
+            assertTrue(matrix.getCapabilities().isCanViewFullFlow());
             assertTrue(matrix.getTotalLeads() >= 0);
+        }
+    }
+
+    @Test
+    @DisplayName("Integration: Partial permissions without Grade hides grade tree")
+    void testPartialPermissionsWithoutGrade() throws Exception {
+        authenticateWithAuthorities(
+                "DATA_SEGREGATION_VIEW",
+                "DATA_SEGREGATION_COURSE_TYPE_VIEW",
+                "DATA_SEGREGATION_SOURCE_VIEW",
+                "DATA_SEGREGATION_BOARD_VIEW"
+        );
+
+        List<CourseType> courseTypes = courseTypeRepository.findAll();
+        if (!courseTypes.isEmpty()) {
+            CourseType ct = courseTypes.get(0);
+            SegregationMatrixResponseDTO matrix = segregationService.getSegregationMatrix(ct.getId(), null, null, null);
+            assertNotNull(matrix);
+            assertNotNull(matrix.getCapabilities());
+            assertTrue(matrix.getCapabilities().isCanViewBoard());
+            assertTrue(!matrix.getCapabilities().isCanViewGrade());
+
+            // Verify no grades exist in any board node
+            matrix.getSources().forEach(src -> {
+                src.getBoards().forEach(board -> {
+                    assertEquals(0, board.getGrades().size(), "Grades must not be returned when grade permission is missing");
+                });
+            });
+
+            // Passing gradeId must be rejected
+            assertThrows(UnauthorizedException.class, () ->
+                    segregationService.getSegregationMatrix(ct.getId(), null, null, UUID.randomUUID()));
         }
     }
 

@@ -218,6 +218,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
+                    <reuseForks>true</reuseForks>
+                    <trimStackTrace>false</trimStackTrace>
                 </configuration>
             </plugin>
 

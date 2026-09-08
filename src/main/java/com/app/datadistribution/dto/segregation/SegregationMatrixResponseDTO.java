@@ -22,6 +22,8 @@ public class SegregationMatrixResponseDTO {
     private long unallottedLeads;
     private long availedLeads;
 
+    private DataSegregationCapabilitiesDTO capabilities;
+
     @Builder.Default
     private List<SourceNodeDTO> sources = new ArrayList<>();
 }
