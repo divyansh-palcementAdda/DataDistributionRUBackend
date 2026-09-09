@@ -21,6 +21,7 @@ public class LeadFollowUpRequest {
     private java.util.UUID leadStatusId;
 
     @NotNull(message = "Follow-up date is required")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.app.datadistribution.config.FlexibleLocalDateTimeDeserializer.class)
     private LocalDateTime followUpDate;
 
     @jakarta.validation.constraints.NotBlank(message = "Remarks/feedback is required while scheduling a follow-up")

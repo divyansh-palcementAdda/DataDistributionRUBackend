@@ -15,8 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Scheduled job that automatically transitions UPCOMING follow-ups
- * whose scheduled date has arrived (today or earlier) to PENDING.
+ * Scheduled job that automatically transitions follow-up statuses based on business date:
+ * 1. UPCOMING -> PENDING when scheduled date has arrived (today or earlier).
+ * 2. PENDING -> MISSED when scheduled date is in the past (before today's start of day).
  */
 @Slf4j
 @Component
@@ -31,17 +32,23 @@ public class FollowUpTransitionScheduler {
      */
     @Scheduled(cron = "${app.followup.transition-cron:0 1 * * * *}", zone = "Asia/Kolkata")
     @Transactional
-    public void transitionUpcomingFollowUpsToPending() {
+    public void transitionFollowUpStatuses() {
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
         try {
-            int updatedCount = leadFollowUpRepository.transitionUpcomingToPendingForDate(endOfDay);
-            if (updatedCount > 0) {
-                log.info("Transitioned {} UPCOMING follow-up(s) to PENDING for date <= {}", updatedCount, today);
+            int upcomingToPendingCount = leadFollowUpRepository.transitionUpcomingToPendingForDate(endOfDay);
+            if (upcomingToPendingCount > 0) {
+                log.info("Transitioned {} UPCOMING follow-up(s) to PENDING for date <= {}", upcomingToPendingCount, today);
+            }
+
+            int pendingToMissedCount = leadFollowUpRepository.transitionPendingToMissedForDate(startOfDay);
+            if (pendingToMissedCount > 0) {
+                log.info("Transitioned {} PENDING follow-up(s) to MISSED for date < {}", pendingToMissedCount, today);
             }
         } catch (Exception e) {
-            log.error("Failed to automatically transition UPCOMING follow-ups to PENDING", e);
+            log.error("Failed to automatically transition follow-up statuses", e);
         }
     }
 }

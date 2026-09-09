@@ -65,7 +65,9 @@ public class FollowUpController {
     @Operation(summary = "Schedule a follow-up for a lead")
     public ResponseEntity<ApiResponse<LeadFollowUpResponse>> scheduleFollowUp(
             @Valid @RequestBody LeadFollowUpRequest request) throws UnauthorizedException, BadRequestException {
+    	System.err.println("FollowUp Date debug in request :- "+request.getFollowUpDate());
         LeadFollowUpResponse response = leadFollowUpService.createFollowUp(request);
+    	System.err.println("FollowUp Date debug in response :- "+response.getFollowUpDate());
         return ResponseEntity.ok(ApiResponse.success("Follow-up scheduled successfully", response, HttpStatus.OK.value()));
     }
 

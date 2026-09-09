@@ -91,5 +91,6 @@ public class LeadRequest {
     @Builder.Default
     private boolean active = true;
 
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.app.datadistribution.config.FlexibleLocalDateTimeDeserializer.class)
     private LocalDateTime nextFollowUpDate;
 }

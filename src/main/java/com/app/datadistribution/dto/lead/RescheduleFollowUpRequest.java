@@ -19,6 +19,7 @@ import lombok.Setter;
 public class RescheduleFollowUpRequest {
 
     @NotNull(message = "New follow-up date and time is required")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.app.datadistribution.config.FlexibleLocalDateTimeDeserializer.class)
     private LocalDateTime newFollowUpDate;
 
     @NotBlank(message = "Remarks/reason is required when rescheduling a follow-up.")
