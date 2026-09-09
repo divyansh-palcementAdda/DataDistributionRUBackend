@@ -3,6 +3,7 @@ package com.app.datadistribution.repository.specification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.FollowUpStatus;
 
 public class FollowUpSpecification {
+
+    public static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
 
     public static Specification<LeadFollowUp> isNotDeleted() {
         return (root, query, cb) -> cb.equal(root.get("isDeleted"), false);
@@ -68,18 +71,32 @@ public class FollowUpSpecification {
         return (root, query, cb) -> cb.equal(root.get("completed"), completed);
     }
 
+    public static Specification<LeadFollowUp> forToday() {
+        return hasFollowUpDateOn(LocalDate.now(BUSINESS_ZONE));
+    }
+
     public static Specification<LeadFollowUp> hasFollowUpDateOn(LocalDate date) {
         return (root, query, cb) -> {
             LocalDateTime startOfDay = date.atStartOfDay();
-            LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-            return cb.between(root.get("followUpDate"), startOfDay, endOfDay);
+            LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
+            return cb.and(
+                cb.greaterThanOrEqualTo(root.get("followUpDate"), startOfDay),
+                cb.lessThan(root.get("followUpDate"), startOfNextDay)
+            );
         };
+    }
+
+    public static Specification<LeadFollowUp> hasFollowUpDateBetween(LocalDateTime startDateTime, LocalDateTime endDateTimeExclusive) {
+        return (root, query, cb) -> cb.and(
+            cb.greaterThanOrEqualTo(root.get("followUpDate"), startDateTime),
+            cb.lessThan(root.get("followUpDate"), endDateTimeExclusive)
+        );
     }
 
     public static Specification<LeadFollowUp> isOverdue() {
         return (root, query, cb) -> cb.and(
             cb.equal(root.get("completed"), false),
-            cb.lessThan(root.get("followUpDate"), LocalDateTime.now())
+            cb.lessThan(root.get("followUpDate"), LocalDateTime.now(BUSINESS_ZONE))
         );
     }
 

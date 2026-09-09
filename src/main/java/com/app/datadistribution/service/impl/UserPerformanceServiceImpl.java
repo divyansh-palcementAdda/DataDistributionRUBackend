@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -152,14 +153,15 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         Set<UUID> connectedStatusIds = getDescendantStatusIds("CONNECTED");
 
         Set<UUID> candidateUserIds = candidateUsers.stream().map(User::getId).collect(Collectors.toSet());
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
 
         // 5. Independent Grouped Aggregations by User ID
         Map<UUID, LeadStatsDTO> leadStatsMap = fetchLeadStatsForUsers(candidateUserIds, rawStatusIds, registeredStatusIds, connectedStatusIds);
-        Map<UUID, FollowupStatsDTO> followupStatsMap = fetchFollowupStatsForUsers(candidateUserIds, startOfDay, endOfDay, now);
-        Map<UUID, ActivityStatsDTO> activityStatsMap = fetchActivityStatsForUsers(candidateUserIds, startOfDay, endOfDay, now);
+        Map<UUID, FollowupStatsDTO> followupStatsMap = fetchFollowupStatsForUsers(candidateUserIds, startOfDay, tomorrowStart, now);
+        Map<UUID, ActivityStatsDTO> activityStatsMap = fetchActivityStatsForUsers(candidateUserIds, startOfDay, tomorrowStart, now);
 
         // 6. Assemble Row Responses
         List<UserPerformanceResponse> rows = new ArrayList<>(candidateUsers.size());
@@ -386,7 +388,7 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
                 "  COUNT(DISTINCT CASE WHEN lfu.completed = false THEN lfu.id END) AS total_pending " +
                 "FROM lead_follow_ups lfu " +
                 "WHERE lfu.is_deleted = false AND lfu.assigned_to_user_id IN (:userIds) " +
-                "  AND lfu.follow_up_date BETWEEN :startOfDay AND :endOfDay " +
+                "  AND lfu.follow_up_date >= :startOfDay AND lfu.follow_up_date < :endOfDay " +
                 "GROUP BY lfu.assigned_to_user_id";
 
         Query query = entityManager.createNativeQuery(sql);

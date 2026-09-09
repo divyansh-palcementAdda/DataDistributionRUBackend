@@ -35,12 +35,12 @@ public class FollowUpTransitionScheduler {
     public void transitionFollowUpStatuses() {
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
         LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
 
         try {
-            int upcomingToPendingCount = leadFollowUpRepository.transitionUpcomingToPendingForDate(endOfDay);
+            int upcomingToPendingCount = leadFollowUpRepository.transitionUpcomingToPendingForDate(startOfNextDay);
             if (upcomingToPendingCount > 0) {
-                log.info("Transitioned {} UPCOMING follow-up(s) to PENDING for date <= {}", upcomingToPendingCount, today);
+                log.info("Transitioned {} UPCOMING follow-up(s) to PENDING for date < {}", upcomingToPendingCount, startOfNextDay);
             }
 
             int pendingToMissedCount = leadFollowUpRepository.transitionPendingToMissedForDate(startOfDay);

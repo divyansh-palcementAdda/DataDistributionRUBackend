@@ -108,12 +108,12 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
         // 4. Batch Query Target User Capacities (Asia/Kolkata)
         LocalDate today = LocalDate.now(IST_ZONE);
         LocalDateTime todayStart = today.atStartOfDay();
-        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
+        LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
 
         List<UUID> activeUserIds = targetUsers.stream().map(User::getId).toList();
 
         Map<UUID, Long> todayFollowUpsMap = new HashMap<>();
-        List<Object[]> followUpResults = leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(activeUserIds, todayStart, todayEnd);
+        List<Object[]> followUpResults = leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(activeUserIds, todayStart, tomorrowStart);
         for (Object[] row : followUpResults) {
             if (row[0] != null && row[1] != null) {
                 todayFollowUpsMap.put((UUID) row[0], ((Number) row[1]).longValue());

@@ -40,9 +40,13 @@ public class FeedbackSpecification {
 
     public static Specification<LeadFeedback> createdToday() {
         return (root, query, cb) -> {
-            LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-            LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
-            return cb.between(root.get("createdAt"), startOfDay, endOfDay);
+            LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+            LocalDateTime startOfDay = today.atStartOfDay();
+            LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
+            return cb.and(
+                cb.greaterThanOrEqualTo(root.get("createdAt"), startOfDay),
+                cb.lessThan(root.get("createdAt"), startOfNextDay)
+            );
         };
     }
 

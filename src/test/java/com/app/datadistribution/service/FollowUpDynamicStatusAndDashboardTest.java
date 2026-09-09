@@ -365,6 +365,8 @@ public class FollowUpDynamicStatusAndDashboardTest {
                 when(path.get(anyString())).thenReturn(path);
                 when(cb.equal(any(), any())).thenReturn(pred);
                 when(cb.between(any(), any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(pred);
+                when(cb.greaterThanOrEqualTo(any(), any(LocalDateTime.class))).thenReturn(pred);
+                when(cb.lessThan(any(), any(LocalDateTime.class))).thenReturn(pred);
                 when(cb.or(any(Predicate[].class))).thenReturn(pred);
                 when(cb.and(any(Predicate[].class))).thenReturn(pred);
                 when(cb.countDistinct(any())).thenReturn(mock(jakarta.persistence.criteria.Expression.class));

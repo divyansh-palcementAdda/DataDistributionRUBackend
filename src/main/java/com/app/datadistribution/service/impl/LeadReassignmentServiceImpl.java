@@ -261,7 +261,7 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
         ZonedDateTime nowIST = ZonedDateTime.now(IST_ZONE);
         LocalDate targetDate = request.getScheduledDate() != null ? request.getScheduledDate() : nowIST.toLocalDate();
         LocalDateTime startOfDay = targetDate.atStartOfDay();
-        LocalDateTime endOfDay = targetDate.atTime(23, 59, 59);
+        LocalDateTime startOfNextDay = targetDate.plusDays(1).atStartOfDay();
 
         Set<UUID> processedFollowUpIds = new HashSet<>();
         List<FollowUpReassignResponse.UserFollowUpDistributionSummary> summaries = new ArrayList<>();
@@ -320,7 +320,8 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
                 predicates.add(cb.or(assignedToPredicate, leadAssignedToPredicate));
 
                 if (request.getScheduledDate() != null) {
-                    predicates.add(cb.between(root.get("followUpDate"), startOfDay, endOfDay));
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("followUpDate"), startOfDay));
+                    predicates.add(cb.lessThan(root.get("followUpDate"), startOfNextDay));
                 }
                 if (!processedFollowUpIds.isEmpty()) {
                     predicates.add(cb.not(root.get("id").in(processedFollowUpIds)));
@@ -344,7 +345,7 @@ public class LeadReassignmentServiceImpl implements ILeadReassignmentService {
             }
 
             // Workload validation for target user today
-            long currentTargetWorkload = leadFollowUpRepository.countScheduledFollowUpsForUserBetween(targetUser.getId(), startOfDay, endOfDay);
+            long currentTargetWorkload = leadFollowUpRepository.countScheduledFollowUpsForUserBetween(targetUser.getId(), startOfDay, startOfNextDay);
             long newWorkload = currentTargetWorkload + followUpsToReassign.size();
 
             if (newWorkload > maxDailyFollowUps) {

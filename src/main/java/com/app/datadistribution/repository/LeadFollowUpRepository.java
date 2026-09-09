@@ -24,17 +24,17 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
 
     List<LeadFollowUp> findByLeadIdOrderByFollowUpDateDesc(UUID leadId);
 
-    @Query("SELECT COUNT(f) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id = :userId OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id = :userId)) AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay")
+    @Query("SELECT COUNT(f) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id = :userId OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id = :userId)) AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay")
     long countScheduledFollowUpsForUserBetween(@Param("userId") UUID userId, @Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 
-    @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), COUNT(f) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
+    @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), COUNT(f) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
     List<Object[]> countScheduledFollowUpsGroupedByUserBetween(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 
     @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), COUNT(f) "
          + "FROM LeadFollowUp f "
          + "WHERE f.isDeleted = false AND f.completed = false "
          + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
-         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay "
          + "AND (f.assignedTo.id IN :userIds OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id IN :userIds)) "
          + "GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
     List<Object[]> countActiveTodayFollowUpsGroupedByUserIds(
@@ -45,14 +45,14 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
     @Query("SELECT COUNT(f) FROM LeadFollowUp f "
          + "WHERE f.isDeleted = false AND f.completed = false "
          + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
-         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay "
          + "AND (f.assignedTo.id = :userId OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id = :userId))")
     long countActiveTodayFollowUpsForUser(
             @Param("userId") UUID userId,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay);
 
-    @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), MIN(f.followUpDate) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
+    @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), MIN(f.followUpDate) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
     List<Object[]> findEarliestScheduledFollowUpGroupedByUserBetween(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 
     @Query("SELECT f FROM LeadFollowUp f WHERE f.isDeleted = false AND f.completed = false AND f.lead.id IN :leadIds AND f.followUpDate >= :startOfDay")
@@ -76,7 +76,7 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
          + "WHERE f.isDeleted = false AND l.isDeleted = false "
          + "AND f.completed = false "
          + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
-         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate < :endOfDay "
          + "ORDER BY f.followUpDate ASC")
     List<LeadFollowUp> findActiveFollowUpsForDateRangeWithDetails(
             @Param("startOfDay") LocalDateTime startOfDay,
@@ -85,8 +85,8 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE LeadFollowUp f SET f.status = com.app.datadistribution.enums.FollowUpStatus.PENDING "
          + "WHERE f.isDeleted = false AND f.completed = false AND f.status = com.app.datadistribution.enums.FollowUpStatus.UPCOMING "
-         + "AND f.followUpDate <= :endOfDay")
-    int transitionUpcomingToPendingForDate(@Param("endOfDay") LocalDateTime endOfDay);
+         + "AND f.followUpDate < :startOfNextDay")
+    int transitionUpcomingToPendingForDate(@Param("startOfNextDay") LocalDateTime startOfNextDay);
 
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE LeadFollowUp f SET f.status = com.app.datadistribution.enums.FollowUpStatus.MISSED "

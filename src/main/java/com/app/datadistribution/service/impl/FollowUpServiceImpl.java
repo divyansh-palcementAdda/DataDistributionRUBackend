@@ -204,10 +204,13 @@ public class FollowUpServiceImpl implements FollowUpService {
         return getAllFollowUps(pageRequest, null, null, userId, null, null, null);
     }
 
+    private static final java.time.ZoneId BUSINESS_ZONE = java.time.ZoneId.of("Asia/Kolkata");
+
     @Override
     @Transactional(readOnly = true)
     public FollowUpPagedResponseDTO getTodayFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        return getAllFollowUps(pageRequest, LocalDate.now(), null, null, null, null, null);
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        return getAllFollowUps(pageRequest, today, null, null, null, null, null);
     }
 
     @Override
@@ -258,13 +261,14 @@ public class FollowUpServiceImpl implements FollowUpService {
             });
         }
 
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         long pending = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isCompleted(false)));
         long completed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isCompleted(true)));
         long overdue = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isOverdue()));
-        long today = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasFollowUpDateOn(LocalDate.now())));
+        long todayCount = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasFollowUpDateOn(today)));
 
         return FollowUpSummaryDTO.builder()
-                .todayFollowUps(today)
+                .todayFollowUps(todayCount)
                 .pendingFollowUps(pending)
                 .completedFollowUps(completed)
                 .overdueFollowUps(overdue)

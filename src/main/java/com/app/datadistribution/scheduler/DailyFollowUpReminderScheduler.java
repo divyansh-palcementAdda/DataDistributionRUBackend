@@ -53,9 +53,9 @@ public class DailyFollowUpReminderScheduler {
         log.info("Starting Daily Follow-up Reminder Job for date: {}", today);
 
         LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
 
-        List<LeadFollowUp> activeFollowUps = leadFollowUpRepository.findActiveFollowUpsForDateRangeWithDetails(startOfDay, endOfDay);
+        List<LeadFollowUp> activeFollowUps = leadFollowUpRepository.findActiveFollowUpsForDateRangeWithDetails(startOfDay, startOfNextDay);
         if (activeFollowUps == null || activeFollowUps.isEmpty()) {
             log.info("No active follow-ups scheduled for today ({}). Daily reminder job finished.", today);
             return;

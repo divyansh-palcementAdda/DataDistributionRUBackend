@@ -270,14 +270,14 @@ public class FollowUpTimezoneAndStatusPreservationTest {
     void testTransitionScheduler_TransitionsStatusesCorrectly() {
         LocalDate today = LocalDate.now(IST_ZONE);
         LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
+        LocalDateTime startOfNextDay = today.plusDays(1).atStartOfDay();
 
-        when(leadFollowUpRepository.transitionUpcomingToPendingForDate(endOfDay)).thenReturn(5);
+        when(leadFollowUpRepository.transitionUpcomingToPendingForDate(startOfNextDay)).thenReturn(5);
         when(leadFollowUpRepository.transitionPendingToMissedForDate(startOfDay)).thenReturn(3);
 
         transitionScheduler.transitionFollowUpStatuses();
 
-        verify(leadFollowUpRepository).transitionUpcomingToPendingForDate(eq(endOfDay));
+        verify(leadFollowUpRepository).transitionUpcomingToPendingForDate(eq(startOfNextDay));
         verify(leadFollowUpRepository).transitionPendingToMissedForDate(eq(startOfDay));
     }
 

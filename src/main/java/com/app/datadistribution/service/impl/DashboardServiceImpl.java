@@ -912,8 +912,9 @@ public class DashboardServiceImpl implements IDashboardService {
 
         LocalDate today = LocalDate.now(IST_ZONE);
         LocalDateTime todayStart = today.atStartOfDay();
-        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
-        predicates.add(cb.between(root.get("followUpDate"), todayStart, todayEnd));
+        LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
+        predicates.add(cb.greaterThanOrEqualTo(root.get("followUpDate"), todayStart));
+        predicates.add(cb.lessThan(root.get("followUpDate"), tomorrowStart));
 
         if (dataScope.getScopeType() == ScopeType.SELF) {
             predicates.add(cb.or(
@@ -1279,11 +1280,12 @@ public class DashboardServiceImpl implements IDashboardService {
 
         LocalDateTime startOfDayIST = nowIST.toLocalDate().atStartOfDay();
         LocalDateTime endOfDayIST = nowIST.toLocalDate().atTime(LocalTime.MAX);
+        LocalDateTime tomorrowStartIST = nowIST.toLocalDate().plusDays(1).atStartOfDay();
         LocalDateTime cutoffDateTimeIST = nowIST.toLocalDate().atTime(cutoff);
 
         List<User> activeUsers = getActiveMonitoredUsersInScope(dataScope);
 
-        List<Object[]> followUpCounts = leadFollowUpRepository.countScheduledFollowUpsGroupedByUserBetween(startOfDayIST, endOfDayIST);
+        List<Object[]> followUpCounts = leadFollowUpRepository.countScheduledFollowUpsGroupedByUserBetween(startOfDayIST, tomorrowStartIST);
         Map<UUID, Long> countMap = new HashMap<>();
         for (Object[] row : followUpCounts) {
             UUID uId = (UUID) row[0];
@@ -1291,7 +1293,7 @@ public class DashboardServiceImpl implements IDashboardService {
             if (uId != null) countMap.put(uId, count);
         }
 
-        List<Object[]> earliestTimes = leadFollowUpRepository.findEarliestScheduledFollowUpGroupedByUserBetween(startOfDayIST, endOfDayIST);
+        List<Object[]> earliestTimes = leadFollowUpRepository.findEarliestScheduledFollowUpGroupedByUserBetween(startOfDayIST, tomorrowStartIST);
         Map<UUID, LocalDateTime> earliestMap = new HashMap<>();
         for (Object[] row : earliestTimes) {
             UUID uId = (UUID) row[0];
