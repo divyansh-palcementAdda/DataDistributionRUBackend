@@ -43,6 +43,7 @@ public class LeadResponse {
     private List<com.app.datadistribution.dto.course.CourseTypeResponseDTO> interestedCourseTypes;
     private CourseSummaryDTO course;
     private CourseSummaryDTO registeredCourse;
+    private com.app.datadistribution.dto.program.ProgramSummaryDTO program;
     private BoardResponse board;
     private GradeResponse grade;
     private DepartmentSummaryDTO department;

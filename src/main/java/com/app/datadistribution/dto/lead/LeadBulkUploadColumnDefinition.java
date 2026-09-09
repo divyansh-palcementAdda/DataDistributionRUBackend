@@ -17,6 +17,7 @@ public enum LeadBulkUploadColumnDefinition {
     STATE("State", "state", false, "Text", "Maharashtra", "Optional. Candidate state of residence."),
     COUNTRY("Country", "country", false, "Text", "India", "Optional. Candidate country."),
     SOURCE_DETAILS("Source Details", "sourceDetails", false, "Text", "Education Expo 2026", "Optional. Specific campaign, event, or inquiry details."),
+    PROGRAM("Program", "program", false, "Text", "School of Management", "Optional. Specific program or school name."),
     COURSE_INTERESTED("Course Interested", "courseInterested", false, "Text", "Computer Science Engineering", "Optional. Specific course or specialization name."),
     REMARKS("Remarks", "remarks", false, "Text", "High intent lead, requested callback", "Optional. Initial notes or remarks for counselor.");
 

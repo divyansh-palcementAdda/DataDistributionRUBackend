@@ -79,6 +79,10 @@ class DatabaseSeederTest {
     @Mock
     private LeadSourceRepository leadSourceRepository;
     @Mock
+    private com.app.datadistribution.repository.ProgramRepository programRepository;
+    @Mock
+    private com.app.datadistribution.repository.CourseRepository courseRepository;
+    @Mock
     private EntityManager entityManager;
 
     @InjectMocks

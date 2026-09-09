@@ -61,7 +61,7 @@ public class LeadBulkUploadTemplateTest {
     @Test
     public void testColumnDefinition_Integrity() {
         List<LeadBulkUploadColumnDefinition> columns = LeadBulkUploadColumnDefinition.getAllColumns();
-        assertEquals(10, columns.size());
+        assertEquals(11, columns.size());
 
         assertTrue(LeadBulkUploadColumnDefinition.FULL_NAME.isRequired());
         assertTrue(LeadBulkUploadColumnDefinition.PHONE_NUMBER.isRequired());

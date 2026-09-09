@@ -106,14 +106,25 @@ public class DropdownController {
         return ResponseEntity.ok(ApiResponse.success("Lead sources dropdown retrieved successfully", data, 200));
     }
 
-    @GetMapping("/courses")
-    @PreAuthorize("hasAuthority('DROPDOWN_COURSE_VIEW') or hasAuthority('COURSE_VIEW') or hasAuthority('LEAD_READ')")
-    @Operation(summary = "Get Courses Dropdown", description = "Retrieves active courses with optional course-type filter")
-    public ResponseEntity<ApiResponse<List<CourseDropdownResponse>>> getCoursesDropdown(
-            @RequestParam(required = false) UUID courseTypeId,
+    @GetMapping("/programs")
+    @PreAuthorize("hasAuthority('DROPDOWN_PROGRAM_VIEW') or hasAuthority('PROGRAM_VIEW') or hasAuthority('LEAD_CREATE') or hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ') or isAuthenticated()")
+    @Operation(summary = "Get Programs Dropdown", description = "Retrieves active programs for selection")
+    public ResponseEntity<ApiResponse<List<DropdownOptionResponse>>> getProgramsDropdown(
             @RequestParam(required = false) String search) {
 
-        List<CourseDropdownResponse> data = dropdownService.getCoursesDropdown(courseTypeId, search);
+        List<DropdownOptionResponse> data = dropdownService.getProgramsDropdown(search);
+        return ResponseEntity.ok(ApiResponse.success("Programs dropdown retrieved successfully", data, 200));
+    }
+
+    @GetMapping("/courses")
+    @PreAuthorize("hasAuthority('DROPDOWN_COURSE_VIEW') or hasAuthority('COURSE_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get Courses Dropdown", description = "Retrieves active courses with optional course-type and program filter")
+    public ResponseEntity<ApiResponse<List<CourseDropdownResponse>>> getCoursesDropdown(
+            @RequestParam(required = false) UUID courseTypeId,
+            @RequestParam(required = false) UUID programId,
+            @RequestParam(required = false) String search) {
+
+        List<CourseDropdownResponse> data = dropdownService.getCoursesDropdown(courseTypeId, programId, search);
         return ResponseEntity.ok(ApiResponse.success("Courses dropdown retrieved successfully", data, 200));
     }
 

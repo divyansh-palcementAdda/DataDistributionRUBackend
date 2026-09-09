@@ -76,6 +76,10 @@ class LeadDepartmentSyncAndStatusTest {
     private com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
     @Mock
     private com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
+    @Mock
+    private com.app.datadistribution.repository.ProgramRepository programRepository;
+    @Mock
+    private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
 
     @InjectMocks
     private LeadServiceImpl leadService;

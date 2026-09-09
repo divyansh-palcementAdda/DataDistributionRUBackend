@@ -15,6 +15,7 @@ import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.Permission;
+import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.SentimentCategory;
@@ -31,6 +32,7 @@ import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.PermissionRepository;
+import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
@@ -70,6 +72,7 @@ public class DropdownServiceImpl implements IDropdownService {
     private final LeadSourceRepository leadSourceRepository;
     private final CourseRepository courseRepository;
     private final CourseTypeRepository courseTypeRepository;
+    private final ProgramRepository programRepository;
     private final BoardRepository boardRepository;
     private final GradeRepository gradeRepository;
     private final RoleRepository roleRepository;
@@ -362,10 +365,40 @@ public class DropdownServiceImpl implements IDropdownService {
     }
 
     @Override
-    public List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, String search) {
-        List<Course> courses = courseRepository.findAll().stream()
-                .filter(c -> c != null && c.getStatus() == Status.ACTIVE && !c.isDeleted())
-                .filter(c -> courseTypeId == null || (c.getCourseType() != null && courseTypeId.equals(c.getCourseType().getId())))
+    public List<DropdownOptionResponse> getProgramsDropdown(String search) {
+        List<Program> programs = programRepository.findAllByStatusAndIsDeletedFalseOrderByNameAsc(Status.ACTIVE).stream()
+                .filter(p -> {
+                    if (search == null || search.isBlank()) return true;
+                    String pattern = search.trim().toLowerCase();
+                    return (p.getName() != null && p.getName().toLowerCase().contains(pattern))
+                            || (p.getCode() != null && p.getCode().toLowerCase().contains(pattern));
+                })
+                .collect(Collectors.toList());
+
+        return programs.stream()
+                .map(p -> DropdownOptionResponse.builder()
+                        .id(p.getId())
+                        .name(p.getName())
+                        .code(p.getCode())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, String search) {
+        List<Course> courses;
+        if (programId != null) {
+            courses = courseRepository.findActiveCoursesByProgramId(programId).stream()
+                    .filter(c -> courseTypeId == null || (c.getCourseType() != null && courseTypeId.equals(c.getCourseType().getId())))
+                    .collect(Collectors.toList());
+        } else {
+            courses = courseRepository.findAll().stream()
+                    .filter(c -> c != null && c.getStatus() == Status.ACTIVE && !c.isDeleted())
+                    .filter(c -> courseTypeId == null || (c.getCourseType() != null && courseTypeId.equals(c.getCourseType().getId())))
+                    .collect(Collectors.toList());
+        }
+
+        return courses.stream()
                 .filter(c -> {
                     if (search == null || search.isBlank()) return true;
                     String pattern = search.trim().toLowerCase();
@@ -373,9 +406,6 @@ public class DropdownServiceImpl implements IDropdownService {
                             || (c.getCourseCode() != null && c.getCourseCode().toLowerCase().contains(pattern));
                 })
                 .sorted(Comparator.comparing(Course::getCourseName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .collect(Collectors.toList());
-
-        return courses.stream()
                 .map(c -> CourseDropdownResponse.builder()
                         .id(c.getId())
                         .name(c.getCourseName())

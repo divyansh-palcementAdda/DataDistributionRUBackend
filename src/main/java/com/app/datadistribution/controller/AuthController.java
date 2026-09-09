@@ -23,6 +23,7 @@ import com.app.datadistribution.dto.user.PermissionDTO;
 import com.app.datadistribution.dto.user.UserResponse;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.enums.LogoutReason;
 import com.app.datadistribution.exception.AccessDeniedException;
 import com.app.datadistribution.exception.AuthenticationFailedException;
 import com.app.datadistribution.exception.BadRequestException;
@@ -87,10 +88,10 @@ public class AuthController {
                     .body(ApiResponse.error("Refresh token is required in body", HttpStatus.BAD_REQUEST.value()));
         }
         String reasonStr = requestBody.get("logoutReason");
-        com.app.datadistribution.enums.LogoutReason reason = com.app.datadistribution.enums.LogoutReason.MANUAL_LOGOUT;
+        LogoutReason reason = LogoutReason.MANUAL_LOGOUT;
         if (reasonStr != null && !reasonStr.isBlank()) {
             try {
-                reason = com.app.datadistribution.enums.LogoutReason.valueOf(reasonStr.trim());
+                reason = LogoutReason.valueOf(reasonStr.trim());
             } catch (IllegalArgumentException ignored) {}
         }
         authService.logout(refreshToken, reason);

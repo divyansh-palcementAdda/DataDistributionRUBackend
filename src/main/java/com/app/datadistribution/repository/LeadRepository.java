@@ -46,4 +46,10 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
 
     @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IS NOT NULL AND EXISTS (SELECT la FROM LeadAvailed la WHERE la.lead = l AND la.availedByUser = l.assignedTo AND la.isDeleted = false) GROUP BY l.assignedTo.id")
     List<Object[]> findAvailedLeadCountsGroupedByUser();
+
+    @Query("SELECT l.assignedTo.id, COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id IN :userIds AND l.currentStatus.id = :rawStatusId GROUP BY l.assignedTo.id")
+    List<Object[]> countCurrentRawLeadsGroupedByUserIds(@org.springframework.data.repository.query.Param("userIds") Collection<UUID> userIds, @org.springframework.data.repository.query.Param("rawStatusId") UUID rawStatusId);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id = :userId AND l.currentStatus.id = :rawStatusId")
+    long countCurrentRawLeadsByUserId(@org.springframework.data.repository.query.Param("userId") UUID userId, @org.springframework.data.repository.query.Param("rawStatusId") UUID rawStatusId);
 }

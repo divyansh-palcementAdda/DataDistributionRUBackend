@@ -64,4 +64,9 @@ public class Course extends BaseEntity {
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
     @Builder.Default
     private List<Lead> leads = new ArrayList<>();
+
+    @jakarta.persistence.ManyToMany(mappedBy = "courses", fetch = FetchType.LAZY)
+    @Builder.Default
+    private java.util.Set<Program> programs = new java.util.HashSet<>();
 }
+

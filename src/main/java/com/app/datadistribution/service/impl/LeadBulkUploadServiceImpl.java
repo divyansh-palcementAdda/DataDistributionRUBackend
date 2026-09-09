@@ -36,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.app.datadistribution.dto.lead.BulkLeadUploadResponse;
 import com.app.datadistribution.dto.lead.BulkLeadUploadRowError;
 import com.app.datadistribution.entity.Board;
+import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.CourseType;
 import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.Grade;
@@ -43,6 +44,7 @@ import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.enums.Status;
@@ -50,6 +52,7 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.BoardRepository;
+import com.app.datadistribution.repository.CourseRepository;
 import com.app.datadistribution.repository.CourseTypeRepository;
 import com.app.datadistribution.repository.DepartmentRepository;
 import com.app.datadistribution.repository.GradeRepository;
@@ -57,9 +60,11 @@ import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.LeadStatusHistoryRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
+import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.ILeadBulkUploadService;
 import com.app.datadistribution.service.util.LeadDepartmentResolver;
+import com.app.datadistribution.service.util.ProgramCourseResolver;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -77,6 +82,9 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final CourseTypeRepository courseTypeRepository;
+    private final CourseRepository courseRepository;
+    private final ProgramRepository programRepository;
+    private final ProgramCourseResolver programCourseResolver;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
     private final com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
 
@@ -87,6 +95,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
     @Transactional
     public BulkLeadUploadResponse bulkUploadLeads(
             MultipartFile file,
+            UUID programId,
             UUID courseTypeId,
             UUID gradeId,
             UUID boardId,
@@ -118,6 +127,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         }
 
         // 3. Preload & Validate UI Selected Master Data Entities (Fast Fail)
+        Program selectedProgram = validateAndFetchProgram(programId);
         CourseType selectedCourseType = validateAndFetchCourseType(courseTypeId);
         Grade selectedGrade = validateAndFetchGrade(gradeId);
         Board selectedBoard = validateAndFetchBoard(boardId);
@@ -183,6 +193,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 String state = getCellValue(row, headerMap, "state", formatter);
                 String country = getCellValue(row, headerMap, "country", formatter);
                 String sourceDetails = getCellValue(row, headerMap, "sourceDetails", formatter);
+                String programVal = getCellValue(row, headerMap, "program", formatter);
                 String courseInterested = getCellValue(row, headerMap, "courseInterested", formatter);
                 String remarks = getCellValue(row, headerMap, "remarks", formatter);
 
@@ -268,12 +279,66 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                     }
                 }
 
+                // Row-Level Program & Course Canonical Entity Resolution & Validation
+                Program rowProgram = selectedProgram;
+                if (programVal != null && !programVal.isBlank()) {
+                    rowProgram = programCourseResolver.resolveProgramByNameOrCode(programVal)
+                            .filter(p -> !p.isDeleted() && p.getStatus() == Status.ACTIVE)
+                            .orElse(null);
+                    if (rowProgram == null) {
+                        failedCount++;
+                        failedRows.add(BulkLeadUploadRowError.builder()
+                                .rowNumber(displayRowNumber)
+                                .field("program")
+                                .value(programVal)
+                                .reason("Program '" + programVal + "' not found or is inactive")
+                                .build());
+                        continue;
+                    }
+                }
+
+                Course rowCourse = null;
+                if (courseInterested != null && !courseInterested.isBlank()) {
+                    rowCourse = programCourseResolver.resolveCourseByNameOrCode(courseInterested)
+                            .filter(c -> !c.isDeleted() && c.getStatus() == Status.ACTIVE)
+                            .orElse(null);
+                    if (rowCourse == null) {
+                        failedCount++;
+                        failedRows.add(BulkLeadUploadRowError.builder()
+                                .rowNumber(displayRowNumber)
+                                .field("courseInterested")
+                                .value(courseInterested)
+                                .reason("Course '" + courseInterested + "' not found or is inactive")
+                                .build());
+                        continue;
+                    }
+                }
+
+                // Check Program -> Course mapping
+                if (rowProgram != null && rowCourse != null) {
+                    if (!programCourseResolver.isCourseMappedToProgram(rowProgram, rowCourse)) {
+                        failedCount++;
+                        failedRows.add(BulkLeadUploadRowError.builder()
+                                .rowNumber(displayRowNumber)
+                                .field("courseInterested")
+                                .value(courseInterested)
+                                .reason("Course '" + rowCourse.getCourseName() + "' is not mapped to Program '" + rowProgram.getName() + "'")
+                                .build());
+                        continue;
+                    }
+                }
+
                 // Add to processed phone numbers
                 fileProcessedPhoneSet.add(normalizedPhone);
                 dbPhoneSet.add(normalizedPhone);
 
                 // Build Lead Entity
                 String leadCode = generateUniqueLeadCode();
+                Set<Course> interestedCourses = new HashSet<>();
+                if (rowCourse != null) {
+                    interestedCourses.add(rowCourse);
+                }
+
                 Lead lead = Lead.builder()
                         .leadCode(leadCode)
                         .fullName(fullName.trim())
@@ -284,7 +349,10 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         .state(state != null && !state.isBlank() ? state.trim() : null)
                         .country(country != null && !country.isBlank() ? country.trim() : null)
                         .sourceDetails(sourceDetails != null && !sourceDetails.isBlank() ? sourceDetails.trim() : null)
-                        .courseInterested(courseInterested != null && !courseInterested.isBlank() ? courseInterested.trim() : null)
+                        .program(rowProgram)
+                        .course(rowCourse)
+                        .interestedCourses(interestedCourses)
+                        .courseInterested(courseInterested != null && !courseInterested.isBlank() ? courseInterested.trim() : (rowCourse != null ? rowCourse.getCourseName() : null))
                         .remarks(remarks != null && !remarks.isBlank() ? remarks.trim() : null)
                         .leadSources(selectedLeadSources)
                         .currentStatus(selectedStatus)
@@ -523,6 +591,17 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         String username = auth.getName();
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
+    }
+
+    private Program validateAndFetchProgram(UUID programId) throws BadRequestException {
+        if (programId == null) return null;
+        Program program = programRepository.findById(programId)
+                .filter(p -> !p.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Selected Program not found with ID: " + programId));
+        if (program.getStatus() != Status.ACTIVE) {
+            throw new BadRequestException("Selected Program '" + program.getName() + "' is inactive");
+        }
+        return program;
     }
 
     private CourseType validateAndFetchCourseType(UUID courseTypeId) throws BadRequestException {

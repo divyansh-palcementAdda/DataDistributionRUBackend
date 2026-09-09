@@ -104,6 +104,10 @@ class LeadStatusHistoryTest {
     @Mock
     private com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
     @Mock
+    private com.app.datadistribution.repository.ProgramRepository programRepository;
+    @Mock
+    private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
+    @Mock
     private LeadMapper leadMapper;
 
     @InjectMocks

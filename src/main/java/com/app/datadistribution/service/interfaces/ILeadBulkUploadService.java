@@ -11,6 +11,7 @@ public interface ILeadBulkUploadService {
 
     BulkLeadUploadResponse bulkUploadLeads(
             MultipartFile file,
+            UUID programId,
             UUID courseTypeId,
             UUID gradeId,
             UUID boardId,
@@ -19,6 +20,19 @@ public interface ILeadBulkUploadService {
             UUID statusId,
             UUID departmentId,
             UUID assignedToUserId) throws BadRequestException, UnauthorizedException;
+
+    default BulkLeadUploadResponse bulkUploadLeads(
+            MultipartFile file,
+            UUID courseTypeId,
+            UUID gradeId,
+            UUID boardId,
+            UUID leadSourceId,
+            List<UUID> leadSourceIds,
+            UUID statusId,
+            UUID departmentId,
+            UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
+        return bulkUploadLeads(file, null, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId);
+    }
 
     byte[] downloadTemplate();
 }

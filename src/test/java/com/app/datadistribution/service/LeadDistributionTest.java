@@ -8,28 +8,28 @@ import static org.mockito.Mockito.*;
 import com.app.datadistribution.dto.lead.*;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.LeadAssignmentHistoryRepository;
 import com.app.datadistribution.repository.LeadFollowUpRepository;
 import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.engine.LeadDistributionEngine;
 import com.app.datadistribution.service.impl.LeadDistributionServiceImpl;
 import java.time.LocalDateTime;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class LeadDistributionTest {
@@ -42,42 +42,49 @@ class LeadDistributionTest {
     private LeadFollowUpRepository leadFollowUpRepository;
     @Mock
     private LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
+    @Mock
+    private LeadStatusRepository leadStatusRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
+    private LeadDistributionEngine leadDistributionEngine;
     private LeadDistributionServiceImpl leadDistributionService;
 
     private User adminUser;
-    private User userA;
-    private User userB;
-    private User userC;
-    private Lead lead1;
-    private Lead lead2;
-    private Lead lead3;
+    private User user1;
+    private User user2;
+    private User user3;
+    private LeadStatus rawStatus;
+    private UUID rawStatusId;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(leadDistributionService, "maxDailyFollowups", 30);
+        leadDistributionEngine = new LeadDistributionEngine();
+        leadDistributionService = new LeadDistributionServiceImpl(
+                leadRepository,
+                userRepository,
+                leadFollowUpRepository,
+                leadAssignmentHistoryRepository,
+                leadStatusRepository,
+                leadDistributionEngine,
+                eventPublisher
+        );
 
         adminUser = User.builder().username("admin").active(true).build();
         adminUser.setId(UUID.randomUUID());
 
-        userA = User.builder().username("userA").firstName("User").lastName("A").email("userA@test.com").active(true).build();
-        userA.setId(UUID.randomUUID());
+        user1 = User.builder().username("counselor1").firstName("Counselor").lastName("One").email("c1@test.com").active(true).build();
+        user1.setId(UUID.randomUUID());
 
-        userB = User.builder().username("userB").firstName("User").lastName("B").email("userB@test.com").active(true).build();
-        userB.setId(UUID.randomUUID());
+        user2 = User.builder().username("counselor2").firstName("Counselor").lastName("Two").email("c2@test.com").active(true).build();
+        user2.setId(UUID.randomUUID());
 
-        userC = User.builder().username("userC").firstName("User").lastName("C").email("userC@test.com").active(true).build();
-        userC.setId(UUID.randomUUID());
+        user3 = User.builder().username("counselor3").firstName("Counselor").lastName("Three").email("c3@test.com").active(true).build();
+        user3.setId(UUID.randomUUID());
 
-        lead1 = Lead.builder().leadCode("LEAD-001").fullName("Lead One").build();
-        lead1.setId(UUID.randomUUID());
-
-        lead2 = Lead.builder().leadCode("LEAD-002").fullName("Lead Two").build();
-        lead2.setId(UUID.randomUUID());
-
-        lead3 = Lead.builder().leadCode("LEAD-003").fullName("Lead Three").build();
-        lead3.setId(UUID.randomUUID());
+        rawStatusId = UUID.randomUUID();
+        rawStatus = LeadStatus.builder().name("RAW").code("RAW").active(true).build();
+        rawStatus.setId(rawStatusId);
 
         SecurityContext securityContext = mock(SecurityContext.class);
         Authentication authentication = mock(Authentication.class);
@@ -86,102 +93,232 @@ class LeadDistributionTest {
         lenient().when(securityContext.getAuthentication()).thenReturn(authentication);
         SecurityContextHolder.setContext(securityContext);
         lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+        lenient().when(leadStatusRepository.findByCodeIgnoreCase("RAW")).thenReturn(Optional.of(rawStatus));
+    }
+
+    private List<Lead> createMockLeads(int count) {
+        List<Lead> list = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            Lead lead = Lead.builder()
+                    .leadCode("LEAD-" + String.format("%03d", i))
+                    .fullName("Student " + i)
+                    .currentStatus(rawStatus)
+                    .build();
+            lead.setId(UUID.randomUUID());
+            list.add(lead);
+        }
+        return list;
     }
 
     @Test
-    void testPreviewDistribution_CalculatesCapacityAndSkippingCorrectly() throws BadRequestException, UnauthorizedException {
-        when(leadRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(lead1, lead2, lead3));
-        when(userRepository.findById(userA.getId())).thenReturn(Optional.of(userA));
-        when(userRepository.findById(userB.getId())).thenReturn(Optional.of(userB));
+    void testFairRoundRobin_TenLeadsAcrossThreeEligibleUsers() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(10);
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+        List<UUID> userIds = List.of(user1.getId(), user2.getId(), user3.getId());
 
-        // User A: 32 follow-ups today (Limit reached)
-        lenient().when(leadFollowUpRepository.countScheduledFollowUpsForUserBetween(eq(userA.getId()), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(32L);
-        lenient().when(leadRepository.countUnavailedLeadsByUserId(userA.getId())).thenReturn(5L);
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(userIds)).thenReturn(List.of(user1, user2, user3));
 
-        // User B: 12 follow-ups today, 22 unavailed leads, max 40 => capacity 18
-        lenient().when(leadFollowUpRepository.countScheduledFollowUpsForUserBetween(eq(userB.getId()), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(12L);
-        lenient().when(leadRepository.countUnavailedLeadsByUserId(userB.getId())).thenReturn(22L);
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId)))
+                .thenReturn(Collections.emptyList());
 
         LeadDistributionRequest request = LeadDistributionRequest.builder()
-                .userIds(List.of(userA.getId(), userB.getId()))
-                .maximumDataPerUser(40)
-                .filters(LeadDistributionFilterRequest.builder().build())
+                .leadIds(leadIds)
+                .userIds(userIds)
+                .build();
+
+        LeadDistributionResponse preview = leadDistributionService.previewDistribution(request);
+
+        assertNotNull(preview);
+        assertTrue(preview.isPreviewOnly());
+        assertEquals(10, preview.getTotalSelectedLeads());
+        assertEquals(10, preview.getTotalAssigned());
+        assertEquals(0, preview.getTotalUnassigned());
+
+        UserDistributionSummaryDTO u1Summary = preview.getUsers().stream().filter(u -> u.getUserId().equals(user1.getId())).findFirst().orElseThrow();
+        UserDistributionSummaryDTO u2Summary = preview.getUsers().stream().filter(u -> u.getUserId().equals(user2.getId())).findFirst().orElseThrow();
+        UserDistributionSummaryDTO u3Summary = preview.getUsers().stream().filter(u -> u.getUserId().equals(user3.getId())).findFirst().orElseThrow();
+
+        assertEquals(4, u1Summary.getAssignedCount());
+        assertEquals(3, u2Summary.getAssignedCount());
+        assertEquals(3, u3Summary.getAssignedCount());
+    }
+
+    @Test
+    void testFairRoundRobin_TenLeadsAcrossTenEligibleUsers_OneLeadPerUser() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(10);
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+
+        List<User> tenUsers = new ArrayList<>();
+        List<UUID> tenUserIds = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            User u = User.builder().username("counselor" + i).firstName("Counselor").lastName(String.valueOf(i)).active(true).build();
+            u.setId(UUID.randomUUID());
+            tenUsers.add(u);
+            tenUserIds.add(u.getId());
+        }
+
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(tenUserIds)).thenReturn(tenUsers);
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any()))
+                .thenReturn(Collections.emptyList());
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId)))
+                .thenReturn(Collections.emptyList());
+
+        LeadDistributionRequest request = LeadDistributionRequest.builder()
+                .leadIds(leadIds)
+                .userIds(tenUserIds)
+                .build();
+
+        LeadDistributionResponse preview = leadDistributionService.previewDistribution(request);
+
+        assertNotNull(preview);
+        assertEquals(10, preview.getTotalAssigned());
+        for (UserDistributionSummaryDTO summary : preview.getUsers()) {
+            assertEquals(1, summary.getAssignedCount(), "Each of the 10 users must receive exactly 1 lead");
+        }
+    }
+
+    @Test
+    void testStrictWorkloadCapacityLimits_FollowupsAndRawLimits() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(8);
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+        List<UUID> userIds = List.of(user1.getId(), user2.getId(), user3.getId());
+
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(userIds)).thenReturn(List.of(user1, user2, user3));
+
+        List<Object[]> followUpRows = new ArrayList<>();
+        followUpRows.add(new Object[]{user1.getId(), 30L});
+        followUpRows.add(new Object[]{user2.getId(), 10L});
+        followUpRows.add(new Object[]{user3.getId(), 20L});
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any())).thenReturn(followUpRows);
+
+        List<Object[]> rawRows = new ArrayList<>();
+        rawRows.add(new Object[]{user1.getId(), 10L});
+        rawRows.add(new Object[]{user2.getId(), 40L});
+        rawRows.add(new Object[]{user3.getId(), 35L});
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId))).thenReturn(rawRows);
+
+        LeadDistributionRequest request = LeadDistributionRequest.builder()
+                .leadIds(leadIds)
+                .userIds(userIds)
                 .build();
 
         LeadDistributionResponse response = leadDistributionService.previewDistribution(request);
 
         assertNotNull(response);
-        assertTrue(response.isPreviewOnly());
-        assertEquals(3, response.getTotalMatchingLeads());
-        assertEquals(3, response.getTotalAvailableLeads());
-        assertEquals(3, response.getTotalAssigned());
+        assertEquals(8, response.getTotalSelectedLeads());
+        assertEquals(5, response.getTotalAssigned());
+        assertEquals(3, response.getTotalUnassigned());
 
-        UserDistributionSummaryDTO summaryA = response.getUsers().stream().filter(u -> u.getUserId().equals(userA.getId())).findFirst().orElseThrow();
-        assertEquals("SKIPPED", summaryA.getStatus());
-        assertEquals("DAILY_FOLLOWUP_LIMIT_REACHED", summaryA.getReason());
-        assertEquals(0, summaryA.getAssignedCount());
+        UserDistributionSummaryDTO u1 = response.getUsers().stream().filter(u -> u.getUserId().equals(user1.getId())).findFirst().orElseThrow();
+        assertEquals("EXCEEDED_FOLLOWUP_LIMIT", u1.getStatus());
+        assertEquals(0, u1.getAssignedCount());
+        assertEquals(0, u1.getFinalCapacity());
 
-        UserDistributionSummaryDTO summaryB = response.getUsers().stream().filter(u -> u.getUserId().equals(userB.getId())).findFirst().orElseThrow();
-        assertEquals("SUCCESS", summaryB.getStatus());
-        assertEquals(18, summaryB.getRemainingCapacity());
-        assertEquals(3, summaryB.getAssignedCount());
+        UserDistributionSummaryDTO u2 = response.getUsers().stream().filter(u -> u.getUserId().equals(user2.getId())).findFirst().orElseThrow();
+        assertEquals("EXCEEDED_RAW_LIMIT", u2.getStatus());
+        assertEquals(0, u2.getAssignedCount());
+        assertEquals(0, u2.getFinalCapacity());
 
-        // Verify preview did NOT save assignments
-        verify(leadRepository, never()).save(any(Lead.class));
+        UserDistributionSummaryDTO u3 = response.getUsers().stream().filter(u -> u.getUserId().equals(user3.getId())).findFirst().orElseThrow();
+        assertEquals("ELIGIBLE", u3.getStatus());
+        assertEquals(5, u3.getAssignedCount());
+        assertEquals(5, u3.getFinalCapacity());
+
+        assertEquals(3, response.getUnassignedLeads().size());
     }
 
     @Test
-    void testDistributeLeads_ExecutesAssignmentAndLogsAudit() throws BadRequestException, UnauthorizedException {
-        lenient().when(leadRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(lead1, lead2));
-        lenient().when(userRepository.findById(userB.getId())).thenReturn(Optional.of(userB));
-        lenient().when(leadFollowUpRepository.countScheduledFollowUpsForUserBetween(eq(userB.getId()), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(10L);
-        lenient().when(leadRepository.countUnavailedLeadsByUserId(userB.getId())).thenReturn(20L);
-        lenient().when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+    void testCapacityLimits_ExceededBothLimitsStatus() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(2);
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+        List<UUID> userIds = List.of(user1.getId());
+
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(userIds)).thenReturn(List.of(user1));
+
+        List<Object[]> followUpRows = new ArrayList<>();
+        followUpRows.add(new Object[]{user1.getId(), 35L});
+        List<Object[]> rawRows = new ArrayList<>();
+        rawRows.add(new Object[]{user1.getId(), 45L});
+
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any())).thenReturn(followUpRows);
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId))).thenReturn(rawRows);
 
         LeadDistributionRequest request = LeadDistributionRequest.builder()
-                .userIds(List.of(userB.getId()))
-                .maximumDataPerUser(40)
-                .filters(LeadDistributionFilterRequest.builder().build())
+                .leadIds(leadIds)
+                .userIds(userIds)
+                .build();
+
+        LeadDistributionResponse response = leadDistributionService.previewDistribution(request);
+
+        assertNotNull(response);
+        assertEquals(0, response.getTotalAssigned());
+        assertEquals(2, response.getTotalUnassigned());
+
+        UserDistributionSummaryDTO u1 = response.getUsers().get(0);
+        assertEquals("EXCEEDED_BOTH_LIMITS", u1.getStatus());
+    }
+
+    @Test
+    void testDistributeLeads_ExplicitSelectedLeads_PersistsAssignmentAndHistory() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(3);
+        leads.get(0).setAssignedTo(user1);
+
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+        List<UUID> userIds = List.of(user2.getId());
+
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(userIds)).thenReturn(List.of(user2));
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId))).thenReturn(Collections.emptyList());
+        when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        LeadDistributionRequest request = LeadDistributionRequest.builder()
+                .leadIds(leadIds)
+                .userIds(userIds)
                 .build();
 
         LeadDistributionResponse response = leadDistributionService.distributeLeads(request);
 
         assertNotNull(response);
         assertFalse(response.isPreviewOnly());
-        assertEquals(2, response.getTotalAssigned());
+        assertEquals(3, response.getTotalAssigned());
 
-        verify(leadRepository, times(2)).save(any(Lead.class));
-        verify(leadAssignmentHistoryRepository, times(2)).save(any(LeadAssignmentHistory.class));
-        assertEquals(userB, lead1.getAssignedTo());
-        assertEquals(userB, lead2.getAssignedTo());
+        verify(leadRepository, times(3)).save(any(Lead.class));
+        verify(leadAssignmentHistoryRepository, times(3)).save(any(LeadAssignmentHistory.class));
+        assertEquals(user2, leads.get(0).getAssignedTo());
+        assertEquals(user2, leads.get(1).getAssignedTo());
+        assertEquals(user2, leads.get(2).getAssignedTo());
     }
 
     @Test
-    void testDistributeLeads_UserWithMaxUnavailedLeads_Skipped() throws BadRequestException, UnauthorizedException {
-        lenient().when(leadRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(lead1));
-        lenient().when(userRepository.findById(userC.getId())).thenReturn(Optional.of(userC));
-        lenient().when(leadFollowUpRepository.countScheduledFollowUpsForUserBetween(eq(userC.getId()), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(5L);
-        lenient().when(leadRepository.countUnavailedLeadsByUserId(userC.getId())).thenReturn(40L);
+    void testDistributeLeads_MaximumNumberLimit_LimitsAllocations() throws BadRequestException, UnauthorizedException {
+        List<Lead> leads = createMockLeads(10);
+        List<UUID> leadIds = leads.stream().map(Lead::getId).toList();
+        List<UUID> userIds = List.of(user1.getId(), user2.getId());
+
+        when(leadRepository.findAllById(leadIds)).thenReturn(leads);
+        when(userRepository.findAllById(userIds)).thenReturn(List.of(user1, user2));
+        when(leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(leadRepository.countCurrentRawLeadsGroupedByUserIds(any(), eq(rawStatusId))).thenReturn(Collections.emptyList());
 
         LeadDistributionRequest request = LeadDistributionRequest.builder()
-                .userIds(List.of(userC.getId()))
-                .maximumDataPerUser(40)
-                .filters(LeadDistributionFilterRequest.builder().build())
+                .leadIds(leadIds)
+                .userIds(userIds)
+                .maximumNumber(4)
                 .build();
 
-        LeadDistributionResponse response = leadDistributionService.distributeLeads(request);
+        LeadDistributionResponse response = leadDistributionService.previewDistribution(request);
 
         assertNotNull(response);
-        assertEquals(0, response.getTotalAssigned());
-
-        UserDistributionSummaryDTO summaryC = response.getUsers().get(0);
-        assertEquals("SKIPPED", summaryC.getStatus());
-        assertEquals("MAX_CAPACITY_REACHED", summaryC.getReason());
-
-        verify(leadRepository, never()).save(any(Lead.class));
+        assertEquals(10, response.getTotalSelectedLeads());
+        assertEquals(4, response.getTotalDistributableLeads());
+        assertEquals(4, response.getTotalAssigned());
+        assertEquals(6, response.getTotalUnassigned());
     }
 }

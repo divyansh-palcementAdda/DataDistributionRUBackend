@@ -30,6 +30,28 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
     @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), COUNT(f) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
     List<Object[]> countScheduledFollowUpsGroupedByUserBetween(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 
+    @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), COUNT(f) "
+         + "FROM LeadFollowUp f "
+         + "WHERE f.isDeleted = false AND f.completed = false "
+         + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "AND (f.assignedTo.id IN :userIds OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id IN :userIds)) "
+         + "GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
+    List<Object[]> countActiveTodayFollowUpsGroupedByUserIds(
+            @Param("userIds") java.util.Collection<UUID> userIds,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay);
+
+    @Query("SELECT COUNT(f) FROM LeadFollowUp f "
+         + "WHERE f.isDeleted = false AND f.completed = false "
+         + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
+         + "AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay "
+         + "AND (f.assignedTo.id = :userId OR (f.assignedTo.id IS NULL AND f.lead.assignedTo.id = :userId))")
+    long countActiveTodayFollowUpsForUser(
+            @Param("userId") UUID userId,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay);
+
     @Query("SELECT COALESCE(f.assignedTo.id, f.lead.assignedTo.id), MIN(f.followUpDate) FROM LeadFollowUp f WHERE f.isDeleted = false AND (f.assignedTo.id IS NOT NULL OR f.lead.assignedTo.id IS NOT NULL) AND f.followUpDate >= :startOfDay AND f.followUpDate <= :endOfDay GROUP BY COALESCE(f.assignedTo.id, f.lead.assignedTo.id)")
     List<Object[]> findEarliestScheduledFollowUpGroupedByUserBetween(@Param("startOfDay") LocalDateTime startOfDay, @Param("endOfDay") LocalDateTime endOfDay);
 

@@ -74,6 +74,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private final com.app.datadistribution.repository.DashboardCardRepository dashboardCardRepository;
 	private final com.app.datadistribution.service.interfaces.IDashboardCardPermissionService dashboardCardPermissionService;
 	private final com.app.datadistribution.repository.LeadSourceRepository leadSourceRepository;
+	private final com.app.datadistribution.repository.ProgramRepository programRepository;
+	private final com.app.datadistribution.repository.CourseRepository courseRepository;
 	private final com.app.datadistribution.entity.LeadSource leadSourceEntityHelper = null;
 	private final jakarta.persistence.EntityManager entityManager;
 
@@ -102,6 +104,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedLeadSources();
 		seedBoards();
 //		seedGrades();
+		seedPrograms();
 		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
@@ -128,7 +131,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		// 2. ADMIN Role (Administrative System-wide Access)
 		Set<Permission> adminPermissions = filterPermissions(allPermissions,
 				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
-				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "FOLLOWUP_",
+				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "PROGRAM_", "FOLLOWUP_",
 				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_", "EMAIL_");
 		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
@@ -177,6 +180,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DEPARTMENT_DATA_CREATE.name())
 							|| n.equals(PermissionType.DEPARTMENT_DATA_UPDATE.name())
 							|| n.startsWith("COURSE_")
+							|| n.startsWith("PROGRAM_")
 							|| n.startsWith("LEAD_STATUS_")
 							|| n.startsWith("LEADSOURCE_")
 							|| n.startsWith("BOARD_")
@@ -212,6 +216,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DASHBOARD_CARD_PREFERENCE_UPDATE.name())
 							|| n.equals(PermissionType.DASHBOARD_CARD_ORDER_UPDATE.name())
 							|| n.equals(PermissionType.COURSE_VIEW.name())
+							|| n.equals(PermissionType.PROGRAM_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_PROGRAM_VIEW.name())
 							|| n.equals(PermissionType.COURSE_TYPE_VIEW.name())
 							|| n.equals(PermissionType.COURSE_TEMPLATE_VIEW.name())
 							|| n.equals(PermissionType.COURSE_TEMPLATE_SEND.name())
@@ -705,6 +711,60 @@ public class DatabaseSeeder implements CommandLineRunner {
 			log.info("Seeded default dashboard card with unique permission: {} ({})", name, code);
 		} else {
 			dashboardCardRepository.findByCodeIgnoreCase(code).ifPresent(dashboardCardPermissionService::registerCardAndPermission);
+		}
+	}
+
+	private void seedPrograms() {
+		createProgramIfNotExist("School of Management", "SOM", "Faculty of Management Studies & Business Administration");
+		createProgramIfNotExist("School of Engineering & Technology", "SOET", "Faculty of Engineering, Computing & Applied Sciences");
+		createProgramIfNotExist("School of Law", "SOL", "Faculty of Legal Studies & Constitutional Law");
+		createProgramIfNotExist("School of Commerce", "SOC", "Faculty of Commerce, Accounting & Finance");
+		createProgramIfNotExist("School of Humanities & Social Sciences", "SOHSS", "Faculty of Arts, Media, Literature & Social Sciences");
+		createProgramIfNotExist("School of Design", "SOD", "Faculty of Architecture, Fashion & Industrial Design");
+
+		// Auto-map existing courses to programs if not mapped yet
+		List<com.app.datadistribution.entity.Course> courses = courseRepository.findAll();
+		if (!courses.isEmpty()) {
+			programRepository.findAll().forEach(program -> {
+				if (program.getCourses() == null || program.getCourses().isEmpty()) {
+					Set<com.app.datadistribution.entity.Course> matchedCourses = new HashSet<>();
+					String pCode = program.getCode();
+					for (com.app.datadistribution.entity.Course course : courses) {
+						String cName = course.getCourseName() != null ? course.getCourseName().toLowerCase() : "";
+						String cCode = course.getCourseCode() != null ? course.getCourseCode().toLowerCase() : "";
+						if ("SOM".equalsIgnoreCase(pCode) && (cName.contains("mba") || cName.contains("bba") || cName.contains("management") || cName.contains("business") || cCode.contains("mba") || cCode.contains("bba"))) {
+							matchedCourses.add(course);
+						} else if ("SOET".equalsIgnoreCase(pCode) && (cName.contains("tech") || cName.contains("engineering") || cName.contains("bca") || cName.contains("mca") || cName.contains("computer") || cCode.contains("cs") || cCode.contains("it") || cCode.contains("bca") || cCode.contains("mca"))) {
+							matchedCourses.add(course);
+						} else if ("SOL".equalsIgnoreCase(pCode) && (cName.contains("law") || cName.contains("llb") || cName.contains("ll.b") || cName.contains("llm") || cCode.contains("law") || cCode.contains("llb"))) {
+							matchedCourses.add(course);
+						} else if ("SOC".equalsIgnoreCase(pCode) && (cName.contains("com") || cName.contains("b.com") || cName.contains("m.com") || cName.contains("accounting") || cName.contains("finance"))) {
+							matchedCourses.add(course);
+						} else if ("SOD".equalsIgnoreCase(pCode) && (cName.contains("design") || cName.contains("b.des") || cName.contains("m.des") || cName.contains("fashion") || cName.contains("animation"))) {
+							matchedCourses.add(course);
+						}
+					}
+					if (matchedCourses.isEmpty()) {
+						matchedCourses.addAll(courses);
+					}
+					program.setCourses(matchedCourses);
+					programRepository.save(program);
+					log.info("Mapped {} courses to program: {}", matchedCourses.size(), program.getName());
+				}
+			});
+		}
+	}
+
+	private void createProgramIfNotExist(String name, String code, String description) {
+		if (!programRepository.findByCodeIgnoreCase(code).isPresent() && !programRepository.findByNameIgnoreCase(name).isPresent()) {
+			com.app.datadistribution.entity.Program program = com.app.datadistribution.entity.Program.builder()
+					.name(name)
+					.code(code)
+					.description(description)
+					.status(com.app.datadistribution.enums.Status.ACTIVE)
+					.build();
+			programRepository.save(program);
+			log.info("Seeded default program: {} ({})", name, code);
 		}
 	}
 }

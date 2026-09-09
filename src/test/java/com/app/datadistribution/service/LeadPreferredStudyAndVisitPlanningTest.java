@@ -80,6 +80,12 @@ public class LeadPreferredStudyAndVisitPlanningTest {
     @Spy
     private ILocationService locationService = new LocationServiceImpl();
 
+    @Mock
+    private com.app.datadistribution.repository.ProgramRepository programRepository;
+
+    @Mock
+    private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
+
     @InjectMocks
     private LeadServiceImpl leadService;
 

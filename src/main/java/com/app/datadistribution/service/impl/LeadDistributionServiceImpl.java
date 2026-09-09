@@ -3,13 +3,19 @@ package com.app.datadistribution.service.impl;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -20,17 +26,22 @@ import org.springframework.transaction.annotation.Transactional;
 import com.app.datadistribution.dto.lead.LeadDistributionFilterRequest;
 import com.app.datadistribution.dto.lead.LeadDistributionRequest;
 import com.app.datadistribution.dto.lead.LeadDistributionResponse;
-import com.app.datadistribution.dto.lead.UserDistributionSummaryDTO;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
+import com.app.datadistribution.entity.LeadFollowUp;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.event.LeadAllocatedEvent;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.LeadAssignmentHistoryRepository;
 import com.app.datadistribution.repository.LeadFollowUpRepository;
 import com.app.datadistribution.repository.LeadRepository;
+import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.engine.LeadDistributionEngine;
+import com.app.datadistribution.service.engine.LeadDistributionEngine.EnginePlanResult;
 import com.app.datadistribution.service.interfaces.ILeadDistributionService;
 import com.app.datadistribution.service.util.LeadDepartmentResolver;
 
@@ -44,14 +55,15 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class LeadDistributionServiceImpl implements ILeadDistributionService {
 
+    private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
+
     private final LeadRepository leadRepository;
     private final UserRepository userRepository;
     private final LeadFollowUpRepository leadFollowUpRepository;
     private final LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
-    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
-
-    @Value("${app.lead-distribution.max-daily-followups:30}")
-    private int maxDailyFollowups;
+    private final LeadStatusRepository leadStatusRepository;
+    private final LeadDistributionEngine leadDistributionEngine;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -72,165 +84,153 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
         validateRequest(request);
 
         User currentUser = getCurrentUserEntity();
-        Specification<Lead> availableSpec = buildAvailableLeadsSpecification(request.getFilters());
-        List<Lead> availableLeads = leadRepository.findAll(availableSpec, Sort.by(Sort.Direction.ASC, "createdAt", "id"));
 
-        long totalAvailableCount = availableLeads.size();
-        log.info("Lead Distribution (preview={}): Found {} available leads matching filters", isPreview, totalAvailableCount);
+        // 1. Resolve Candidate Leads
+        List<Lead> candidateLeads = resolveCandidateLeads(request);
+        log.info("Lead Distribution (preview={}): Found {} candidate leads for distribution", isPreview, candidateLeads.size());
 
-        List<UUID> uniqueUserIds = request.getUserIds().stream().distinct().collect(Collectors.toList());
-        List<UserDistributionSummaryDTO> userSummaries = new ArrayList<>();
+        // 2. Resolve Target Users
+        List<UUID> uniqueUserIds = request.getUserIds().stream().distinct().toList();
+        List<User> targetUsers = userRepository.findAllById(uniqueUserIds).stream()
+                .filter(u -> !u.isDeleted() && u.isActive())
+                .toList();
 
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
-
-        int remainingLeadPoolSize = (int) totalAvailableCount;
-        int totalAssignedInBatch = 0;
-        int leadPointer = 0;
-        String batchId = UUID.randomUUID().toString();
-
-        for (UUID userId : uniqueUserIds) {
-            Optional<User> userOpt = userRepository.findById(userId).filter(u -> !u.isDeleted());
-            if (userOpt.isEmpty()) {
-                userSummaries.add(UserDistributionSummaryDTO.builder()
-                        .userId(userId)
-                        .userName("Unknown User")
-                        .todayFollowUpCount(0)
-                        .currentUnavailedLeadCount(0)
-                        .remainingCapacity(0)
-                        .assignedCount(0)
-                        .status("SKIPPED")
-                        .reason("USER_NOT_FOUND")
-                        .build());
-                continue;
-            }
-
-            User user = userOpt.get();
-            if (!user.isActive()) {
-                userSummaries.add(UserDistributionSummaryDTO.builder()
-                        .userId(user.getId())
-                        .userName(user.getFirstName() + " " + user.getLastName())
-                        .userEmail(user.getEmail())
-                        .todayFollowUpCount(0)
-                        .currentUnavailedLeadCount(0)
-                        .remainingCapacity(0)
-                        .assignedCount(0)
-                        .status("SKIPPED")
-                        .reason("USER_INACTIVE")
-                        .build());
-                continue;
-            }
-
-            long todayFollowUps = leadFollowUpRepository.countScheduledFollowUpsForUserBetween(user.getId(), todayStart, todayEnd);
-            long currentUnavailedLeads = leadRepository.countUnavailedLeadsByUserId(user.getId());
-
-            if (todayFollowUps >= maxDailyFollowups) {
-                userSummaries.add(UserDistributionSummaryDTO.builder()
-                        .userId(user.getId())
-                        .userName(user.getFirstName() + " " + user.getLastName())
-                        .userEmail(user.getEmail())
-                        .todayFollowUpCount(todayFollowUps)
-                        .currentUnavailedLeadCount(currentUnavailedLeads)
-                        .remainingCapacity(0)
-                        .assignedCount(0)
-                        .status("SKIPPED")
-                        .reason("DAILY_FOLLOWUP_LIMIT_REACHED")
-                        .build());
-                continue;
-            }
-
-            if (currentUnavailedLeads >= request.getMaximumDataPerUser()) {
-                userSummaries.add(UserDistributionSummaryDTO.builder()
-                        .userId(user.getId())
-                        .userName(user.getFirstName() + " " + user.getLastName())
-                        .userEmail(user.getEmail())
-                        .todayFollowUpCount(todayFollowUps)
-                        .currentUnavailedLeadCount(currentUnavailedLeads)
-                        .remainingCapacity(0)
-                        .assignedCount(0)
-                        .status("SKIPPED")
-                        .reason("MAX_CAPACITY_REACHED")
-                        .build());
-                continue;
-            }
-
-            int remainingCapacity = (int) (request.getMaximumDataPerUser() - currentUnavailedLeads);
-            int assignCountForUser = Math.min(remainingCapacity, remainingLeadPoolSize);
-
-            if (assignCountForUser <= 0) {
-                userSummaries.add(UserDistributionSummaryDTO.builder()
-                        .userId(user.getId())
-                        .userName(user.getFirstName() + " " + user.getLastName())
-                        .userEmail(user.getEmail())
-                        .todayFollowUpCount(todayFollowUps)
-                        .currentUnavailedLeadCount(currentUnavailedLeads)
-                        .remainingCapacity(remainingCapacity)
-                        .assignedCount(0)
-                        .status("SKIPPED")
-                        .reason("NO_AVAILABLE_LEADS")
-                        .build());
-                continue;
-            }
-
-            if (!isPreview) {
-                for (int i = 0; i < assignCountForUser; i++) {
-                    Lead leadToAssign = availableLeads.get(leadPointer + i);
-                    User oldUser = leadToAssign.getAssignedTo();
-
-                    leadToAssign.setAssignedTo(user);
-                    leadToAssign.setDepartment(LeadDepartmentResolver.resolveDepartmentForUser(user, leadToAssign.getDepartment()));
-                    leadRepository.save(leadToAssign);
-
-                    LeadAssignmentHistory history = LeadAssignmentHistory.builder()
-                            .lead(leadToAssign)
-                            .oldAssignedUser(oldUser)
-                            .newAssignedUser(user)
-                            .changedByUser(currentUser)
-                            .remarks("Manual rule-based batch lead distribution")
-                            .build();
-                    leadAssignmentHistoryRepository.save(history);
-                }
-
-                String deptName = (user.getDepartments() != null && !user.getDepartments().isEmpty())
-                        ? user.getDepartments().iterator().next().getName()
-                        : "General Department";
-
-                if (eventPublisher != null) {
-                    eventPublisher.publishEvent(com.app.datadistribution.event.LeadAllocatedEvent.builder()
-                            .targetUserId(user.getId())
-                            .allocatedByUserId(currentUser != null ? currentUser.getId() : null)
-                            .allocatedCount(assignCountForUser)
-                            .departmentName(deptName)
-                            .allocationTime(LocalDateTime.now())
-                            .batchId(batchId)
-                            .build());
-                }
-            }
-
-            leadPointer += assignCountForUser;
-            remainingLeadPoolSize -= assignCountForUser;
-            totalAssignedInBatch += assignCountForUser;
-
-            userSummaries.add(UserDistributionSummaryDTO.builder()
-                    .userId(user.getId())
-                    .userName(user.getFirstName() + " " + user.getLastName())
-                    .userEmail(user.getEmail())
-                    .todayFollowUpCount(todayFollowUps)
-                    .currentUnavailedLeadCount(currentUnavailedLeads)
-                    .remainingCapacity(remainingCapacity)
-                    .assignedCount(assignCountForUser)
-                    .status("SUCCESS")
-                    .build());
+        if (targetUsers.isEmpty()) {
+            throw new BadRequestException("No active target users found for lead distribution.");
         }
 
+        // 3. Resolve Dynamic RAW Status ID
+        UUID rawStatusId = leadStatusRepository.findByCodeIgnoreCase("RAW")
+                .map(LeadStatus::getId)
+                .or(() -> leadStatusRepository.findByNameIgnoreCase("Raw").map(LeadStatus::getId))
+                .orElse(null);
+
+        // 4. Batch Query Target User Capacities (Asia/Kolkata)
+        LocalDate today = LocalDate.now(IST_ZONE);
+        LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime todayEnd = today.atTime(LocalTime.MAX);
+
+        List<UUID> activeUserIds = targetUsers.stream().map(User::getId).toList();
+
+        Map<UUID, Long> todayFollowUpsMap = new HashMap<>();
+        List<Object[]> followUpResults = leadFollowUpRepository.countActiveTodayFollowUpsGroupedByUserIds(activeUserIds, todayStart, todayEnd);
+        for (Object[] row : followUpResults) {
+            if (row[0] != null && row[1] != null) {
+                todayFollowUpsMap.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        Map<UUID, Long> rawLeadsMap = new HashMap<>();
+        if (rawStatusId != null) {
+            List<Object[]> rawResults = leadRepository.countCurrentRawLeadsGroupedByUserIds(activeUserIds, rawStatusId);
+            for (Object[] row : rawResults) {
+                if (row[0] != null && row[1] != null) {
+                    rawLeadsMap.put((UUID) row[0], ((Number) row[1]).longValue());
+                }
+            }
+        }
+
+        // 5. Execute Allocation via Shared LeadDistributionEngine
+        Integer effectiveMaxLimit = request.resolveEffectiveMaxLeads();
+        EnginePlanResult planResult = leadDistributionEngine.planDistribution(
+                candidateLeads,
+                targetUsers,
+                todayFollowUpsMap,
+                rawLeadsMap,
+                effectiveMaxLimit);
+
+        // 6. If Actual Distribution (!isPreview), persist assignments & publish events
+        if (!isPreview) {
+            String batchId = UUID.randomUUID().toString();
+            Map<UUID, User> userMap = targetUsers.stream().collect(Collectors.toMap(User::getId, Function.identity()));
+
+            for (Map.Entry<UUID, List<Lead>> entry : planResult.getUserAssignedLeadsMap().entrySet()) {
+                UUID targetUserId = entry.getKey();
+                List<Lead> assignedLeads = entry.getValue();
+                User targetUser = userMap.get(targetUserId);
+
+                if (targetUser != null && !assignedLeads.isEmpty()) {
+                    for (Lead lead : assignedLeads) {
+                        User oldAssignedUser = lead.getAssignedTo();
+
+                        lead.setAssignedTo(targetUser);
+                        lead.setDepartment(LeadDepartmentResolver.resolveDepartmentForUser(targetUser, lead.getDepartment()));
+                        leadRepository.save(lead);
+
+                        // Save assignment history
+                        LeadAssignmentHistory history = LeadAssignmentHistory.builder()
+                                .lead(lead)
+                                .oldAssignedUser(oldAssignedUser)
+                                .newAssignedUser(targetUser)
+                                .changedByUser(currentUser)
+                                .remarks("Fair round-robin lead distribution (Batch: " + batchId + ")")
+                                .build();
+                        leadAssignmentHistoryRepository.save(history);
+
+                        // Reassign active pending/upcoming follow-ups to the new user
+                        List<LeadFollowUp> activeFollowUps = leadFollowUpRepository.findActiveFollowUpsByLeadId(lead.getId());
+                        for (LeadFollowUp f : activeFollowUps) {
+                            f.setAssignedTo(targetUser);
+                            leadFollowUpRepository.save(f);
+                        }
+                    }
+
+                    // Publish allocation event for notifications/analytics
+                    if (eventPublisher != null) {
+                        String deptName = (targetUser.getDepartments() != null && !targetUser.getDepartments().isEmpty())
+                                ? targetUser.getDepartments().iterator().next().getName()
+                                : "General Department";
+
+                        eventPublisher.publishEvent(LeadAllocatedEvent.builder()
+                                .targetUserId(targetUser.getId())
+                                .allocatedByUserId(currentUser != null ? currentUser.getId() : null)
+                                .allocatedCount(assignedLeads.size())
+                                .departmentName(deptName)
+                                .allocationTime(LocalDateTime.now())
+                                .batchId(batchId)
+                                .build());
+                    }
+                }
+            }
+        }
+
+        long totalSelectedCount = candidateLeads.size();
+        long totalDistributable = effectiveMaxLimit != null ? Math.min(totalSelectedCount, effectiveMaxLimit) : totalSelectedCount;
+
         return LeadDistributionResponse.builder()
-                .totalMatchingLeads(totalAvailableCount)
-                .totalAvailableLeads(totalAvailableCount)
-                .totalAssigned(totalAssignedInBatch)
+                .totalSelectedLeads(totalSelectedCount)
+                .totalDistributableLeads(totalDistributable)
+                .totalMatchingLeads(totalSelectedCount)
+                .totalAvailableLeads(totalDistributable)
+                .totalAssigned(planResult.getTotalAssigned())
+                .totalUnassigned(planResult.getTotalUnassigned())
+                .requestedMaximumNumber(effectiveMaxLimit)
                 .requestedMaximumPerUser(request.getMaximumDataPerUser())
                 .isPreviewOnly(isPreview)
-                .users(userSummaries)
+                .users(planResult.getUserSummaries())
+                .unassignedLeads(planResult.getUnassignedLeads())
                 .build();
+    }
+
+    private List<Lead> resolveCandidateLeads(LeadDistributionRequest request) {
+        if (request.getLeadIds() != null && !request.getLeadIds().isEmpty()) {
+            List<UUID> requestedIds = request.getLeadIds();
+            Map<UUID, Lead> leadMap = leadRepository.findAllById(requestedIds).stream()
+                    .filter(l -> !l.isDeleted())
+                    .collect(Collectors.toMap(Lead::getId, Function.identity()));
+
+            List<Lead> orderedLeads = new ArrayList<>();
+            for (UUID id : requestedIds) {
+                Lead lead = leadMap.get(id);
+                if (lead != null) {
+                    orderedLeads.add(lead);
+                }
+            }
+            return orderedLeads;
+        }
+
+        Specification<Lead> spec = buildAvailableLeadsSpecification(request.getFilters());
+        return leadRepository.findAll(spec, Sort.by(Sort.Direction.ASC, "createdAt", "id"));
     }
 
     private void validateRequest(LeadDistributionRequest request) throws BadRequestException {
@@ -240,8 +240,8 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
         if (request.getUserIds() == null || request.getUserIds().isEmpty()) {
             throw new BadRequestException("At least one user ID must be selected for lead distribution.");
         }
-        if (request.getMaximumDataPerUser() <= 0) {
-            throw new BadRequestException("Maximum data per user must be greater than zero.");
+        if ((request.getLeadIds() == null || request.getLeadIds().isEmpty()) && request.getFilters() == null) {
+            throw new BadRequestException("Either specific lead IDs or filter criteria must be provided.");
         }
     }
 
@@ -336,3 +336,4 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
     }
 }
+

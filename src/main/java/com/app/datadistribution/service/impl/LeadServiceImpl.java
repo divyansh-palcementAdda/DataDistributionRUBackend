@@ -43,6 +43,7 @@ import com.app.datadistribution.entity.LeadFeedback;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.exception.BadRequestException;
@@ -93,6 +94,8 @@ public class LeadServiceImpl implements ILeadService {
     private final LeadAvailedRepository leadAvailedRepository;
     private final LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
     private final CourseRepository courseRepository;
+    private final com.app.datadistribution.repository.ProgramRepository programRepository;
+    private final com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
     private final IUserDataScopeService dataScopeService;
     private final ILeadDataScopeService leadDataScopeService;
     private final com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
@@ -158,6 +161,10 @@ public class LeadServiceImpl implements ILeadService {
         }
 
         UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
+        
+        // Validate Program -> Course mapping
+        Program program = programCourseResolver.resolveAndValidate(request.getProgramId(), regCourseId, request.getInterestedCourseIds());
+
         Course course = null;
         if (regCourseId != null) {
             course = courseRepository.findById(regCourseId)
@@ -189,6 +196,7 @@ public class LeadServiceImpl implements ILeadService {
         lead.setInterestedCourses(interestedCourses);
         lead.setAssignedTo(assignedTo);
         lead.setCreatedByUser(currentUser);
+        lead.setProgram(program);
         lead.setCourse(course);
         lead.setBoard(board);
         lead.setGrade(grade);
@@ -267,6 +275,16 @@ public class LeadServiceImpl implements ILeadService {
         }
 
         UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
+        
+        // Validate Program -> Course mapping for update
+        Program program = null;
+        if (request.getProgramId() != null) {
+            program = programCourseResolver.resolveAndValidate(request.getProgramId(), regCourseId, request.getInterestedCourseIds());
+        } else if (lead.getProgram() != null && regCourseId != null) {
+            programCourseResolver.resolveAndValidate(lead.getProgram().getId(), regCourseId, request.getInterestedCourseIds());
+            program = lead.getProgram();
+        }
+
         Course course = null;
         if (regCourseId != null) {
             course = courseRepository.findById(regCourseId)
@@ -314,6 +332,9 @@ public class LeadServiceImpl implements ILeadService {
         lead.setCourseInterested(request.getCourseInterested());
         lead.setRemarks(request.getRemarks());
         lead.setAssignedTo(assignedTo);
+        if (request.getProgramId() != null || program != null) {
+            lead.setProgram(program);
+        }
         lead.setCourse(course);
         lead.setBoard(board);
         lead.setGrade(grade);

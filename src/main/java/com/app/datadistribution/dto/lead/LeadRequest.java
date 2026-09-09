@@ -76,10 +76,10 @@ public class LeadRequest {
 
     private UUID registeredCourseId;
 
+    private UUID programId;
+
     private UUID boardId;
-
     private UUID gradeId;
-
     private UUID departmentId;
 
     private String remarks;

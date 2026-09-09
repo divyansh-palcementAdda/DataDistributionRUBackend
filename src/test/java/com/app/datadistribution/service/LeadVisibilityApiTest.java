@@ -71,6 +71,10 @@ class LeadVisibilityApiTest {
     @Mock
     private LeadMapper leadMapper;
     @Mock
+    private com.app.datadistribution.repository.ProgramRepository programRepository;
+    @Mock
+    private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
+    @Mock
     private jakarta.persistence.EntityManager entityManager;
 
     @InjectMocks

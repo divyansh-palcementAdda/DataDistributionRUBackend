@@ -444,6 +444,7 @@ public class LeadController {
     @Operation(summary = "Bulk upload leads from an Excel file with selected master-data mappings")
     public ResponseEntity<ApiResponse<BulkLeadUploadResponse>> bulkUpload(
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "programId", required = false) UUID programId,
             @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
             @RequestParam(value = "boardId", required = false) UUID boardId,
@@ -454,7 +455,7 @@ public class LeadController {
             @RequestParam(value = "assignedToUserId", required = false) UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
 
         BulkLeadUploadResponse response = leadBulkUploadService.bulkUploadLeads(
-                file, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
+                file, programId, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
         );
         return ResponseEntity.ok(ApiResponse.success("Lead bulk upload processed successfully", response, HttpStatus.OK.value()));
     }

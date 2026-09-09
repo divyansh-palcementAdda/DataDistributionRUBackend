@@ -123,6 +123,16 @@ public interface LeadMapper {
                     .build();
         }
 
+        com.app.datadistribution.dto.program.ProgramSummaryDTO programDto = null;
+        if (lead.getProgram() != null && !lead.getProgram().isDeleted()) {
+            programDto = com.app.datadistribution.dto.program.ProgramSummaryDTO.builder()
+                    .id(lead.getProgram().getId())
+                    .name(lead.getProgram().getName())
+                    .code(lead.getProgram().getCode())
+                    .status(lead.getProgram().getStatus())
+                    .build();
+        }
+
         UserMapper userMapper = org.mapstruct.factory.Mappers.getMapper(UserMapper.class);
 
         boolean isAvailed = false;
@@ -164,6 +174,7 @@ public interface LeadMapper {
                 .interestedCourseTypes(interestedCourseTypesDtos)
                 .course(registeredCourseDto)
                 .registeredCourse(registeredCourseDto)
+                .program(programDto)
                 .board(toDto(lead.getBoard()))
                 .grade(toDto(lead.getGrade()))
                 .department(departmentDto)
@@ -199,6 +210,7 @@ public interface LeadMapper {
     @Mapping(target = "currentStatus", ignore = true)
     @Mapping(target = "board", ignore = true)
     @Mapping(target = "grade", ignore = true)
+    @Mapping(target = "program", ignore = true)
     @Mapping(target = "department", ignore = true)
     @Mapping(target = "assignedTo", ignore = true)
     @Mapping(target = "createdByUser", ignore = true)
