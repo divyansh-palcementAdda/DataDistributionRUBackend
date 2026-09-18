@@ -19,6 +19,7 @@ public interface LeadStatusRepository extends JpaRepository<LeadStatus, UUID>, J
     boolean existsByCodeIgnoreCase(String code);
     boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
     List<LeadStatus> findBySentimentCategory(SentimentCategory sentimentCategory);
+    List<LeadStatus> findByActiveTrueAndIsDeletedFalseOrderByDisplayOrderAsc();
     List<LeadStatus> findByActiveTrueAndIsFollowUpStatusTrueAndIsDeletedFalseOrderByDisplayOrderAsc();
     List<LeadStatus> findByIsFollowUpStatusTrueAndIsDeletedFalseOrderByDisplayOrderAsc();
 }

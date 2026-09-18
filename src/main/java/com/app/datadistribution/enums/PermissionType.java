@@ -176,6 +176,10 @@ public enum PermissionType {
     EMAIL_SEND,
     EMAIL_LOG_VIEW,
     EMAIL_CONFIG_VIEW,
-    EMAIL_CONFIG_TEST
+    EMAIL_CONFIG_TEST,
+
+    // User Detail Lead Matrix Permissions
+    USER_COURSE_MATRIX_VIEW,
+    USER_PROGRAM_MATRIX_VIEW
 }
 

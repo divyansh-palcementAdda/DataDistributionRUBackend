@@ -187,7 +187,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.startsWith("GRADE_")
 							|| (n.startsWith("DROPDOWN_") && !n.equals(PermissionType.DROPDOWN_ROLE_VIEW.name()) && !n.equals(PermissionType.DROPDOWN_PERMISSION_VIEW.name()))
 							|| n.equals(PermissionType.USER_READ.name())
-							|| n.equals(PermissionType.AUTH_READ.name());
+							|| n.equals(PermissionType.AUTH_READ.name())
+							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())
+							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name());
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.HOD.name(), "Head of Department Role", hodPermissions);
@@ -243,7 +245,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DROPDOWN_SOURCE_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_GRADE_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_BOARD_VIEW.name())
-							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name());
+							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name())
+							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())
+							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name());
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.COUNSELOR.name(), "Counselor Operational Role", counselorPermissions);
