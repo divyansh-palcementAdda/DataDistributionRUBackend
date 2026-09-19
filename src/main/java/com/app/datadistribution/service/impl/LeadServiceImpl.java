@@ -63,6 +63,7 @@ import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.LeadStatusHistoryRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.repository.specification.LeadFilterSpecification;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadService;
@@ -1212,49 +1213,23 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private Specification<Lead> filterBySources(List<UUID> leadSourceIds) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-            jakarta.persistence.criteria.SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", jakarta.persistence.criteria.JoinType.INNER);
-            return cb.and(
-                    sourceJoin.get("id").in(leadSourceIds),
-                    cb.equal(sourceJoin.get("isDeleted"), false)
-            );
-        };
+        return LeadFilterSpecification.filterBySources(leadSourceIds);
     }
 
     private Specification<Lead> filterByInterestedCourses(List<UUID> interestedCourseIds) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-            return root.join("interestedCourses", jakarta.persistence.criteria.JoinType.INNER).get("id").in(interestedCourseIds);
-        };
+        return LeadFilterSpecification.filterByInterestedCourses(interestedCourseIds);
     }
 
     private Specification<Lead> filterByCourseType(UUID courseTypeId) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-            jakarta.persistence.criteria.Join<Object, Object> interestedJoin = root.join("interestedCourses", jakarta.persistence.criteria.JoinType.LEFT);
-            jakarta.persistence.criteria.Join<Object, Object> registeredJoin = root.join("course", jakarta.persistence.criteria.JoinType.LEFT);
-            return cb.or(
-                    cb.equal(interestedJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id"), courseTypeId),
-                    cb.equal(registeredJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id"), courseTypeId)
-            );
-        };
+        return LeadFilterSpecification.filterByCourseType(courseTypeId);
     }
 
     private Specification<Lead> filterByCourse(UUID courseId) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-            jakarta.persistence.criteria.Join<Object, Object> interestedJoin = root.join("interestedCourses", jakarta.persistence.criteria.JoinType.LEFT);
-            jakarta.persistence.criteria.Join<Object, Object> registeredJoin = root.join("course", jakarta.persistence.criteria.JoinType.LEFT);
-            return cb.or(
-                    cb.equal(interestedJoin.get("id"), courseId),
-                    cb.equal(registeredJoin.get("id"), courseId)
-            );
-        };
+        return LeadFilterSpecification.filterByCourse(courseId);
     }
 
     private Specification<Lead> filterWithoutCourse() {
-        return (root, query, cb) -> cb.isNull(root.get("course"));
+        return LeadFilterSpecification.filterWithoutCourse();
     }
 
     private LeadStatus resolveInitialStatus(UUID statusId) {
@@ -1309,11 +1284,11 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private Specification<Lead> filterByStatus(UUID statusId) {
-        return (root, query, cb) -> cb.equal(root.get("currentStatus").get("id"), statusId);
+        return LeadFilterSpecification.filterByStatus(statusId);
     }
 
     private Specification<Lead> filterByStatusIds(List<UUID> statusIds) {
-        return (root, query, cb) -> root.get("currentStatus").get("id").in(statusIds);
+        return LeadFilterSpecification.filterByStatusIds(statusIds);
     }
 
     private List<UUID> resolveStatusHistoryIds(UUID leadStatusHistoryId, List<UUID> leadStatusHistoryIds, String leadStatusHistory) {
@@ -1347,165 +1322,59 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private Specification<Lead> filterByStatusHistory(List<UUID> statusIds) {
-        return (root, query, cb) -> {
-            if (statusIds == null || statusIds.isEmpty()) {
-                return cb.conjunction();
-            }
-            jakarta.persistence.criteria.Subquery<Integer> subquery = query.subquery(Integer.class);
-            jakarta.persistence.criteria.Root<LeadStatusHistory> historyRoot = subquery.from(LeadStatusHistory.class);
-            subquery.select(cb.literal(1));
-
-            jakarta.persistence.criteria.Predicate leadMatches = cb.equal(historyRoot.get("lead").get("id"), root.get("id"));
-            jakarta.persistence.criteria.Predicate notDeleted = cb.isFalse(historyRoot.get("isDeleted"));
-            jakarta.persistence.criteria.Predicate statusMatches = historyRoot.get("newStatus").get("id").in(statusIds);
-
-            subquery.where(cb.and(leadMatches, notDeleted, statusMatches));
-            return cb.exists(subquery);
-        };
+        return LeadFilterSpecification.filterByStatusHistory(statusIds);
     }
 
     private Specification<Lead> filterByBoard(UUID boardId) {
-        return (root, query, cb) -> cb.equal(root.get("board").get("id"), boardId);
+        return LeadFilterSpecification.filterByBoard(boardId);
     }
 
     private Specification<Lead> filterByBoardIds(List<UUID> boardIds) {
-        return (root, query, cb) -> root.get("board").get("id").in(boardIds);
+        return LeadFilterSpecification.filterByBoardIds(boardIds);
     }
 
     private Specification<Lead> filterByGrade(UUID gradeId) {
-        return (root, query, cb) -> cb.equal(root.get("grade").get("id"), gradeId);
+        return LeadFilterSpecification.filterByGrade(gradeId);
     }
 
     private Specification<Lead> filterByGradeIds(List<UUID> gradeIds) {
-        return (root, query, cb) -> root.get("grade").get("id").in(gradeIds);
+        return LeadFilterSpecification.filterByGradeIds(gradeIds);
     }
 
     private Specification<Lead> searchLeads(String keyword) {
-        return (root, query, cb) -> {
-            String searchPattern = "%" + keyword.toLowerCase() + "%";
-            return cb.or(
-                    cb.like(cb.lower(root.get("fullName")), searchPattern),
-                    cb.like(cb.lower(root.get("email")), searchPattern),
-                    cb.like(cb.lower(root.get("phoneNumber")), searchPattern),
-                    cb.like(cb.lower(root.get("leadCode")), searchPattern),
-                    cb.like(cb.lower(root.get("city")), searchPattern),
-                    cb.like(cb.lower(root.get("state")), searchPattern),
-                    cb.like(cb.lower(root.get("country")), searchPattern),
-                    cb.like(cb.lower(root.get("courseInterested")), searchPattern)
-            );
-        };
+        return LeadFilterSpecification.searchLeads(keyword);
     }
 
     private Specification<Lead> filterByCourseTypeIds(List<UUID> courseTypeIds) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-            jakarta.persistence.criteria.Join<Object, Object> interestedJoin = root.join("interestedCourses", jakarta.persistence.criteria.JoinType.LEFT);
-            jakarta.persistence.criteria.Join<Object, Object> registeredJoin = root.join("course", jakarta.persistence.criteria.JoinType.LEFT);
-            return cb.or(
-                    interestedJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id").in(courseTypeIds),
-                    registeredJoin.join("courseType", jakarta.persistence.criteria.JoinType.LEFT).get("id").in(courseTypeIds)
-            );
-        };
+        return LeadFilterSpecification.filterByCourseTypeIds(courseTypeIds);
     }
 
     private Specification<Lead> filterByDepartmentIds(List<UUID> departmentIds) {
-        return (root, query, cb) -> root.get("department").get("id").in(departmentIds);
+        return LeadFilterSpecification.filterByDepartmentIds(departmentIds);
     }
 
     private Specification<Lead> filterByAssignedUserIds(List<UUID> assignedUserIds) {
-        return (root, query, cb) -> root.get("assignedTo").get("id").in(assignedUserIds);
+        return LeadFilterSpecification.filterByAssignedUserIds(assignedUserIds);
     }
 
     private Specification<Lead> filterByAllotted(Boolean allotted) {
-        return (root, query, cb) -> {
-            if (Boolean.TRUE.equals(allotted)) {
-                return cb.isNotNull(root.get("assignedTo"));
-            } else if (Boolean.FALSE.equals(allotted)) {
-                return cb.isNull(root.get("assignedTo"));
-            }
-            return cb.conjunction();
-        };
+        return LeadFilterSpecification.filterByAllotted(allotted);
     }
 
     private Specification<Lead> filterByCreatedDateRange(LocalDate startDate, LocalDate endDate) {
-        return (root, query, cb) -> {
-            List<Predicate> preds = new ArrayList<>();
-            if (startDate != null) {
-                preds.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate.atStartOfDay()));
-            }
-            if (endDate != null) {
-                preds.add(cb.lessThanOrEqualTo(root.get("createdAt"), endDate.atTime(LocalTime.MAX)));
-            }
-            return cb.and(preds.toArray(new Predicate[0]));
-        };
+        return LeadFilterSpecification.filterByCreatedDateRange(startDate, endDate);
     }
 
     private Specification<Lead> filterByUpdatedDateRange(LocalDate updatedFrom, LocalDate updatedTo) {
-        return (root, query, cb) -> {
-            List<Predicate> preds = new ArrayList<>();
-            if (updatedFrom != null) {
-                preds.add(cb.greaterThanOrEqualTo(root.get("updatedAt"), updatedFrom.atStartOfDay()));
-            }
-            if (updatedTo != null) {
-                preds.add(cb.lessThanOrEqualTo(root.get("updatedAt"), updatedTo.atTime(LocalTime.MAX)));
-            }
-            return cb.and(preds.toArray(new Predicate[0]));
-        };
+        return LeadFilterSpecification.filterByUpdatedDateRange(updatedFrom, updatedTo);
     }
 
     private Specification<Lead> filterByAvailedDetails(Boolean isAvailed, UUID availedByUserId, List<UUID> availedByUserIds, LocalDate availedFrom, LocalDate availedTo) {
-        return (root, query, cb) -> {
-            jakarta.persistence.criteria.Subquery<UUID> subquery = query.subquery(UUID.class);
-            jakarta.persistence.criteria.Root<LeadAvailed> availedRoot = subquery.from(LeadAvailed.class);
-            subquery.select(availedRoot.get("lead").get("id"));
-
-            List<Predicate> subqueryPreds = new ArrayList<>();
-            subqueryPreds.add(cb.equal(availedRoot.get("lead"), root));
-            subqueryPreds.add(cb.equal(availedRoot.get("availedByUser"), root.get("assignedTo")));
-            subqueryPreds.add(cb.equal(availedRoot.get("isDeleted"), false));
-
-            if (availedByUserId != null) {
-                subqueryPreds.add(cb.equal(availedRoot.get("availedByUser").get("id"), availedByUserId));
-            }
-            if (availedByUserIds != null && !availedByUserIds.isEmpty()) {
-                subqueryPreds.add(availedRoot.get("availedByUser").get("id").in(availedByUserIds));
-            }
-            if (availedFrom != null) {
-                subqueryPreds.add(cb.greaterThanOrEqualTo(availedRoot.get("availedAt"), availedFrom.atStartOfDay()));
-            }
-            if (availedTo != null) {
-                subqueryPreds.add(cb.lessThanOrEqualTo(availedRoot.get("availedAt"), availedTo.atTime(LocalTime.MAX)));
-            }
-            subquery.where(subqueryPreds.toArray(new Predicate[0]));
-
-            if (Boolean.FALSE.equals(isAvailed)) {
-                return cb.not(cb.exists(subquery));
-            } else {
-                return cb.and(cb.isNotNull(root.get("assignedTo")), cb.exists(subquery));
-            }
-        };
+        return LeadFilterSpecification.filterByAvailedDetails(isAvailed, availedByUserId, availedByUserIds, availedFrom, availedTo);
     }
 
     private Specification<Lead> filterByAvailed(Boolean availed) {
-        return (root, query, cb) -> {
-            jakarta.persistence.criteria.Subquery<UUID> subquery = query.subquery(UUID.class);
-            jakarta.persistence.criteria.Root<LeadAvailed> availedRoot = subquery.from(LeadAvailed.class);
-            subquery.select(availedRoot.get("lead").get("id"));
-            subquery.where(
-                    cb.equal(availedRoot.get("lead"), root),
-                    cb.equal(availedRoot.get("availedByUser"), root.get("assignedTo")),
-                    cb.equal(availedRoot.get("isDeleted"), false)
-            );
-
-            if (Boolean.TRUE.equals(availed)) {
-                return cb.and(
-                        cb.isNotNull(root.get("assignedTo")),
-                        cb.exists(subquery)
-                );
-            } else {
-                return cb.not(cb.exists(subquery));
-            }
-        };
+        return LeadFilterSpecification.filterByAvailedDetails(availed, null, null, null, null);
     }
 
     private void validatePreferredStudyPlace(String preferredState, String preferredCity) throws BadRequestException {
