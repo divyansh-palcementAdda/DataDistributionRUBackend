@@ -355,11 +355,20 @@ public class DashboardAnalyticsRepository {
             predicates.add(root.get("course").get("id").in(filter.getRegisteredCourseIds()));
         }
 
-        // Multi-value Lead Source filter
+        // Multi-value Lead Source filter — use correlated EXISTS subquery to prevent
+        // row duplication from the Lead.leadSources many-to-many association.
         if (filter.getLeadSourceIds() != null && !filter.getLeadSourceIds().isEmpty()) {
-            SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", JoinType.INNER);
-            predicates.add(cb.equal(sourceJoin.get("isDeleted"), false));
-            predicates.add(sourceJoin.get("id").in(filter.getLeadSourceIds()));
+            jakarta.persistence.criteria.Subquery<Integer> srcSubquery =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> srcSubRoot = srcSubquery.from(Lead.class);
+            SetJoin<Lead, LeadSource> srcJoin = srcSubRoot.joinSet("leadSources", JoinType.INNER);
+            srcSubquery.select(cb.literal(1));
+            srcSubquery.where(
+                    cb.equal(srcSubRoot.get("id"), root.get("id")),
+                    srcJoin.get("id").in(filter.getLeadSourceIds()),
+                    cb.isFalse(srcJoin.get("isDeleted"))
+            );
+            predicates.add(cb.exists(srcSubquery));
         }
 
         // Multi-value Interested Course filter
@@ -369,14 +378,33 @@ public class DashboardAnalyticsRepository {
             predicates.add(courseJoin.get("id").in(filter.getCourseIds()));
         }
 
-        // Multi-value Course Type filter
+        // Multi-value Course Type filter — use a single correlated EXISTS subquery covering
+        // both registered course and interested courses to prevent row duplication from joins.
         if (filter.getCourseTypeIds() != null && !filter.getCourseTypeIds().isEmpty()) {
-            SetJoin<Lead, Course> interestedJoin = root.joinSet("interestedCourses", JoinType.LEFT);
-            Join<Lead, Course> registeredJoin = root.join("course", JoinType.LEFT);
-            predicates.add(cb.or(
-                    interestedJoin.join("courseType", JoinType.LEFT).get("id").in(filter.getCourseTypeIds()),
-                    registeredJoin.join("courseType", JoinType.LEFT).get("id").in(filter.getCourseTypeIds())
-            ));
+            jakarta.persistence.criteria.Subquery<Integer> ctSubquery =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> ctSubRoot = ctSubquery.from(Lead.class);
+            jakarta.persistence.criteria.Join<Lead, com.app.datadistribution.entity.Course> regJoin =
+                    ctSubRoot.join("course", JoinType.LEFT);
+            jakarta.persistence.criteria.SetJoin<Lead, com.app.datadistribution.entity.Course> intJoin =
+                    ctSubRoot.joinSet("interestedCourses", JoinType.LEFT);
+            ctSubquery.select(cb.literal(1));
+            ctSubquery.where(
+                    cb.equal(ctSubRoot.get("id"), root.get("id")),
+                    cb.or(
+                            cb.and(
+                                    cb.isNotNull(regJoin.get("id")),
+                                    cb.isFalse(regJoin.get("isDeleted")),
+                                    regJoin.get("courseType").get("id").in(filter.getCourseTypeIds())
+                            ),
+                            cb.and(
+                                    cb.isNotNull(intJoin.get("id")),
+                                    cb.isFalse(intJoin.get("isDeleted")),
+                                    intJoin.get("courseType").get("id").in(filter.getCourseTypeIds())
+                            )
+                    )
+            );
+            predicates.add(cb.exists(ctSubquery));
         }
 
         // Allotted / Unallotted filter
