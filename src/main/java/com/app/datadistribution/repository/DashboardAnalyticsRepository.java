@@ -371,11 +371,37 @@ public class DashboardAnalyticsRepository {
             predicates.add(cb.exists(srcSubquery));
         }
 
-        // Multi-value Interested Course filter
+        // Multi-value Course filter — use correlated EXISTS subquery covering both registered and interested courses
         if (filter.getCourseIds() != null && !filter.getCourseIds().isEmpty()) {
-            SetJoin<Lead, Course> courseJoin = root.joinSet("interestedCourses", JoinType.INNER);
-            predicates.add(cb.equal(courseJoin.get("isDeleted"), false));
-            predicates.add(courseJoin.get("id").in(filter.getCourseIds()));
+            jakarta.persistence.criteria.Subquery<Integer> courseSubquery =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> courseSubRoot = courseSubquery.from(Lead.class);
+            jakarta.persistence.criteria.Join<Lead, Course> regCourseJoin = courseSubRoot.join("course", JoinType.LEFT);
+            SetJoin<Lead, Course> courseJoin = courseSubRoot.joinSet("interestedCourses", JoinType.LEFT);
+            courseSubquery.select(cb.literal(1));
+            courseSubquery.where(
+                    cb.equal(courseSubRoot.get("id"), root.get("id")),
+                    cb.or(
+                            cb.and(cb.isNotNull(regCourseJoin.get("id")), regCourseJoin.get("id").in(filter.getCourseIds()), cb.isFalse(regCourseJoin.get("isDeleted"))),
+                            cb.and(cb.isNotNull(courseJoin.get("id")), courseJoin.get("id").in(filter.getCourseIds()), cb.isFalse(courseJoin.get("isDeleted")))
+                    )
+            );
+            predicates.add(cb.exists(courseSubquery));
+        }
+
+        // Status History filter
+        if (filter.getLeadStatusHistoryIds() != null && !filter.getLeadStatusHistoryIds().isEmpty()) {
+            jakarta.persistence.criteria.Subquery<Integer> histSubquery =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<com.app.datadistribution.entity.LeadStatusHistory> historyRoot =
+                    histSubquery.from(com.app.datadistribution.entity.LeadStatusHistory.class);
+            histSubquery.select(cb.literal(1));
+            histSubquery.where(
+                    cb.equal(historyRoot.get("lead").get("id"), root.get("id")),
+                    cb.isFalse(historyRoot.get("isDeleted")),
+                    historyRoot.get("newStatus").get("id").in(filter.getLeadStatusHistoryIds())
+            );
+            predicates.add(cb.exists(histSubquery));
         }
 
         // Multi-value Course Type filter — use a single correlated EXISTS subquery covering
@@ -386,8 +412,12 @@ public class DashboardAnalyticsRepository {
             jakarta.persistence.criteria.Root<Lead> ctSubRoot = ctSubquery.from(Lead.class);
             jakarta.persistence.criteria.Join<Lead, com.app.datadistribution.entity.Course> regJoin =
                     ctSubRoot.join("course", JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Course, CourseType> regCtJoin =
+                    regJoin.join("courseType", JoinType.LEFT);
             jakarta.persistence.criteria.SetJoin<Lead, com.app.datadistribution.entity.Course> intJoin =
                     ctSubRoot.joinSet("interestedCourses", JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Course, CourseType> intCtJoin =
+                    intJoin.join("courseType", JoinType.LEFT);
             ctSubquery.select(cb.literal(1));
             ctSubquery.where(
                     cb.equal(ctSubRoot.get("id"), root.get("id")),
@@ -395,12 +425,12 @@ public class DashboardAnalyticsRepository {
                             cb.and(
                                     cb.isNotNull(regJoin.get("id")),
                                     cb.isFalse(regJoin.get("isDeleted")),
-                                    regJoin.get("courseType").get("id").in(filter.getCourseTypeIds())
+                                    regCtJoin.get("id").in(filter.getCourseTypeIds())
                             ),
                             cb.and(
                                     cb.isNotNull(intJoin.get("id")),
                                     cb.isFalse(intJoin.get("isDeleted")),
-                                    intJoin.get("courseType").get("id").in(filter.getCourseTypeIds())
+                                    intCtJoin.get("id").in(filter.getCourseTypeIds())
                             )
                     )
             );
@@ -489,6 +519,21 @@ public class DashboardAnalyticsRepository {
         // Generic Search Keyword filter
         if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
             String pattern = "%" + filter.getSearch().trim().toLowerCase() + "%";
+
+            // Correlated EXISTS subquery over interestedCourses.courseName to avoid
+            // row duplication from the ManyToMany join while still allowing course-name search.
+            jakarta.persistence.criteria.Subquery<Integer> courseSearchSub =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> courseSearchRoot = courseSearchSub.from(Lead.class);
+            SetJoin<Lead, com.app.datadistribution.entity.Course> courseSearchJoin =
+                    courseSearchRoot.joinSet("interestedCourses", JoinType.INNER);
+            courseSearchSub.select(cb.literal(1));
+            courseSearchSub.where(
+                    cb.equal(courseSearchRoot.get("id"), root.get("id")),
+                    cb.isFalse(courseSearchJoin.get("isDeleted")),
+                    cb.like(cb.lower(courseSearchJoin.get("courseName")), pattern)
+            );
+
             predicates.add(cb.or(
                     cb.like(cb.lower(root.get("fullName")), pattern),
                     cb.like(cb.lower(root.get("email")), pattern),
@@ -497,7 +542,7 @@ public class DashboardAnalyticsRepository {
                     cb.like(cb.lower(root.get("city")), pattern),
                     cb.like(cb.lower(root.get("state")), pattern),
                     cb.like(cb.lower(root.get("country")), pattern),
-                    cb.like(cb.lower(root.get("courseInterested")), pattern)
+                    cb.exists(courseSearchSub)
             ));
         }
 

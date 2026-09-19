@@ -158,6 +158,12 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public DashboardLeadCountResponseDTO getAllottedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest != null && Boolean.FALSE.equals(filterRequest.getAllotted())) {
+            return DashboardLeadCountResponseDTO.builder()
+                    .type("ALLOTTED")
+                    .count(0L)
+                    .build();
+        }
         if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
         filterRequest.setAllotted(true);
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
@@ -171,6 +177,12 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public DashboardLeadCountResponseDTO getUnallottedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest != null && Boolean.TRUE.equals(filterRequest.getAllotted())) {
+            return DashboardLeadCountResponseDTO.builder()
+                    .type("UNALLOTTED")
+                    .count(0L)
+                    .build();
+        }
         if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
         filterRequest.setAllotted(false);
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
@@ -184,6 +196,12 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public DashboardLeadCountResponseDTO getAvailedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest != null && Boolean.FALSE.equals(filterRequest.getEffectiveIsAvailed())) {
+            return DashboardLeadCountResponseDTO.builder()
+                    .type("AVAILED")
+                    .count(0L)
+                    .build();
+        }
         if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
         filterRequest.setIsAvailed(true);
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);

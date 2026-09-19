@@ -462,4 +462,73 @@ class DashboardDataScopeTest {
         com.app.datadistribution.dto.dashboard.DashboardCardDTO availedCard = cards.stream().filter(c -> "TOTAL_AVAILED_DATA".equals(c.getCode())).findFirst().orElseThrow();
         assertEquals(30L, availedCard.getValue());
     }
+
+    @Test
+    void testGetAllottedLeadsCount_WithUnallottedFilter_ReturnsZero() throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest filter = DashboardAnalyticsFilterRequest.builder()
+                .allotted(false)
+                .build();
+
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getAllottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("ALLOTTED", result.getType());
+        assertEquals(0L, result.getCount());
+    }
+
+    @Test
+    void testGetUnallottedLeadsCount_WithAllottedFilter_ReturnsZero() throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest filter = DashboardAnalyticsFilterRequest.builder()
+                .allotted(true)
+                .build();
+
+        com.app.datadistribution.dto.dashboard.DashboardLeadCountResponseDTO result = dashboardService.getUnallottedLeadsCount(filter);
+
+        assertNotNull(result);
+        assertEquals("UNALLOTTED", result.getType());
+        assertEquals(0L, result.getCount());
+    }
+
+    @Test
+    void testDashboardAnalyticsFilterRequest_SingularAliasesAndBinding() {
+        DashboardAnalyticsFilterRequest req = new DashboardAnalyticsFilterRequest();
+        UUID ctId = UUID.randomUUID();
+        UUID srcId = UUID.randomUUID();
+        UUID stId = UUID.randomUUID();
+        UUID brdId = UUID.randomUUID();
+        UUID grdId = UUID.randomUUID();
+        UUID crsId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        UUID usrId = UUID.randomUUID();
+        UUID histId = UUID.randomUUID();
+
+        req.setCourseTypeId(ctId);
+        req.setLeadSourceId(srcId);
+        req.setStatusId(stId);
+        req.setBoardId(brdId);
+        req.setGradeId(grdId);
+        req.setCourseId(crsId);
+        req.setDepartmentId(deptId);
+        req.setAssignedUserId(usrId);
+        req.setUnallotted(true);
+        req.setLeadStatusHistoryId(histId);
+        req.setSearch("test query");
+
+        assertEquals(List.of(ctId), req.getCourseTypeIds());
+        assertEquals(List.of(srcId), req.getLeadSourceIds());
+        assertEquals(List.of(stId), req.getStatusIds());
+        assertEquals(List.of(brdId), req.getBoardIds());
+        assertEquals(List.of(grdId), req.getGradeIds());
+        assertEquals(List.of(crsId), req.getCourseIds());
+        assertEquals(List.of(deptId), req.getDepartmentIds());
+        assertEquals(List.of(usrId), req.getAssignedUserIds());
+        assertEquals(Boolean.FALSE, req.getAllotted());
+        assertEquals(List.of(histId), req.getLeadStatusHistoryIds());
+        assertEquals("test query", req.getSearch());
+
+        DashboardAnalyticsFilterRequest copied = req.copy();
+        assertEquals(req.getCourseTypeIds(), copied.getCourseTypeIds());
+        assertEquals(req.getSearch(), copied.getSearch());
+        assertEquals(req.getAllotted(), copied.getAllotted());
+    }
 }

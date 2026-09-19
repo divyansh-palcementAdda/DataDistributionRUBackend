@@ -79,7 +79,8 @@ public class EmailNotificationListener {
             String leadStatusName = lead.getCurrentStatus() != null ? lead.getCurrentStatus().getName()
                     : (lead.getLeadStatus() != null ? lead.getLeadStatus().getName() : "Pending");
             String courseName = lead.getCourse() != null ? lead.getCourse().getCourseName()
-                    : (lead.getCourseInterested() != null ? lead.getCourseInterested() : "-");
+                    : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty()
+                            ? lead.getInterestedCourses().iterator().next().getCourseName() : "-");
             String leadUrl = frontendUrl + "/leads/" + lead.getId();
 
             String formattedDate = event.getFollowUpDate() != null ? event.getFollowUpDate().format(DATE_FORMATTER)
@@ -135,7 +136,8 @@ public class EmailNotificationListener {
             String followUpType = event.getFollowUpStatus() != null ? event.getFollowUpStatus() : "Follow-up";
             String leadStatusName = lead.getCurrentStatus() != null ? lead.getCurrentStatus().getName() : "-";
             String courseName = lead.getCourse() != null ? lead.getCourse().getCourseName()
-                    : (lead.getCourseInterested() != null ? lead.getCourseInterested() : "-");
+                    : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty()
+                            ? lead.getInterestedCourses().iterator().next().getCourseName() : "-");
             String leadUrl = frontendUrl + "/leads/" + lead.getId();
 
             String formattedDate = event.getNewFollowUpDate() != null

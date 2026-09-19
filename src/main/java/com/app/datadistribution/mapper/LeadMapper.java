@@ -169,7 +169,6 @@ public interface LeadMapper {
                 .visitRemarks(lead.getVisitRemarks())
                 .leadSources(leadSourcesDtos)
                 .sourceDetails(lead.getSourceDetails())
-                .courseInterested(lead.getCourseInterested())
                 .interestedCourses(interestedCoursesDtos)
                 .interestedCourseTypes(interestedCourseTypesDtos)
                 .course(registeredCourseDto)

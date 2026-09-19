@@ -194,8 +194,10 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 String country = getCellValue(row, headerMap, "country", formatter);
                 String sourceDetails = getCellValue(row, headerMap, "sourceDetails", formatter);
                 String programVal = getCellValue(row, headerMap, "program", formatter);
-                String courseInterested = getCellValue(row, headerMap, "courseInterested", formatter);
                 String remarks = getCellValue(row, headerMap, "remarks", formatter);
+                // courseInterested column is no longer stored as a string field;
+                // we read it only to resolve the Course entity into interestedCourses.
+                String courseNameInput = getCellValue(row, headerMap, "courseInterested", formatter);
 
                 // Row-Level Validation
                 if (fullName == null || fullName.isBlank()) {
@@ -298,8 +300,8 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 }
 
                 Course rowCourse = null;
-                if (courseInterested != null && !courseInterested.isBlank()) {
-                    rowCourse = programCourseResolver.resolveCourseByNameOrCode(courseInterested)
+                if (courseNameInput != null && !courseNameInput.isBlank()) {
+                    rowCourse = programCourseResolver.resolveCourseByNameOrCode(courseNameInput)
                             .filter(c -> !c.isDeleted() && c.getStatus() == Status.ACTIVE)
                             .orElse(null);
                     if (rowCourse == null) {
@@ -307,8 +309,8 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         failedRows.add(BulkLeadUploadRowError.builder()
                                 .rowNumber(displayRowNumber)
                                 .field("courseInterested")
-                                .value(courseInterested)
-                                .reason("Course '" + courseInterested + "' not found or is inactive")
+                                .value(courseNameInput)
+                                .reason("Course '" + courseNameInput + "' not found or is inactive")
                                 .build());
                         continue;
                     }
@@ -321,7 +323,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         failedRows.add(BulkLeadUploadRowError.builder()
                                 .rowNumber(displayRowNumber)
                                 .field("courseInterested")
-                                .value(courseInterested)
+                                .value(courseNameInput)
                                 .reason("Course '" + rowCourse.getCourseName() + "' is not mapped to Program '" + rowProgram.getName() + "'")
                                 .build());
                         continue;
@@ -352,7 +354,6 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         .program(rowProgram)
                         .course(rowCourse)
                         .interestedCourses(interestedCourses)
-                        .courseInterested(courseInterested != null && !courseInterested.isBlank() ? courseInterested.trim() : (rowCourse != null ? rowCourse.getCourseName() : null))
                         .remarks(remarks != null && !remarks.isBlank() ? remarks.trim() : null)
                         .leadSources(selectedLeadSources)
                         .currentStatus(selectedStatus)

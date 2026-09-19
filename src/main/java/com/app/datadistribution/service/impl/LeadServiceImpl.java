@@ -330,7 +330,6 @@ public class LeadServiceImpl implements ILeadService {
         validateAndApplyVisitPlanning(lead, request.getPlanningToVisitUniversity(), request.getVisitDate(), request.getVisitTime(), request.getVisitRemarks());
         lead.setLeadSources(sources);
         lead.setSourceDetails(request.getSourceDetails());
-        lead.setCourseInterested(request.getCourseInterested());
         lead.setRemarks(request.getRemarks());
         lead.setAssignedTo(assignedTo);
         if (request.getProgramId() != null || program != null) {
@@ -756,7 +755,7 @@ public class LeadServiceImpl implements ILeadService {
                                 .email(lead.getEmail())
                                 .city(lead.getCity())
                                 .state(lead.getState())
-                                .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : lead.getCourseInterested())
+                                .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty() ? lead.getInterestedCourses().iterator().next().getCourseName() : null))
                                 .enrollmentId(lead.getEnrollmentId())
                                 .build();
 
@@ -934,7 +933,7 @@ public class LeadServiceImpl implements ILeadService {
                         .email(lead.getEmail())
                         .city(lead.getCity())
                         .state(lead.getState())
-                        .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : lead.getCourseInterested())
+                        .courseName(lead.getCourse() != null ? lead.getCourse().getCourseName() : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty() ? lead.getInterestedCourses().iterator().next().getCourseName() : null))
                         .enrollmentId(lead.getEnrollmentId())
                         .build();
 

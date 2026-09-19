@@ -67,8 +67,6 @@ public class LeadRequest {
     @Size(max = 255, message = "Source details must be less than 255 characters")
     private String sourceDetails;
 
-    @Size(max = 150, message = "Course interested must be less than 150 characters")
-    private String courseInterested;
 
     private List<UUID> interestedCourseIds;
 

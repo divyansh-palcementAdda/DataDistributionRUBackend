@@ -221,7 +221,11 @@ public class EmailTemplateServiceImpl implements IEmailTemplateService {
                 String student = (f.getLead() != null && f.getLead().getFullName() != null) ? escape(f.getLead().getFullName()) : "Lead #" + idx;
                 String time = f.getFollowUpDate() != null ? f.getFollowUpDate().format(TIME_FORMATTER) : "-";
                 String statusName = (f.getLead() != null && f.getLead().getCurrentStatus() != null) ? escape(f.getLead().getCurrentStatus().getName()) : f.getStatus().getDisplayName();
-                String course = (f.getLead() != null && f.getLead().getCourse() != null) ? escape(f.getLead().getCourse().getCourseName()) : (f.getLead() != null && f.getLead().getCourseInterested() != null ? escape(f.getLead().getCourseInterested()) : "-");
+                String course = (f.getLead() != null && f.getLead().getCourse() != null)
+                        ? escape(f.getLead().getCourse().getCourseName())
+                        : (f.getLead() != null && f.getLead().getInterestedCourses() != null && !f.getLead().getInterestedCourses().isEmpty()
+                            ? escape(f.getLead().getInterestedCourses().iterator().next().getCourseName())
+                            : "-");
 
                 String rowBg = (idx % 2 == 0) ? "#F9FAFB" : "#FFFFFF";
                 body.append("<tr style=\"background-color:").append(rowBg).append("; border-bottom:1px solid #F3F4F6;\">");

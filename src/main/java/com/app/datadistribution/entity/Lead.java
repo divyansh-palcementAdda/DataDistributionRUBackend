@@ -96,8 +96,6 @@ public class Lead extends BaseEntity {
     @Column(name = "source_details", length = 255)
     private String sourceDetails;
 
-    @Column(name = "course_interested", length = 150)
-    private String courseInterested;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
