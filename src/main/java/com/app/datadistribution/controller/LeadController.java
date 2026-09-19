@@ -105,8 +105,10 @@ public class LeadController {
             @RequestParam(value = "sortDirection", defaultValue = "ASC") String sortDirection,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "sourceId", required = false) UUID sourceId,
+            @RequestParam(value = "leadSourceId", required = false) UUID leadSourceId,
             @RequestParam(value = "leadSourceIds", required = false) List<UUID> leadSourceIds,
             @RequestParam(value = "courseId", required = false) UUID courseId,
+            @RequestParam(value = "courseIds", required = false) List<UUID> courseIds,
             @RequestParam(value = "interestedCourseIds", required = false) List<UUID> interestedCourseIds,
             @RequestParam(value = "registeredCourseId", required = false) UUID registeredCourseId,
             @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
@@ -123,6 +125,7 @@ public class LeadController {
             @RequestParam(value = "assignedUserId", required = false) UUID assignedUserId,
             @RequestParam(value = "assignedUserIds", required = false) List<UUID> assignedUserIds,
             @RequestParam(value = "allotted", required = false) Boolean allotted,
+            @RequestParam(value = "unallotted", required = false) Boolean unallotted,
             @RequestParam(value = "availed", required = false) Boolean availed,
             @RequestParam(value = "isAvailed", required = false) Boolean isAvailed,
             @RequestParam(value = "availedByUserId", required = false) UUID availedByUserId,
@@ -140,8 +143,22 @@ public class LeadController {
             @RequestParam(value = "leadStatusHistory", required = false) String leadStatusHistory) throws UnauthorizedException, BadRequestException {
 
         List<UUID> sourceIdsToFilter = leadSourceIds;
-        if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty()) && sourceId != null) {
-            sourceIdsToFilter = List.of(sourceId);
+        if ((sourceIdsToFilter == null || sourceIdsToFilter.isEmpty())) {
+            if (leadSourceId != null) {
+                sourceIdsToFilter = List.of(leadSourceId);
+            } else if (sourceId != null) {
+                sourceIdsToFilter = List.of(sourceId);
+            }
+        }
+
+        UUID effectiveCourseId = courseId;
+        if (effectiveCourseId == null && courseIds != null && !courseIds.isEmpty()) {
+            effectiveCourseId = courseIds.get(0);
+        }
+
+        Boolean effectiveAllotted = allotted;
+        if (effectiveAllotted == null && Boolean.TRUE.equals(unallotted)) {
+            effectiveAllotted = false;
         }
 
         List<UUID> deptIdsToFilter = departmentIds;
@@ -169,7 +186,7 @@ public class LeadController {
         LeadPageResponse response = leadService.getAllLeads(
                 pageRequest,
                 sourceIdsToFilter,
-                courseId,
+                effectiveCourseId,
                 interestedCourseIds,
                 registeredCourseId,
                 courseTypeId,
@@ -183,7 +200,7 @@ public class LeadController {
                 gradeIds,
                 deptIdsToFilter,
                 assignedUsersToFilter,
-                allotted,
+                effectiveAllotted,
                 effectiveAvailed,
                 availedByUserId,
                 availedByUserIds,

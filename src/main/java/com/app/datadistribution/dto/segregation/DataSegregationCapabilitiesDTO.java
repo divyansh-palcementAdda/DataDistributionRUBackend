@@ -20,4 +20,6 @@ public class DataSegregationCapabilitiesDTO {
     private boolean canViewGrade;
     private boolean canViewUserAnalytics;
     private boolean canViewLeadStatusAnalytics;
+    private boolean canViewCourse;
+    private boolean canViewCourseUser;
 }

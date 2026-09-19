@@ -98,6 +98,8 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
                     .canViewGrade(false)
                     .canViewUserAnalytics(false)
                     .canViewLeadStatusAnalytics(false)
+                    .canViewCourse(false)
+                    .canViewCourseUser(false)
                     .build();
         }
 
@@ -114,6 +116,14 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
                 || authorities.contains(PermissionType.DATA_SEGREGATION_LEAD_STATUS_ANALYTICS.name())
                 || authorities.contains(PermissionType.DATA_SEGREGATION_VIEW.name());
 
+        boolean canCourse = hasFullFlow
+                || authorities.contains(PermissionType.DATA_SEGREGATION_COURSE_VIEW.name())
+                || authorities.contains(PermissionType.DATA_SEGREGATION_VIEW.name());
+
+        boolean canCourseUser = hasFullFlow
+                || authorities.contains(PermissionType.DATA_SEGREGATION_COURSE_USER_VIEW.name())
+                || authorities.contains(PermissionType.DATA_SEGREGATION_VIEW.name());
+
         return DataSegregationCapabilitiesDTO.builder()
                 .canView(true)
                 .canViewFullFlow(hasFullFlow)
@@ -123,6 +133,8 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
                 .canViewGrade(canGrade)
                 .canViewUserAnalytics(canUserAnalytics)
                 .canViewLeadStatusAnalytics(canLeadStatusAnalytics)
+                .canViewCourse(canCourse)
+                .canViewCourseUser(canCourseUser)
                 .build();
     }
 
@@ -203,6 +215,50 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation status analytics.");
+        }
+    }
+
+    @Override
+    public void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateBaseAccess();
+        DataSegregationCapabilitiesDTO caps = getCapabilities();
+
+        if (!caps.isCanViewCourse()) {
+            throw new UnauthorizedException("You do not have permission to view course-wise segregation.");
+        }
+        if (courseTypeId != null && !caps.isCanViewCourseType()) {
+            throw new UnauthorizedException("You do not have permission to view Course Type segregation.");
+        }
+        if (leadSourceId != null && !caps.isCanViewSource()) {
+            throw new UnauthorizedException("You do not have permission to view Lead Source segregation.");
+        }
+        if (boardId != null && !caps.isCanViewBoard()) {
+            throw new UnauthorizedException("You do not have permission to view Board segregation.");
+        }
+        if (gradeId != null && !caps.isCanViewGrade()) {
+            throw new UnauthorizedException("You do not have permission to view Grade segregation.");
+        }
+    }
+
+    @Override
+    public void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateBaseAccess();
+        DataSegregationCapabilitiesDTO caps = getCapabilities();
+
+        if (!caps.isCanViewCourseUser()) {
+            throw new UnauthorizedException("You do not have permission to view course user-wise segregation.");
+        }
+        if (courseTypeId != null && !caps.isCanViewCourseType()) {
+            throw new UnauthorizedException("You do not have permission to view Course Type segregation.");
+        }
+        if (leadSourceId != null && !caps.isCanViewSource()) {
+            throw new UnauthorizedException("You do not have permission to view Lead Source segregation.");
+        }
+        if (boardId != null && !caps.isCanViewBoard()) {
+            throw new UnauthorizedException("You do not have permission to view Board segregation.");
+        }
+        if (gradeId != null && !caps.isCanViewGrade()) {
+            throw new UnauthorizedException("You do not have permission to view Grade segregation.");
         }
     }
 }

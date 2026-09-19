@@ -1214,7 +1214,11 @@ public class LeadServiceImpl implements ILeadService {
     private Specification<Lead> filterBySources(List<UUID> leadSourceIds) {
         return (root, query, cb) -> {
             query.distinct(true);
-            return root.join("leadSources", jakarta.persistence.criteria.JoinType.INNER).get("id").in(leadSourceIds);
+            jakarta.persistence.criteria.SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", jakarta.persistence.criteria.JoinType.INNER);
+            return cb.and(
+                    sourceJoin.get("id").in(leadSourceIds),
+                    cb.equal(sourceJoin.get("isDeleted"), false)
+            );
         };
     }
 
@@ -1238,7 +1242,15 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private Specification<Lead> filterByCourse(UUID courseId) {
-        return (root, query, cb) -> cb.equal(root.get("course").get("id"), courseId);
+        return (root, query, cb) -> {
+            query.distinct(true);
+            jakarta.persistence.criteria.Join<Object, Object> interestedJoin = root.join("interestedCourses", jakarta.persistence.criteria.JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Object, Object> registeredJoin = root.join("course", jakarta.persistence.criteria.JoinType.LEFT);
+            return cb.or(
+                    cb.equal(interestedJoin.get("id"), courseId),
+                    cb.equal(registeredJoin.get("id"), courseId)
+            );
+        };
     }
 
     private Specification<Lead> filterWithoutCourse() {

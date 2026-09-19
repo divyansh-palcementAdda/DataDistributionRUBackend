@@ -6,15 +6,19 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.app.datadistribution.dto.segregation.CourseSegregationResponseDTO;
+import com.app.datadistribution.dto.segregation.CourseUserSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
 import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
 import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
+import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.BoardRepository;
+import com.app.datadistribution.repository.CourseRepository;
 import com.app.datadistribution.repository.CourseTypeRepository;
 import com.app.datadistribution.repository.DataSegregationRepository;
 import com.app.datadistribution.repository.GradeRepository;
@@ -36,6 +40,7 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
     private final IUserDataScopeService dataScopeService;
     private final IDataSegregationPermissionService segregationPermissionService;
     private final CourseTypeRepository courseTypeRepository;
+    private final CourseRepository courseRepository;
     private final LeadSourceRepository leadSourceRepository;
     private final BoardRepository boardRepository;
     private final GradeRepository gradeRepository;
@@ -103,6 +108,42 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         return segregationRepository.fetchLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, gradeId, dataScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                                String search, int page, int size, String sortBy, String sortDirection)
+            throws UnauthorizedException, BadRequestException {
+        if (courseTypeId == null) {
+            throw new BadRequestException("courseTypeId is required for course-wise segregation.");
+        }
+
+        segregationPermissionService.validateCourseAccess(courseTypeId, leadSourceId, boardId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return segregationRepository.fetchCourseWiseSegregation(courseTypeId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                                        String search, int page, int size, String sortBy, String sortDirection)
+            throws UnauthorizedException, BadRequestException {
+        if (courseId == null) {
+            throw new BadRequestException("courseId is required for course user-wise segregation.");
+        }
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + courseId));
+
+        UUID courseTypeId = course.getCourseType() != null ? course.getCourseType().getId() : null;
+        segregationPermissionService.validateCourseUserAccess(courseTypeId, courseId, leadSourceId, boardId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
+        return segregationRepository.fetchCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
     }
 
     private void validateEntities(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) {

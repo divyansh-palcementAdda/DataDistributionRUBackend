@@ -7,11 +7,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.dto.segregation.CourseSegregationResponseDTO;
+import com.app.datadistribution.dto.segregation.CourseUserSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
@@ -87,5 +90,41 @@ public class DataSegregationController {
             throws UnauthorizedException, BadRequestException {
         List<LeadStatusAnalyticsDTO> response = segregationService.getLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, gradeId);
         return ResponseEntity.ok(ApiResponse.success("Lead status analytics retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/course-wise")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_COURSE_VIEW') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
+    @Operation(summary = "Get course-wise lead segregation for a selected course type / category")
+    public ResponseEntity<ApiResponse<CourseSegregationResponseDTO>> getCourseWiseSegregation(
+            @RequestParam(name = "courseTypeId") UUID courseTypeId,
+            @RequestParam(name = "leadSourceId", required = false) UUID leadSourceId,
+            @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "gradeId", required = false) UUID gradeId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "sortBy", defaultValue = "total") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "desc") String sortDirection)
+            throws UnauthorizedException, BadRequestException {
+        CourseSegregationResponseDTO response = segregationService.getCourseWiseSegregation(courseTypeId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection);
+        return ResponseEntity.ok(ApiResponse.success("Course-wise segregation fetched successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/courses/{courseId}/users")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_COURSE_USER_VIEW') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
+    @Operation(summary = "Get user-wise lead segregation and status counts for a selected course")
+    public ResponseEntity<ApiResponse<CourseUserSegregationResponseDTO>> getCourseUserWiseSegregation(
+            @PathVariable(name = "courseId") UUID courseId,
+            @RequestParam(name = "leadSourceId", required = false) UUID leadSourceId,
+            @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "gradeId", required = false) UUID gradeId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "sortBy", defaultValue = "total") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "desc") String sortDirection)
+            throws UnauthorizedException, BadRequestException {
+        CourseUserSegregationResponseDTO response = segregationService.getCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection);
+        return ResponseEntity.ok(ApiResponse.success("Course user-wise segregation fetched successfully", response, HttpStatus.OK.value()));
     }
 }

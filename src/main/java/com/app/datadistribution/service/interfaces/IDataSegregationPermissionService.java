@@ -42,4 +42,14 @@ public interface IDataSegregationPermissionService {
      * Validate request parameters against user's permitted flow hierarchy for lead status analytics.
      */
     void validateLeadStatusAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
+
+    /**
+     * Validate request parameters against user's permitted flow hierarchy for course-wise segregation.
+     */
+    void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
+
+    /**
+     * Validate request parameters against user's permitted flow hierarchy for course user-wise segregation.
+     */
+    void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
 }

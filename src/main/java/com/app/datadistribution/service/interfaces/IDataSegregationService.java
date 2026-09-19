@@ -3,14 +3,15 @@ package com.app.datadistribution.service.interfaces;
 import java.util.List;
 import java.util.UUID;
 
+import com.app.datadistribution.dto.segregation.CourseSegregationResponseDTO;
+import com.app.datadistribution.dto.segregation.CourseUserSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
+import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
 import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
-
-import com.app.datadistribution.dto.segregation.DataSegregationCapabilitiesDTO;
 
 public interface IDataSegregationService {
 
@@ -23,4 +24,8 @@ public interface IDataSegregationService {
     UserSegregationAnalyticsDTO getUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException, BadRequestException;
 
     List<LeadStatusAnalyticsDTO> getLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException, BadRequestException;
+
+    CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
+
+    CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
 }
