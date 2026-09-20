@@ -49,6 +49,27 @@ public class LeadFilterSpecification {
         };
     }
 
+    public static Specification<Lead> filterByMultiSource(Boolean multiSource) {
+        return (root, query, cb) -> {
+            if (multiSource == null) {
+                return cb.conjunction();
+            }
+            Subquery<Long> subquery = query.subquery(Long.class);
+            Root<Lead> subLead = subquery.from(Lead.class);
+            SetJoin<Lead, LeadSource> sourceJoin = subLead.joinSet("leadSources", JoinType.INNER);
+            subquery.select(cb.countDistinct(sourceJoin.get("id")));
+            subquery.where(
+                    cb.equal(subLead.get("id"), root.get("id")),
+                    cb.isFalse(sourceJoin.get("isDeleted"))
+            );
+            if (Boolean.TRUE.equals(multiSource)) {
+                return cb.greaterThan(subquery, 1L);
+            } else {
+                return cb.lessThanOrEqualTo(subquery, 1L);
+            }
+        };
+    }
+
     public static Specification<Lead> filterByCourse(UUID courseId) {
         return (root, query, cb) -> {
             if (courseId == null) {

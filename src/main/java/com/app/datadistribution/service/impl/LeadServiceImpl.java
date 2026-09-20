@@ -392,19 +392,19 @@ public class LeadServiceImpl implements ILeadService {
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException {
-        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, Boolean availed) throws UnauthorizedException, BadRequestException {
-        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, availed, null, null, null, null, null, null, null, null, null, null, null);
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, null, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, null, null, null, null, availed, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, List<UUID> courseTypeIds, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, List<UUID> departmentIds, List<UUID> assignedUserIds, Boolean allotted, Boolean availed, UUID availedByUserId, List<UUID> availedByUserIds, java.time.LocalDate availedFrom, java.time.LocalDate availedTo, java.time.LocalDate startDate, java.time.LocalDate endDate, java.time.LocalDate updatedFrom, java.time.LocalDate updatedTo) throws UnauthorizedException, BadRequestException {
-        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, courseTypeIds, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, departmentIds, assignedUserIds, allotted, availed, availedByUserId, availedByUserIds, availedFrom, availedTo, startDate, endDate, updatedFrom, updatedTo, null, null, null);
+        return getAllLeads(pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId, courseTypeId, courseTypeIds, withoutCourse, statusId, statusIds, boardId, boardIds, gradeId, gradeIds, departmentIds, assignedUserIds, allotted, null, availed, availedByUserId, availedByUserIds, availedFrom, availedTo, startDate, endDate, updatedFrom, updatedTo, null, null, null);
     }
 
     @Override
@@ -427,6 +427,7 @@ public class LeadServiceImpl implements ILeadService {
             List<UUID> departmentIds,
             List<UUID> assignedUserIds,
             Boolean allotted,
+            Boolean multiSource,
             Boolean availed,
             UUID availedByUserId,
             List<UUID> availedByUserIds,
@@ -496,6 +497,9 @@ public class LeadServiceImpl implements ILeadService {
         }
         if (allotted != null) {
             spec = andSpec(spec, filterByAllotted(allotted));
+        }
+        if (multiSource != null) {
+            spec = andSpec(spec, filterByMultiSource(multiSource));
         }
         if (availed != null || availedByUserId != null || (availedByUserIds != null && !availedByUserIds.isEmpty()) || availedFrom != null || availedTo != null) {
             spec = andSpec(spec, filterByAvailedDetails(availed, availedByUserId, availedByUserIds, availedFrom, availedTo));
@@ -1374,6 +1378,10 @@ public class LeadServiceImpl implements ILeadService {
 
     private Specification<Lead> filterByAvailed(Boolean availed) {
         return LeadFilterSpecification.filterByAvailedDetails(availed, null, null, null, null);
+    }
+
+    private Specification<Lead> filterByMultiSource(Boolean multiSource) {
+        return LeadFilterSpecification.filterByMultiSource(multiSource);
     }
 
     private void validatePreferredStudyPlace(String preferredState, String preferredCity) throws BadRequestException {

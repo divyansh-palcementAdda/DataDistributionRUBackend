@@ -214,6 +214,25 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getMultiSourceLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest != null && Boolean.FALSE.equals(filterRequest.getMultiSource())) {
+            return DashboardLeadCountResponseDTO.builder()
+                    .type("MULTI_SOURCE")
+                    .count(0L)
+                    .build();
+        }
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setMultiSource(true);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("MULTI_SOURCE")
+                .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public DashboardFollowUpCountResponseDTO getTodayFollowUpsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
         if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
@@ -716,6 +735,16 @@ public class DashboardServiceImpl implements IDashboardService {
                     filter.setIsAvailed(true);
                     card.setValue(countLeadsInScope(dataScope, filter));
                     filter.setIsAvailed(null);
+                    break;
+                case "TOTAL_MULTI_SOURCE_DATA":
+                    Boolean origMultiSource = filter.getMultiSource();
+                    if (Boolean.FALSE.equals(origMultiSource)) {
+                        card.setValue(0L);
+                    } else {
+                        filter.setMultiSource(true);
+                        card.setValue(countLeadsInScope(dataScope, filter));
+                        filter.setMultiSource(origMultiSource);
+                    }
                     break;
                 case "TOTAL_FOLLOWUPS_TODAY":
                 case "TODAY_FOLLOW_UPS":

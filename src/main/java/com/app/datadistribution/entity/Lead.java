@@ -213,4 +213,16 @@ public class Lead extends BaseEntity {
 
     @Column(name = "cms_matched_data", columnDefinition = "TEXT")
     private String cmsMatchedStudentData;
+
+    public boolean isMultiSource() {
+        if (this.leadSources == null || this.leadSources.isEmpty()) {
+            return false;
+        }
+        long distinctActiveSources = this.leadSources.stream()
+                .filter(s -> s != null && !s.isDeleted())
+                .map(LeadSource::getId)
+                .distinct()
+                .count();
+        return distinctActiveSources > 1;
+    }
 }

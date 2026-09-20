@@ -107,6 +107,16 @@ public class DashboardController {
                 .ok(ApiResponse.success("Availed leads count retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping({ "/leads/multi-source/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of all multi-source leads matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getMultiSourceCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getMultiSourceLeadsCount(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Multi-source leads count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping({ "/followups/today/count" })
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
     @Operation(summary = "Get count of today's scheduled follow-ups matching filters and user data scope")

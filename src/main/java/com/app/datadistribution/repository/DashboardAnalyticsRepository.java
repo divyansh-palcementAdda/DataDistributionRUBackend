@@ -371,6 +371,24 @@ public class DashboardAnalyticsRepository {
             predicates.add(cb.exists(srcSubquery));
         }
 
+        // Multi-Source filter — check if lead has > 1 distinct active sources
+        if (filter.getMultiSource() != null) {
+            jakarta.persistence.criteria.Subquery<Long> msSubquery =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Long.class);
+            jakarta.persistence.criteria.Root<Lead> msSubRoot = msSubquery.from(Lead.class);
+            SetJoin<Lead, LeadSource> msSourceJoin = msSubRoot.joinSet("leadSources", JoinType.INNER);
+            msSubquery.select(cb.countDistinct(msSourceJoin.get("id")));
+            msSubquery.where(
+                    cb.equal(msSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(msSourceJoin.get("isDeleted"))
+            );
+            if (Boolean.TRUE.equals(filter.getMultiSource())) {
+                predicates.add(cb.greaterThan(msSubquery, 1L));
+            } else {
+                predicates.add(cb.lessThanOrEqualTo(msSubquery, 1L));
+            }
+        }
+
         // Multi-value Course filter — use correlated EXISTS subquery covering both registered and interested courses
         if (filter.getCourseIds() != null && !filter.getCourseIds().isEmpty()) {
             jakarta.persistence.criteria.Subquery<Integer> courseSubquery =

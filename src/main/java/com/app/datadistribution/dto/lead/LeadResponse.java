@@ -55,6 +55,9 @@ public class LeadResponse {
     @JsonProperty("isAvailed")
     private boolean isAvailed;
 
+    @JsonProperty("isMultiSource")
+    private boolean multiSource;
+
     private LocalDateTime availedAt;
     private UserSummaryResponse availedBy;
     private LocalDateTime lastContactedAt;

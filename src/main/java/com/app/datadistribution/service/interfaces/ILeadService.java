@@ -36,6 +36,7 @@ public interface ILeadService {
             List<UUID> departmentIds,
             List<UUID> assignedUserIds,
             Boolean allotted,
+            Boolean multiSource,
             Boolean availed,
             UUID availedByUserId,
             List<UUID> availedByUserIds,

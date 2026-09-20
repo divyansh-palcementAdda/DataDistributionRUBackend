@@ -696,6 +696,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		createCardIfNotExist("TOTAL_UNALLOTTED_DATA", "Total Unallotted Data", "Count of leads currently unassigned", "OVERVIEW", "STAT_CARD", "user-x", 17, allRoles);
 		createCardIfNotExist("TOTAL_AVAILED_DATA", "Total Availed Data", "Count of leads currently marked as availed", "OVERVIEW", "STAT_CARD", "check-circle", 18, allRoles);
 		createCardIfNotExist("TOTAL_FOLLOWUPS_TODAY", "Today's Follow-Ups", "Count of follow-ups scheduled for today", "OVERVIEW", "STAT_CARD", "clock", 19, allRoles);
+		createCardIfNotExist("TOTAL_MULTI_SOURCE_DATA", "Total Multi Source Data", "Count of leads with multiple inbound sources", "OVERVIEW", "STAT_CARD", "share-2", 20, allRoles);
 	}
 
 	private void createCardIfNotExist(String code, String name, String description, String section, String cardType, String icon, int displayOrder, Set<com.app.datadistribution.entity.Role> roles) {

@@ -183,6 +183,7 @@ public interface LeadMapper {
                 .createdBy(userMapper.toSummaryDto(lead.getCreatedByUser()))
                 .active(lead.isActive())
                 .isAvailed(isAvailed)
+                .multiSource(lead.isMultiSource())
                 .availedAt(availedAt)
                 .availedBy(availedBy)
                 .lastContactedAt(lead.getLastContactedAt())

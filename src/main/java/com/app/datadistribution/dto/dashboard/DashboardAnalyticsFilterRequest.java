@@ -33,6 +33,9 @@ public class DashboardAnalyticsFilterRequest {
     // Allotted / Unallotted filter (true = assignedTo is not null, false = assignedTo is null)
     private Boolean allotted;
 
+    // Multi-source filter (true = COUNT(DISTINCT source) > 1, false = COUNT(DISTINCT source) <= 1)
+    private Boolean multiSource;
+
     // Availed / Unavailed filter
     @JsonProperty("isAvailed")
     private Boolean isAvailed;
@@ -238,6 +241,7 @@ public class DashboardAnalyticsFilterRequest {
                 .assignedUserIds(this.assignedUserIds != null ? new java.util.ArrayList<>(this.assignedUserIds) : null)
                 .createdByUserIds(this.createdByUserIds != null ? new java.util.ArrayList<>(this.createdByUserIds) : null)
                 .allotted(this.allotted)
+                .multiSource(this.multiSource)
                 .isAvailed(this.isAvailed)
                 .availed(this.availed)
                 .availedByUserId(this.availedByUserId)

@@ -132,7 +132,7 @@ class LeadStatusHistoryFilterTest {
                 pageRequest,
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, "INTERESTED"
         );
 
@@ -157,7 +157,7 @@ class LeadStatusHistoryFilterTest {
                 pageRequest,
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, "INTERESTED,REGISTERED"
         );
 
@@ -181,7 +181,7 @@ class LeadStatusHistoryFilterTest {
                 pageRequest,
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, "SPECIAL_REVIEW"
         );
 
@@ -204,7 +204,7 @@ class LeadStatusHistoryFilterTest {
                 pageRequest,
                 null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 statusInterested.getId(), null, null
         );
 
