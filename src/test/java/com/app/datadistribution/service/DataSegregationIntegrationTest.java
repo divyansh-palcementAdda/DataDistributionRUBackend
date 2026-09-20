@@ -31,7 +31,7 @@ import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.security.UserDetailsImpl;
 import com.app.datadistribution.service.interfaces.IDataSegregationService;
 
-@SpringBootTest
+@SpringBootTest(classes = com.app.datadistribution.Application.class)
 @Transactional
 public class DataSegregationIntegrationTest {
 

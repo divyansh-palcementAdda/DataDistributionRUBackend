@@ -41,6 +41,14 @@ public class PermissionController {
         return ResponseEntity.ok(ApiResponse.success("Permissions retrieved successfully", permissions, HttpStatus.OK.value()));
     }
 
+    @GetMapping("/unmapped")
+    @PreAuthorize("hasAuthority('PERMISSION_READ')")
+    @Operation(summary = "Get unmapped permissions for diagnostic validation")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.user.UnmappedPermissionsResponse>> getUnmappedPermissions() {
+        com.app.datadistribution.dto.user.UnmappedPermissionsResponse response = permissionService.getUnmappedPermissions();
+        return ResponseEntity.ok(ApiResponse.success("Unmapped permissions retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERMISSION_READ')")
     @Operation(summary = "Get permission details by ID")

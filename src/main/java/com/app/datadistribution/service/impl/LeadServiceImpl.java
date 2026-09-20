@@ -102,8 +102,14 @@ public class LeadServiceImpl implements ILeadService {
     private final com.app.datadistribution.service.interfaces.ILeadStatusTransitionService leadStatusTransitionService;
     private final com.app.datadistribution.integration.cms.service.IStudentVerificationService studentVerificationService;
     private final com.app.datadistribution.service.interfaces.ILocationService locationService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.app.datadistribution.service.interfaces.ILeadFieldSecurityService leadFieldSecurityService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
+
+    public void setLeadFieldSecurityService(com.app.datadistribution.service.interfaces.ILeadFieldSecurityService leadFieldSecurityService) {
+        this.leadFieldSecurityService = leadFieldSecurityService;
+    }
 
     private static final Set<String> ALLOWED_LEAD_SORT_FIELDS = Set.of(
             "id", "leadCode", "fullName", "phoneNumber", "email", "city", "state", "country",
@@ -235,6 +241,9 @@ public class LeadServiceImpl implements ILeadService {
 
         UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+        if (leadFieldSecurityService != null) {
+            leadFieldSecurityService.validateFieldUpdates(lead, request);
+        }
 
         if (dataScope.isSelfScope() && request.getAssignedToUserId() != null && !request.getAssignedToUserId().equals(dataScope.getUserId())) {
             throw new BadRequestException("Counselors can only assign leads to themselves or leave unassigned.");
@@ -362,9 +371,11 @@ public class LeadServiceImpl implements ILeadService {
         } else {
             updated = leadRepository.save(lead);
         }
-        log.info("Updated lead: {}", updated.getLeadCode());
-
-        return leadMapper.toDto(updated);
+        LeadResponse responseDto = leadMapper.toDto(updated);
+        if (leadFieldSecurityService != null) {
+            return leadFieldSecurityService.sanitizeResponse(responseDto);
+        }
+        return responseDto;
     }
 
     @Override
@@ -385,6 +396,9 @@ public class LeadServiceImpl implements ILeadService {
                         dto.setAvailedAt(la.getAvailedAt());
                         dto.setAvailedBy(userMapper.toSummaryDto(la.getAvailedByUser()));
                     });
+        }
+        if (leadFieldSecurityService != null) {
+            return leadFieldSecurityService.sanitizeResponse(dto);
         }
         return dto;
     }
@@ -554,6 +568,10 @@ public class LeadServiceImpl implements ILeadService {
                     return leadDto;
                 })
                 .collect(Collectors.toList());
+
+        if (leadFieldSecurityService != null) {
+            leadFieldSecurityService.sanitizeResponses(content);
+        }
 
         return LeadPageResponse.builder()
                 .content(content)

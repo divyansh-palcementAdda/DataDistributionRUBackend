@@ -1,5 +1,9 @@
 package com.app.datadistribution.dto.user;
 
+import com.app.datadistribution.enums.PermissionEntity;
+import com.app.datadistribution.enums.PermissionGroup;
+import com.app.datadistribution.enums.PermissionOperationType;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -17,6 +21,16 @@ public class PermissionRequest {
     @Size(min = 3, max = 100, message = "Permission name must be between 3 and 100 characters")
     private String name;
 
+    private String code;
+
     @Size(max = 255, message = "Description must not exceed 255 characters")
     private String description;
+
+    private PermissionEntity entity;
+    private PermissionGroup permissionGroup;
+    private PermissionOperationType permissionType;
+    private String fieldKey;
+    private String fieldLabel;
+    private String fieldGroup;
+    private Integer displayOrder;
 }

@@ -36,13 +36,27 @@ public class DashboardCardPermissionServiceImpl implements IDashboardCardPermiss
                 .orElseGet(() -> {
                     Permission newPerm = Permission.builder()
                             .name(permCode)
+                            .code(permCode)
                             .description("Card level RBAC permission for dashboard card: " + card.getName())
+                            .entity(com.app.datadistribution.enums.PermissionEntity.DASHBOARD)
+                            .permissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM)
+                            .permissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW)
                             .active(true)
                             .build();
                     Permission saved = permissionRepository.save(newPerm);
                     log.info("Created dynamic card permission: {}", permCode);
                     return saved;
                 });
+
+        if (permission.getEntity() == null || permission.getPermissionGroup() == null || permission.getPermissionType() == null) {
+            permission.setEntity(com.app.datadistribution.enums.PermissionEntity.DASHBOARD);
+            permission.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM);
+            permission.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+            if (permission.getCode() == null) {
+                permission.setCode(permCode);
+            }
+            permission = permissionRepository.save(permission);
+        }
 
         card.setPermission(permission);
 

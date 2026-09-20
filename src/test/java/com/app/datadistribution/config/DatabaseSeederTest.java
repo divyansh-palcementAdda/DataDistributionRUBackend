@@ -113,6 +113,7 @@ class DatabaseSeederTest {
             return p;
         });
         lenient().when(permissionRepository.findAll()).thenAnswer(inv -> new ArrayList<>(permDb.values()));
+        lenient().when(permissionRepository.findAllByIsDeletedFalse()).thenAnswer(inv -> new ArrayList<>(permDb.values().stream().filter(p -> !p.isDeleted()).toList()));
 
         lenient().when(roleRepository.findByName(anyString())).thenAnswer(inv -> Optional.ofNullable(roleDb.get(inv.getArgument(0))));
         lenient().when(roleRepository.save(any(Role.class))).thenAnswer(inv -> {
@@ -156,6 +157,41 @@ class DatabaseSeederTest {
     }
 
     @Test
+    void testSeedPermissions_AutoMigratesLegacyAndUnmappedPermissions() {
+        Permission pSettings = Permission.builder().name("SETTINGS").build();
+        pSettings.setId(UUID.randomUUID());
+        permDb.put("SETTINGS", pSettings);
+
+        Permission pUserMgmt = Permission.builder().name("SETTINGS_USER_MANAGEMENT").build();
+        pUserMgmt.setId(UUID.randomUUID());
+        permDb.put("SETTINGS_USER_MANAGEMENT", pUserMgmt);
+
+        Permission pData = Permission.builder().name("DATA_AVAILED_COLUMN_VIEW").build();
+        pData.setId(UUID.randomUUID());
+        permDb.put("DATA_AVAILED_COLUMN_VIEW", pData);
+
+        seeder.run();
+
+        Permission migratedSettings = permDb.get("SETTINGS");
+        assertNotNull(migratedSettings);
+        assertEquals(com.app.datadistribution.enums.PermissionEntity.SYSTEM, migratedSettings.getEntity());
+        assertEquals(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG, migratedSettings.getPermissionGroup());
+        assertEquals(com.app.datadistribution.enums.PermissionOperationType.VIEW, migratedSettings.getPermissionType());
+
+        Permission migratedUserMgmt = permDb.get("SETTINGS_USER_MANAGEMENT");
+        assertNotNull(migratedUserMgmt);
+        assertEquals(com.app.datadistribution.enums.PermissionEntity.USER, migratedUserMgmt.getEntity());
+        assertEquals(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG, migratedUserMgmt.getPermissionGroup());
+        assertEquals(com.app.datadistribution.enums.PermissionOperationType.MANAGE, migratedUserMgmt.getPermissionType());
+
+        Permission migratedData = permDb.get("DATA_AVAILED_COLUMN_VIEW");
+        assertNotNull(migratedData);
+        assertEquals(com.app.datadistribution.enums.PermissionEntity.DATA_SEGREGATION, migratedData.getEntity());
+        assertEquals(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM, migratedData.getPermissionGroup());
+        assertEquals(com.app.datadistribution.enums.PermissionOperationType.VIEW, migratedData.getPermissionType());
+    }
+
+    @Test
     void testSeedRoles_CreatesSuperAdminAdminHodCounselor() {
         seeder.run();
 
@@ -180,7 +216,13 @@ class DatabaseSeederTest {
     void testSeedRoles_PreservesExistingDynamicPermissionsOnRestart() {
         // Pre-create role with custom dynamic permission
         Permission defaultPerm = Permission.builder().name(PermissionType.LEAD_READ.name()).active(true).build();
-        Permission customDynamicPerm = Permission.builder().name("CUSTOM_DYNAMIC_PERMISSION").active(true).build();
+        Permission customDynamicPerm = Permission.builder()
+                .name("CUSTOM_DYNAMIC_PERMISSION")
+                .entity(com.app.datadistribution.enums.PermissionEntity.SYSTEM)
+                .permissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM)
+                .permissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW)
+                .active(true)
+                .build();
         permDb.put(defaultPerm.getName(), defaultPerm);
         permDb.put(customDynamicPerm.getName(), customDynamicPerm);
 

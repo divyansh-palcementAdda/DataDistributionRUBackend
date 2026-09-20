@@ -19,5 +19,7 @@ public interface IPermissionService {
 
     List<PermissionDTO> getAll();
 
+    com.app.datadistribution.dto.user.UnmappedPermissionsResponse getUnmappedPermissions();
+
     void delete(UUID id) throws ResourcesNotFoundException, BadRequestException;
 }

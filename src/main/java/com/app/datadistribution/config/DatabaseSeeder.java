@@ -112,13 +112,204 @@ public class DatabaseSeeder implements CommandLineRunner {
 	private void seedPermissions() {
 		for (PermissionType type : PermissionType.values()) {
 			String name = type.name();
-			if (!permissionRepository.findByName(name).isPresent()) {
-				Permission permission = Permission.builder().name(name).description("Dynamic permission for " + name)
+			PermissionMetadataRegistry.PermissionMetadata meta = PermissionMetadataRegistry.getMetadata(type);
+			if (meta == null) {
+				throw new IllegalStateException("Permission " + name + " has no metadata defined in PermissionMetadataRegistry!");
+			}
+
+			Optional<Permission> existingOpt = permissionRepository.findByName(name);
+			if (existingOpt.isPresent()) {
+				Permission p = existingOpt.get();
+				boolean modified = false;
+				if (p.getCode() == null || !p.getCode().equals(meta.getCode())) {
+					p.setCode(meta.getCode());
+					modified = true;
+				}
+				if (p.getEntity() == null || p.getEntity() != meta.getEntity()) {
+					p.setEntity(meta.getEntity());
+					modified = true;
+				}
+				if (p.getPermissionGroup() == null || p.getPermissionGroup() != meta.getPermissionGroup()) {
+					p.setPermissionGroup(meta.getPermissionGroup());
+					modified = true;
+				}
+				if (p.getPermissionType() == null || p.getPermissionType() != meta.getPermissionType()) {
+					p.setPermissionType(meta.getPermissionType());
+					modified = true;
+				}
+				if (meta.getFieldKey() != null && (p.getFieldKey() == null || !p.getFieldKey().equals(meta.getFieldKey()))) {
+					p.setFieldKey(meta.getFieldKey());
+					modified = true;
+				}
+				if (meta.getFieldLabel() != null && (p.getFieldLabel() == null || !p.getFieldLabel().equals(meta.getFieldLabel()))) {
+					p.setFieldLabel(meta.getFieldLabel());
+					modified = true;
+				}
+				if (meta.getFieldGroup() != null && (p.getFieldGroup() == null || !p.getFieldGroup().equals(meta.getFieldGroup()))) {
+					p.setFieldGroup(meta.getFieldGroup());
+					modified = true;
+				}
+				if (meta.getDisplayOrder() != null && (p.getDisplayOrder() == null || !p.getDisplayOrder().equals(meta.getDisplayOrder()))) {
+					p.setDisplayOrder(meta.getDisplayOrder());
+					modified = true;
+				}
+				if (p.getDescription() == null || p.getDescription().startsWith("Dynamic permission for")) {
+					p.setDescription(meta.getDescription());
+					modified = true;
+				}
+				if (modified) {
+					permissionRepository.save(p);
+				}
+			} else {
+				Permission permission = Permission.builder()
+						.name(name)
+						.code(meta.getCode())
+						.description(meta.getDescription())
+						.entity(meta.getEntity())
+						.permissionGroup(meta.getPermissionGroup())
+						.permissionType(meta.getPermissionType())
+						.fieldKey(meta.getFieldKey())
+						.fieldLabel(meta.getFieldLabel())
+						.fieldGroup(meta.getFieldGroup())
+						.displayOrder(meta.getDisplayOrder())
 						.active(true)
 						.build();
 				permissionRepository.save(permission);
 				log.info("Seeded permission: {}", name);
 			}
+		}
+
+		// Auto-migrate any existing legacy, dynamic, or unmapped permissions in database
+		for (Permission p : permissionRepository.findAllByIsDeletedFalse()) {
+			String pName = p.getName() != null ? p.getName().trim().toUpperCase() : "";
+			boolean mod = false;
+
+			// 1. Explicit mappings for known legacy/custom permissions
+			if ("SETTINGS".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.SYSTEM);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+				if (p.getDescription() == null) p.setDescription("Access System Settings");
+				mod = true;
+			} else if ("SETTINGS_USER_MANAGEMENT".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.USER);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.MANAGE);
+				if (p.getDescription() == null) p.setDescription("Settings - User Management");
+				mod = true;
+			} else if ("SETTINGS_NOTIFICATIONS".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.SYSTEM);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.MANAGE);
+				if (p.getDescription() == null) p.setDescription("Settings - Notifications");
+				mod = true;
+			} else if ("SETTINGS_PROJECT_CONFIGURATION".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.SYSTEM);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.MANAGE);
+				if (p.getDescription() == null) p.setDescription("Settings - Project Configuration");
+				mod = true;
+			} else if ("SETTINGS_ROLES_AND_PERMISSIONS".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.ROLE);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.MANAGE);
+				if (p.getDescription() == null) p.setDescription("Settings - Roles & Permissions");
+				mod = true;
+			} else if ("DATA_AVAILED_COLUMN_VIEW".equals(pName) || "DATA_ALLOTTED_COLUMN_VIEW".equals(pName) || "DATA_UNALLOTTED_COLUMN_VIEW".equals(pName)) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.DATA_SEGREGATION);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+				if (p.getDescription() == null) p.setDescription("View Data Segregation Column: " + pName);
+				mod = true;
+			} else if (pName.startsWith("DASHBOARD_CARD_")) {
+				p.setEntity(com.app.datadistribution.enums.PermissionEntity.DASHBOARD);
+				p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM);
+				p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+				mod = true;
+			}
+
+			// 2. Fallback smart auto-inference for any remaining unmapped attributes
+			if (p.getEntity() == null) {
+				if (pName.contains("USER")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.USER);
+				else if (pName.contains("ROLE")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.ROLE);
+				else if (pName.contains("LEAD")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.LEAD);
+				else if (pName.contains("COURSE")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.COURSE);
+				else if (pName.contains("PROGRAM")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.PROGRAM);
+				else if (pName.contains("DEPARTMENT")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.DEPARTMENT);
+				else if (pName.contains("FEEDBACK")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.FEEDBACK);
+				else if (pName.contains("FOLLOWUP") || pName.contains("FOLLOW_UP")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.FOLLOW_UP);
+				else if (pName.contains("DASHBOARD")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.DASHBOARD);
+				else if (pName.contains("SEGREGATION") || pName.startsWith("DATA_")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.DATA_SEGREGATION);
+				else if (pName.contains("EMAIL")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.EMAIL);
+				else p.setEntity(com.app.datadistribution.enums.PermissionEntity.SYSTEM);
+				mod = true;
+			}
+			if (p.getPermissionGroup() == null) {
+				if (pName.startsWith("LEAD_FIELD_")) p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD);
+				else if (pName.startsWith("SETTINGS_") || "SETTINGS".equals(pName)) p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.SYSTEM_CONFIG);
+				else p.setPermissionGroup(com.app.datadistribution.enums.PermissionGroup.GENERAL_SYSTEM);
+				mod = true;
+			}
+			if (p.getPermissionType() == null) {
+				if (pName.endsWith("_READ") || pName.endsWith("_VIEW") || pName.contains("VIEW") || pName.contains("READ")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+				} else if (pName.endsWith("_WRITE") || pName.endsWith("_UPDATE") || pName.endsWith("_EDIT")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.UPDATE);
+				} else if (pName.endsWith("_CREATE")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.CREATE);
+				} else if (pName.endsWith("_DELETE")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.DELETE);
+				} else if (pName.endsWith("_MANAGE")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.MANAGE);
+				} else if (pName.endsWith("_ASSIGN")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.ASSIGN);
+				} else if (pName.endsWith("_UPLOAD")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.UPLOAD);
+				} else if (pName.endsWith("_EXPORT")) {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.EXPORT);
+				} else {
+					p.setPermissionType(com.app.datadistribution.enums.PermissionOperationType.VIEW);
+				}
+				mod = true;
+			}
+			if (p.getCode() == null) {
+				p.setCode(pName);
+				mod = true;
+			}
+			if (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD) {
+				if (p.getFieldKey() == null) {
+					p.setFieldKey(pName.replace("LEAD_FIELD_", "").replace("_READ", "").replace("_WRITE", "").toLowerCase());
+					mod = true;
+				}
+				if (p.getFieldGroup() == null) {
+					p.setFieldGroup("Other Information");
+					mod = true;
+				}
+				if (p.getFieldLabel() == null) {
+					p.setFieldLabel(p.getFieldKey());
+					mod = true;
+				}
+			}
+			if (mod) {
+				permissionRepository.save(p);
+				log.info("Auto-migrated legacy/unmapped permission: {}", pName);
+			}
+		}
+
+		List<Permission> unmapped = permissionRepository.findAllByIsDeletedFalse().stream()
+				.filter(p -> p.getEntity() == null
+						|| p.getPermissionGroup() == null
+						|| p.getPermissionType() == null
+						|| (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD 
+							&& (p.getFieldKey() == null || p.getFieldGroup() == null)))
+				.toList();
+
+		if (!unmapped.isEmpty()) {
+			List<String> unmappedNames = unmapped.stream().map(Permission::getName).toList();
+			log.error("CRITICAL: Found {} unmapped permissions in database: {}", unmapped.size(), unmappedNames);
+			throw new IllegalStateException("Database startup failed: unmapped permissions found: " + unmappedNames);
+		} else {
+			log.info("Metadata verification passed: 0 unmapped permissions.");
 		}
 	}
 
@@ -154,6 +345,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.LEAD_BULK_REASSIGN.name())
 							|| n.equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
 							|| n.equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
+							|| n.startsWith("LEAD_FIELD_")
 							|| n.startsWith("FOLLOWUP_")
 							|| n.startsWith("FOLLOW_UP_")
 							|| n.startsWith("FEEDBACK_")
@@ -206,6 +398,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.LEAD_HISTORY_READ.name())
 							|| n.equals(PermissionType.LEAD_INTERESTED_COURSE_UPDATE.name())
 							|| n.equals(PermissionType.LEAD_REGISTERED_COURSE_UPDATE.name())
+							|| n.startsWith("LEAD_FIELD_")
 							|| n.equals(PermissionType.FOLLOWUP_VIEW.name())
 							|| n.equals(PermissionType.FOLLOWUP_CREATE.name())
 							|| n.equals(PermissionType.FOLLOWUP_UPDATE.name())

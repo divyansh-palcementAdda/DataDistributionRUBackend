@@ -41,7 +41,15 @@ public class PermissionServiceImpl implements IPermissionService {
 
         Permission permission = Permission.builder()
                 .name(request.getName())
+                .code(request.getCode() != null ? request.getCode() : request.getName())
                 .description(request.getDescription())
+                .entity(request.getEntity())
+                .permissionGroup(request.getPermissionGroup())
+                .permissionType(request.getPermissionType())
+                .fieldKey(request.getFieldKey())
+                .fieldLabel(request.getFieldLabel())
+                .fieldGroup(request.getFieldGroup())
+                .displayOrder(request.getDisplayOrder())
                 .active(true)
                 .build();
 
@@ -65,7 +73,31 @@ public class PermissionServiceImpl implements IPermissionService {
         }
 
         permission.setName(request.getName());
+        if (request.getCode() != null) {
+            permission.setCode(request.getCode());
+        }
         permission.setDescription(request.getDescription());
+        if (request.getEntity() != null) {
+            permission.setEntity(request.getEntity());
+        }
+        if (request.getPermissionGroup() != null) {
+            permission.setPermissionGroup(request.getPermissionGroup());
+        }
+        if (request.getPermissionType() != null) {
+            permission.setPermissionType(request.getPermissionType());
+        }
+        if (request.getFieldKey() != null) {
+            permission.setFieldKey(request.getFieldKey());
+        }
+        if (request.getFieldLabel() != null) {
+            permission.setFieldLabel(request.getFieldLabel());
+        }
+        if (request.getFieldGroup() != null) {
+            permission.setFieldGroup(request.getFieldGroup());
+        }
+        if (request.getDisplayOrder() != null) {
+            permission.setDisplayOrder(request.getDisplayOrder());
+        }
         Permission saved = repository.save(permission);
 
         activityLogService.logActivity(ActivityType.PERMISSION_UPDATED, "Updated permission: " + saved.getName());
@@ -87,6 +119,24 @@ public class PermissionServiceImpl implements IPermissionService {
         return repository.findAllByIsDeletedFalse().stream()
                 .map(mapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.app.datadistribution.dto.user.UnmappedPermissionsResponse getUnmappedPermissions() {
+        List<Permission> all = repository.findAllByIsDeletedFalse();
+        List<PermissionDTO> unmapped = all.stream()
+                .filter(p -> p.getEntity() == null
+                        || p.getPermissionGroup() == null
+                        || p.getPermissionType() == null
+                        || (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD 
+                            && (p.getFieldKey() == null || p.getFieldGroup() == null)))
+                .map(mapper::toDto)
+                .collect(Collectors.toList());
+        return com.app.datadistribution.dto.user.UnmappedPermissionsResponse.builder()
+                .count(unmapped.size())
+                .permissions(unmapped)
+                .build();
     }
 
     @Override
