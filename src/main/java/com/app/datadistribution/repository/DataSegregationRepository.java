@@ -1,6 +1,7 @@
 package com.app.datadistribution.repository;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
 
 import com.app.datadistribution.common.PageResponseDTO;
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
 import com.app.datadistribution.dto.segregation.BoardNodeDTO;
 import com.app.datadistribution.dto.segregation.CourseSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseSegregationRowDTO;
@@ -27,9 +29,11 @@ import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusColumnDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
 import com.app.datadistribution.dto.segregation.SourceNodeDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationRowDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationSummaryDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationUsersResponseDTO;
 import com.app.datadistribution.dto.segregation.UserAnalyticsRowDTO;
 import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
-import jakarta.persistence.Query;
 import com.app.datadistribution.entity.Board;
 import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.CourseType;
@@ -46,6 +50,7 @@ import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -1251,6 +1256,331 @@ public class DataSegregationRepository {
         return subquery;
     }
 
+    // =========================================================================
+    // User Allocation & Workload Analytics Methods
+    // =========================================================================
+
+    public UserAllocationSummaryDTO fetchUserAllocationSummary(DashboardAnalyticsFilterRequest filter, UserDataScope dataScope) {
+        if (filter != null && Boolean.FALSE.equals(filter.getAllotted())) {
+            return UserAllocationSummaryDTO.builder()
+                    .totalUsersWithAllottedData(0L)
+                    .usersCurrentlyWorking(0L)
+                    .build();
+        }
+
+        StringBuilder scopeClause = new StringBuilder();
+        Map<String, Object> scopeParams = new HashMap<>();
+        buildNativeScopeClauseAndParams(dataScope, scopeClause, scopeParams);
+
+        StringBuilder filterClause = new StringBuilder();
+        buildAllocationFilterClauseAndParams(filter, filterClause, scopeParams);
+
+        LocalDateTime fifteenMinutesAgo = LocalDateTime.now().minusMinutes(15);
+        scopeParams.put("fifteenMinutesAgo", fifteenMinutesAgo);
+
+        // Combined single query for total unique users with allotted data and users currently working
+        String summarySql =
+                "SELECT " +
+                "  COUNT(DISTINCT l.assigned_to_id) AS total_users, " +
+                "  COUNT(DISTINCT CASE " +
+                "    WHEN uls.id IS NOT NULL " +
+                "     AND uls.last_activity_at >= :fifteenMinutesAgo " +
+                "     AND l.updated_at >= :fifteenMinutesAgo " +
+                "    THEN l.assigned_to_id " +
+                "  END) AS working_users " +
+                "FROM leads l " +
+                "JOIN users u ON u.id = l.assigned_to_id AND u.is_deleted = false AND u.active = true " +
+                "LEFT JOIN user_login_sessions uls ON uls.user_id = l.assigned_to_id " +
+                "     AND uls.is_deleted = false " +
+                "     AND uls.logout_at IS NULL " +
+                "     AND uls.session_status = 'ACTIVE' " +
+                "     AND uls.last_activity_at >= :fifteenMinutesAgo " +
+                "WHERE l.is_deleted = false " +
+                "  AND l.assigned_to_id IS NOT NULL " +
+                "  AND " + scopeClause + filterClause;
+
+        Query summaryQuery = entityManager.createNativeQuery(summarySql);
+        bindSafeQueryParams(summaryQuery, summarySql, scopeParams);
+
+        Object singleResult = summaryQuery.getSingleResult();
+        Object[] row = singleResult instanceof Object[] ? (Object[]) singleResult : new Object[]{singleResult};
+        long totalUsersWithAllottedData = parseLong(row[0]);
+        long usersCurrentlyWorking = row.length > 1 ? parseLong(row[1]) : 0L;
+
+        return UserAllocationSummaryDTO.builder()
+                .totalUsersWithAllottedData(totalUsersWithAllottedData)
+                .usersCurrentlyWorking(usersCurrentlyWorking)
+                .build();
+    }
+
+    public UserAllocationUsersResponseDTO fetchUserAllocationUsers(DashboardAnalyticsFilterRequest filter, UserDataScope dataScope) {
+        if (filter != null && Boolean.FALSE.equals(filter.getAllotted())) {
+            return UserAllocationUsersResponseDTO.builder()
+                    .totalUsers(0L)
+                    .currentlyWorkingUsers(0L)
+                    .totalAllottedData(0L)
+                    .users(PageResponseDTO.<UserAllocationRowDTO>builder()
+                            .content(Collections.emptyList())
+                            .page(0)
+                            .size(10)
+                            .totalElements(0)
+                            .totalPages(0)
+                            .last(true)
+                            .build())
+                    .build();
+        }
+
+        StringBuilder scopeClause = new StringBuilder();
+        Map<String, Object> scopeParams = new HashMap<>();
+        buildNativeScopeClauseAndParams(dataScope, scopeClause, scopeParams);
+
+        StringBuilder filterClause = new StringBuilder();
+        buildAllocationFilterClauseAndParams(filter, filterClause, scopeParams);
+
+        LocalDateTime fifteenMinutesAgo = LocalDateTime.now().minusMinutes(15);
+        scopeParams.put("fifteenMinutesAgo", fifteenMinutesAgo);
+
+        String userRowsSql =
+                "SELECT " +
+                "  l.assigned_to_id AS user_id, " +
+                "  u.first_name, " +
+                "  u.last_name, " +
+                "  u.username, " +
+                "  u.email, " +
+                "  COUNT(DISTINCT l.id) AS total_allotted, " +
+                "  COUNT(DISTINCT CASE WHEN EXISTS ( " +
+                "    SELECT 1 FROM lead_availed la " +
+                "    WHERE la.lead_id = l.id AND la.availed_by_user_id = l.assigned_to_id AND la.is_deleted = false " +
+                "  ) THEN l.id END) AS availed_count, " +
+                "  MAX(CASE WHEN uls.id IS NOT NULL AND l.updated_at >= :fifteenMinutesAgo THEN 1 ELSE 0 END) AS is_working, " +
+                "  MAX(COALESCE(uls.last_activity_at, u.last_login)) AS last_act " +
+                "FROM leads l " +
+                "JOIN users u ON u.id = l.assigned_to_id AND u.is_deleted = false AND u.active = true " +
+                "LEFT JOIN user_login_sessions uls ON uls.user_id = l.assigned_to_id " +
+                "     AND uls.is_deleted = false " +
+                "     AND uls.logout_at IS NULL " +
+                "     AND uls.session_status = 'ACTIVE' " +
+                "     AND uls.last_activity_at >= :fifteenMinutesAgo " +
+                "WHERE l.is_deleted = false " +
+                "  AND l.assigned_to_id IS NOT NULL " +
+                "  AND " + scopeClause + filterClause + " " +
+                "GROUP BY l.assigned_to_id, u.first_name, u.last_name, u.username, u.email";
+
+        Query query = entityManager.createNativeQuery(userRowsSql);
+        bindSafeQueryParams(query, userRowsSql, scopeParams);
+
+        List<?> rawRows = query.getResultList();
+        List<UserAllocationRowDTO> allUserRows = new ArrayList<>();
+        long globalWorkingCount = 0L;
+        long globalTotalAllotted = 0L;
+
+        for (Object item : rawRows) {
+            Object[] row = item instanceof Object[] ? (Object[]) item : new Object[]{item};
+            UUID uId = parseUUID(row[0]);
+            if (uId == null) continue;
+
+            String fName = row.length > 1 && row[1] != null ? row[1].toString() : "";
+            String lName = row.length > 2 && row[2] != null ? row[2].toString() : "";
+            String uName = row.length > 3 && row[3] != null ? row[3].toString() : "";
+            String email = row.length > 4 && row[4] != null ? row[4].toString() : "";
+            long totalAllotted = row.length > 5 ? parseLong(row[5]) : 0L;
+            long availedCount = row.length > 6 ? parseLong(row[6]) : 0L;
+            boolean isWorking = row.length > 7 && parseLong(row[7]) == 1L;
+            LocalDateTime lastAct = row.length > 8 ? parseLocalDateTime(row[8]) : null;
+
+            String fullName = (fName + " " + lName).trim();
+            if (fullName.isEmpty()) fullName = uName;
+
+            User userEntity = entityManager.find(User.class, uId);
+            String departmentName = userEntity != null && userEntity.getDepartments() != null && !userEntity.getDepartments().isEmpty()
+                    ? userEntity.getDepartments().stream().map(Department::getName).collect(Collectors.joining(", "))
+                    : null;
+            List<String> roleNames = userEntity != null && userEntity.getRoles() != null
+                    ? userEntity.getRoles().stream().map(Role::getName).collect(Collectors.toList())
+                    : Collections.emptyList();
+
+            if (isWorking) {
+                globalWorkingCount++;
+            }
+            globalTotalAllotted += totalAllotted;
+
+            allUserRows.add(UserAllocationRowDTO.builder()
+                    .userId(uId)
+                    .name(fullName)
+                    .username(uName)
+                    .email(email)
+                    .department(departmentName)
+                    .roles(roleNames)
+                    .totalAllottedData(totalAllotted)
+                    .currentlyWorkingData(availedCount)
+                    .currentlyWorking(isWorking)
+                    .lastActivityAt(lastAct)
+                    .build());
+        }
+
+        // Filter by currentlyWorking if requested
+        if (filter != null && Boolean.TRUE.equals(filter.getCurrentlyWorking())) {
+            allUserRows = allUserRows.stream()
+                    .filter(UserAllocationRowDTO::isCurrentlyWorking)
+                    .collect(Collectors.toList());
+        }
+
+        // Search filter
+        String search = filter != null ? filter.getSearch() : null;
+        if (search != null && !search.isBlank()) {
+            String term = search.toLowerCase().trim();
+            allUserRows = allUserRows.stream()
+                    .filter(u -> (u.getName() != null && u.getName().toLowerCase().contains(term))
+                            || (u.getUsername() != null && u.getUsername().toLowerCase().contains(term))
+                            || (u.getEmail() != null && u.getEmail().toLowerCase().contains(term))
+                            || (u.getDepartment() != null && u.getDepartment().toLowerCase().contains(term)))
+                    .collect(Collectors.toList());
+        }
+
+        // Sorting
+        String sortBy = filter != null && filter.getSortBy() != null ? filter.getSortBy().toLowerCase().trim() : "totalallotteddata";
+        Comparator<UserAllocationRowDTO> comparator;
+        switch (sortBy) {
+            case "name":
+                comparator = Comparator.comparing(UserAllocationRowDTO::getName, String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "username":
+                comparator = Comparator.comparing(UserAllocationRowDTO::getUsername, String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "currentlyworkingdata":
+            case "availed":
+                comparator = Comparator.comparing(UserAllocationRowDTO::getCurrentlyWorkingData);
+                break;
+            case "currentlyworking":
+                comparator = Comparator.comparing(UserAllocationRowDTO::isCurrentlyWorking);
+                break;
+            case "lastactivityat":
+                comparator = Comparator.comparing(UserAllocationRowDTO::getLastActivityAt, Comparator.nullsLast(Comparator.naturalOrder()));
+                break;
+            case "totalallotteddata":
+            case "total":
+            default:
+                comparator = Comparator.comparing(UserAllocationRowDTO::getTotalAllottedData);
+                break;
+        }
+
+        boolean isDesc = filter == null || filter.getSortDirection() == null || "desc".equalsIgnoreCase(filter.getSortDirection().trim());
+        if (isDesc) {
+            comparator = comparator.reversed();
+        }
+        allUserRows.sort(comparator);
+
+        // Pagination
+        int totalElements = allUserRows.size();
+        int page = filter != null && filter.getPage() != null ? Math.max(filter.getPage(), 0) : 0;
+        int size = filter != null && filter.getSize() != null && filter.getSize() > 0 ? filter.getSize() : 10;
+        int fromIndex = Math.min(page * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<UserAllocationRowDTO> pageContent = (fromIndex <= toIndex) ? allUserRows.subList(fromIndex, toIndex) : Collections.emptyList();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 1;
+
+        PageResponseDTO<UserAllocationRowDTO> pageResponse = PageResponseDTO.<UserAllocationRowDTO>builder()
+                .content(pageContent)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last((page + 1) >= totalPages)
+                .build();
+
+        return UserAllocationUsersResponseDTO.builder()
+                .totalUsers(totalElements)
+                .currentlyWorkingUsers(globalWorkingCount)
+                .totalAllottedData(globalTotalAllotted)
+                .users(pageResponse)
+                .build();
+    }
+
+    private void buildAllocationFilterClauseAndParams(DashboardAnalyticsFilterRequest filter, StringBuilder filterClause, Map<String, Object> params) {
+        if (filter == null) return;
+
+        // Course filter: EXCLUSIVELY lead_interested_courses (DO NOT use registered course l.course_id)
+        if (filter.getCourseIds() != null && !filter.getCourseIds().isEmpty()) {
+            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_interested_courses lic WHERE lic.lead_id = l.id AND lic.course_id IN (:courseIds)) ");
+            params.put("courseIds", filter.getCourseIds());
+        }
+
+        // Course Type (Category) filter: EXCLUSIVELY lead_interested_courses mapped to CourseType (DO NOT use registered course l.course_id)
+        if (filter.getCourseTypeIds() != null && !filter.getCourseTypeIds().isEmpty()) {
+            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_interested_courses lic JOIN courses c ON c.id = lic.course_id AND c.is_deleted = false WHERE lic.lead_id = l.id AND c.course_type_id IN (:courseTypeIds)) ");
+            params.put("courseTypeIds", filter.getCourseTypeIds());
+        }
+
+        // Lead Source filter
+        if (filter.getLeadSourceIds() != null && !filter.getLeadSourceIds().isEmpty()) {
+            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_lead_sources lls WHERE lls.lead_id = l.id AND lls.lead_source_id IN (:leadSourceIds)) ");
+            params.put("leadSourceIds", filter.getLeadSourceIds());
+        }
+
+        // Board filter
+        if (filter.getBoardIds() != null && !filter.getBoardIds().isEmpty()) {
+            filterClause.append(" AND l.board_id IN (:boardIds) ");
+            params.put("boardIds", filter.getBoardIds());
+        }
+
+        // Grade filter
+        if (filter.getGradeIds() != null && !filter.getGradeIds().isEmpty()) {
+            filterClause.append(" AND l.grade_id IN (:gradeIds) ");
+            params.put("gradeIds", filter.getGradeIds());
+        }
+
+        // Status filter
+        if (filter.getLeadStatusIds() != null && !filter.getLeadStatusIds().isEmpty()) {
+            filterClause.append(" AND l.lead_status_id IN (:leadStatusIds) ");
+            params.put("leadStatusIds", filter.getLeadStatusIds());
+        }
+
+        // Program filter
+        if (filter.getProgramId() != null) {
+            filterClause.append(" AND l.program_id = :programId ");
+            params.put("programId", filter.getProgramId());
+        } else if (filter.getProgramIds() != null && !filter.getProgramIds().isEmpty()) {
+            filterClause.append(" AND l.program_id IN (:programIds) ");
+            params.put("programIds", filter.getProgramIds());
+        }
+
+        // Department filter
+        if (filter.getDepartmentIds() != null && !filter.getDepartmentIds().isEmpty()) {
+            filterClause.append(" AND l.department_id IN (:departmentIds) ");
+            params.put("departmentIds", filter.getDepartmentIds());
+        }
+
+        // Assigned user filter
+        if (filter.getAssignedUserIds() != null && !filter.getAssignedUserIds().isEmpty()) {
+            filterClause.append(" AND l.assigned_to_id IN (:assignedUserIds) ");
+            params.put("assignedUserIds", filter.getAssignedUserIds());
+        }
+
+        // Status History filter
+        if (filter.getLeadStatusHistoryIds() != null && !filter.getLeadStatusHistoryIds().isEmpty()) {
+            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_status_histories lsh WHERE lsh.lead_id = l.id AND lsh.is_deleted = false AND lsh.new_status_id IN (:leadStatusHistoryIds)) ");
+            params.put("leadStatusHistoryIds", filter.getLeadStatusHistoryIds());
+        }
+
+        // Date range filter
+        if (filter.getStartDate() != null) {
+            filterClause.append(" AND l.created_at >= :startDate ");
+            params.put("startDate", filter.getStartDate().atStartOfDay());
+        }
+        if (filter.getEndDate() != null) {
+            filterClause.append(" AND l.created_at <= :endDate ");
+            params.put("endDate", filter.getEndDate().atTime(java.time.LocalTime.MAX));
+        }
+
+        // Availed filter
+        Boolean effectiveIsAvailed = filter.getEffectiveIsAvailed();
+        if (Boolean.TRUE.equals(effectiveIsAvailed)) {
+            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_availed la WHERE la.lead_id = l.id AND la.availed_by_user_id = l.assigned_to_id AND la.is_deleted = false) ");
+        } else if (Boolean.FALSE.equals(effectiveIsAvailed)) {
+            filterClause.append(" AND NOT EXISTS (SELECT 1 FROM lead_availed la WHERE la.lead_id = l.id AND la.availed_by_user_id = l.assigned_to_id AND la.is_deleted = false) ");
+        }
+    }
+
     private void buildNativeScopeClauseAndParams(UserDataScope dataScope, StringBuilder scopeClause, Map<String, Object> scopeParams) {
         boolean isSystemScope = dataScope == null || dataScope.getScopeType() == ScopeType.SYSTEM;
         if (isSystemScope) {
@@ -1276,6 +1606,27 @@ public class DataSegregationRepository {
                 scopeClause.append("l.assigned_to_id = :scopeUserId");
                 scopeParams.put("scopeUserId", userId);
             }
+        }
+    }
+
+    private void bindSafeQueryParams(Query query, String sql, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) return;
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            if (sql.contains(":" + entry.getKey())) {
+                query.setParameter(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    private LocalDateTime parseLocalDateTime(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof LocalDateTime ldt) return ldt;
+        if (obj instanceof java.sql.Timestamp ts) return ts.toLocalDateTime();
+        if (obj instanceof java.util.Date d) return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+        try {
+            return LocalDateTime.parse(obj.toString());
+        } catch (Exception e) {
+            return null;
         }
     }
 

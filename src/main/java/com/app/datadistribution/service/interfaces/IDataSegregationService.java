@@ -13,6 +13,10 @@ import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
+import com.app.datadistribution.dto.segregation.UserAllocationSummaryDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationUsersResponseDTO;
+
 public interface IDataSegregationService {
 
     DataSegregationCapabilitiesDTO getCapabilities();
@@ -28,4 +32,8 @@ public interface IDataSegregationService {
     CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
 
     CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
+
+    UserAllocationSummaryDTO getUserAllocationSummary(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+
+    UserAllocationUsersResponseDTO getUserAllocationUsers(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
 }

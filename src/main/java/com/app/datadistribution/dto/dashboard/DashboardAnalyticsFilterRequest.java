@@ -27,11 +27,16 @@ public class DashboardAnalyticsFilterRequest {
     private List<UUID> boardIds;
     private List<UUID> gradeIds;
     private List<UUID> departmentIds;
+    private List<UUID> programIds;
+    private UUID programId;
     private List<UUID> assignedUserIds;
     private List<UUID> createdByUserIds;
 
     // Allotted / Unallotted filter (true = assignedTo is not null, false = assignedTo is null)
     private Boolean allotted;
+
+    // Currently Working filter (true = user active session & updated matching leads within 15m)
+    private Boolean currentlyWorking;
 
     // Multi-source filter (true = COUNT(DISTINCT source) > 1, false = COUNT(DISTINCT source) <= 1)
     private Boolean multiSource;
@@ -185,6 +190,24 @@ public class DashboardAnalyticsFilterRequest {
         }
     }
 
+    public void setInterestedCourseId(UUID interestedCourseId) {
+        setCourseId(interestedCourseId);
+    }
+
+    public void setInterestedCourseIds(List<UUID> interestedCourseIds) {
+        if (interestedCourseIds != null && !interestedCourseIds.isEmpty()) {
+            if (this.courseIds == null) {
+                this.courseIds = new java.util.ArrayList<>(interestedCourseIds);
+            } else {
+                for (UUID id : interestedCourseIds) {
+                    if (!this.courseIds.contains(id)) {
+                        this.courseIds.add(id);
+                    }
+                }
+            }
+        }
+    }
+
     public void setDepartmentId(UUID departmentId) {
         if (departmentId != null) {
             if (this.departmentIds == null) {
@@ -194,6 +217,22 @@ public class DashboardAnalyticsFilterRequest {
                 this.departmentIds.add(departmentId);
             }
         }
+    }
+
+    public void setProgramId(UUID programId) {
+        this.programId = programId;
+        if (programId != null) {
+            if (this.programIds == null) {
+                this.programIds = new java.util.ArrayList<>();
+            }
+            if (!this.programIds.contains(programId)) {
+                this.programIds.add(programId);
+            }
+        }
+    }
+
+    public void setProgramIds(List<UUID> programIds) {
+        this.programIds = programIds;
     }
 
     public void setAssignedUserId(UUID assignedUserId) {

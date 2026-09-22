@@ -24,6 +24,10 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.service.interfaces.IDataSegregationService;
 
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
+import com.app.datadistribution.dto.segregation.UserAllocationSummaryDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationUsersResponseDTO;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -126,5 +130,23 @@ public class DataSegregationController {
             throws UnauthorizedException, BadRequestException {
         CourseUserSegregationResponseDTO response = segregationService.getCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(ApiResponse.success("Course user-wise segregation fetched successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/user-allocation-summary")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_USER_ALLOCATION_VIEW') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
+    @Operation(summary = "Get user allocation summary: total users with allotted data and users currently working")
+    public ResponseEntity<ApiResponse<UserAllocationSummaryDTO>> getUserAllocationSummary(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        UserAllocationSummaryDTO response = segregationService.getUserAllocationSummary(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success("User allocation summary retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/user-allocation-users")
+    @PreAuthorize("hasAuthority('DATA_SEGREGATION_USER_ALLOCATION_USERS_VIEW') or hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
+    @Operation(summary = "Get detailed list of users with allotted data and currently working status matching filters")
+    public ResponseEntity<ApiResponse<UserAllocationUsersResponseDTO>> getUserAllocationUsers(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        UserAllocationUsersResponseDTO response = segregationService.getUserAllocationUsers(filterRequest);
+        return ResponseEntity.ok(ApiResponse.success("User allocation users retrieved successfully", response, HttpStatus.OK.value()));
     }
 }

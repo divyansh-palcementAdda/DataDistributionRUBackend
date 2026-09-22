@@ -6,6 +6,10 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.app.datadistribution.dto.dashboard.DashboardAnalyticsFilterRequest;
+import com.app.datadistribution.dto.segregation.UserAllocationRowDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationSummaryDTO;
+import com.app.datadistribution.dto.segregation.UserAllocationUsersResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseUserSegregationResponseDTO;
 import com.app.datadistribution.dto.segregation.CourseTypeSegregationDTO;
@@ -144,6 +148,28 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         return segregationRepository.fetchCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserAllocationSummaryDTO getUserAllocationSummary(DashboardAnalyticsFilterRequest filterRequest)
+            throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) {
+            filterRequest = new DashboardAnalyticsFilterRequest();
+        }
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        return segregationRepository.fetchUserAllocationSummary(filterRequest, dataScope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserAllocationUsersResponseDTO getUserAllocationUsers(DashboardAnalyticsFilterRequest filterRequest)
+            throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) {
+            filterRequest = new DashboardAnalyticsFilterRequest();
+        }
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        return segregationRepository.fetchUserAllocationUsers(filterRequest, dataScope);
     }
 
     private void validateEntities(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) {

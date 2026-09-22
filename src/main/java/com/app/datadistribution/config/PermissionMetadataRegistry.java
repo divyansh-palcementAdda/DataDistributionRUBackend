@@ -187,6 +187,9 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.DATA_SEGREGATION_LEAD_STATUS_ANALYTICS, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View status conversion analytics segregation");
         reg(map, PermissionType.DATA_SEGREGATION_COURSE_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View course-level segregation data");
         reg(map, PermissionType.DATA_SEGREGATION_COURSE_USER_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View course-user mapped segregation");
+        reg(map, PermissionType.DATA_SEGREGATION_USER_ALLOCATION_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View total users with allotted data analytics card");
+        reg(map, PermissionType.DATA_SEGREGATION_CURRENTLY_WORKING_USERS_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View users currently working analytics card");
+        reg(map, PermissionType.DATA_SEGREGATION_USER_ALLOCATION_USERS_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View user allocation detailed list");
 
         // User Activity
         reg(map, PermissionType.USER_ACTIVITY_VIEW, PermissionEntity.USER_ACTIVITY, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View user activity timeline");
