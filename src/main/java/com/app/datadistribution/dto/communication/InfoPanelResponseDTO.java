@@ -29,4 +29,5 @@ public class InfoPanelResponseDTO {
     private String renderedContent;
     private List<CourseUSPDTO> usps;
     private List<CourseImageDTO> availableImages;
+    private com.app.datadistribution.dto.infopanel.CourseInfoPanelResponseDTO guidancePanel;
 }

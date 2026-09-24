@@ -24,5 +24,6 @@ public enum PermissionEntity {
     USER_ACTIVITY,
     EMAIL,
     PERMISSION,
-    SYSTEM
+    SYSTEM,
+    INFO_PANEL
 }

@@ -320,7 +320,102 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.DROPDOWN_ROLE_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access roles dropdown options");
         reg(map, PermissionType.DROPDOWN_PERMISSION_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access permissions dropdown options");
 
+        // ==========================================
+        // INFO PANEL GENERAL PERMISSIONS
+        // ==========================================
+        reg(map, PermissionType.INFO_PANEL_VIEW, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.VIEW, "View lead caller guidance & info panel");
+        reg(map, PermissionType.INFO_PANEL_CREATE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.CREATE, "Create course info panel & guidance data");
+        reg(map, PermissionType.INFO_PANEL_UPDATE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.UPDATE, "Update course info panel & guidance data");
+        reg(map, PermissionType.INFO_PANEL_DELETE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.DELETE, "Delete course info panel");
+        reg(map, PermissionType.INFO_PANEL_MANAGE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.MANAGE, "Full management of course info panels & competitor comparisons");
+
+        // ==========================================
+        // INFO PANEL FIELD-LEVEL PERMISSIONS (COURSE INFORMATION)
+        // ==========================================
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COURSE_FEE_READ, PermissionType.INFO_PANEL_FIELD_COURSE_FEE_WRITE,
+                "courseFee", "Course Fee", "Course Information", 10, "course fee");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_DURATION_READ, PermissionType.INFO_PANEL_FIELD_DURATION_WRITE,
+                "duration", "Duration", "Course Information", 20, "course duration");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_ELIGIBILITY_READ, PermissionType.INFO_PANEL_FIELD_ELIGIBILITY_WRITE,
+                "eligibility", "Eligibility", "Course Information", 30, "admission eligibility");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_JOB_OPPORTUNITIES_READ, PermissionType.INFO_PANEL_FIELD_JOB_OPPORTUNITIES_WRITE,
+                "jobOpportunities", "Job Opportunities", "Course Information", 40, "career job opportunities");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_HOSTEL_FEE_READ, PermissionType.INFO_PANEL_FIELD_HOSTEL_FEE_WRITE,
+                "hostelFee", "Hostel Fee", "Course Information", 50, "hostel fee details");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COURSE_DETAILS_READ, PermissionType.INFO_PANEL_FIELD_COURSE_DETAILS_WRITE,
+                "courseDetails", "Course Details", "Course Information", 60, "course syllabus and details");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COURSE_SPECIALITIES_READ, PermissionType.INFO_PANEL_FIELD_COURSE_SPECIALITIES_WRITE,
+                "courseSpecialities", "Course Specialities / USPs", "Course Information", 70, "course specialities and USPs");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_RU_USPS_READ, PermissionType.INFO_PANEL_FIELD_RU_USPS_WRITE,
+                "renaissanceUniversityUsps", "RU USPs", "Course Information", 80, "Renaissance University USPs");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_HOW_WE_ARE_DIFFERENT_READ, PermissionType.INFO_PANEL_FIELD_HOW_WE_ARE_DIFFERENT_WRITE,
+                "howWeAreDifferent", "How We Are Different", "Course Information", 90, "university differentiators");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_CALLER_GUIDANCE_READ, PermissionType.INFO_PANEL_FIELD_CALLER_GUIDANCE_WRITE,
+                "callerGuidance", "Caller Guidance", "Course Information", 100, "caller guidance and pitch talking points");
+
+        // ==========================================
+        // INFO PANEL FIELD-LEVEL PERMISSIONS (COMPETITOR INFORMATION)
+        // ==========================================
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COLLEGE_NAME_READ, PermissionType.INFO_PANEL_FIELD_COLLEGE_NAME_WRITE,
+                "collegeName", "College Name", "Competitor Information", 110, "competitor college name");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_BRANCHES_READ, PermissionType.INFO_PANEL_FIELD_BRANCHES_WRITE,
+                "branches", "Branches", "Competitor Information", 120, "competitor branches/campuses");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COMPETITOR_FEE_READ, PermissionType.INFO_PANEL_FIELD_COMPETITOR_FEE_WRITE,
+                "courseFeePerYear", "Course Fee - Per Year", "Competitor Information", 130, "competitor yearly course fee");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COMPETITOR_DURATION_READ, PermissionType.INFO_PANEL_FIELD_COMPETITOR_DURATION_WRITE,
+                "competitorDuration", "Duration", "Competitor Information", 140, "competitor course duration");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_ODDS_READ, PermissionType.INFO_PANEL_FIELD_ODDS_WRITE,
+                "odds", "Odds", "Competitor Information", 150, "competitor odds / drawbacks");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_COMPETITOR_ELIGIBILITY_READ, PermissionType.INFO_PANEL_FIELD_COMPETITOR_ELIGIBILITY_WRITE,
+                "competitorEligibility", "Eligibility", "Competitor Information", 160, "competitor admission eligibility");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_HOSTEL_READ, PermissionType.INFO_PANEL_FIELD_HOSTEL_WRITE,
+                "hostel", "Hostel", "Competitor Information", 170, "competitor hostel details");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_DISTANCE_FROM_CITY_READ, PermissionType.INFO_PANEL_FIELD_DISTANCE_FROM_CITY_WRITE,
+                "distanceFromCity", "Distance From City", "Competitor Information", 180, "competitor distance from city");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_REGISTRATION_FEE_READ, PermissionType.INFO_PANEL_FIELD_REGISTRATION_FEE_WRITE,
+                "registrationFee", "Registration Fee", "Competitor Information", 190, "competitor registration fee");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_AVERAGE_PLACEMENTS_READ, PermissionType.INFO_PANEL_FIELD_AVERAGE_PLACEMENTS_WRITE,
+                "averagePlacements", "Average Placement", "Competitor Information", 200, "competitor average placement package");
+        registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_HIGHEST_PLACEMENT_READ, PermissionType.INFO_PANEL_FIELD_HIGHEST_PLACEMENT_WRITE,
+                "highestPlacement", "Highest Placement", "Competitor Information", 210, "competitor highest placement package");
+
         return map;
+    }
+
+    private static void registerInfoPanelField(Map<PermissionType, PermissionMetadata> map,
+                                              PermissionType readPerm,
+                                              PermissionType writePerm,
+                                              String fieldKey,
+                                              String fieldLabel,
+                                              String fieldGroup,
+                                              int displayOrder,
+                                              String fieldSubject) {
+        if (readPerm != null) {
+            map.put(readPerm, PermissionMetadata.builder()
+                    .code(readPerm.name())
+                    .description("View " + fieldSubject)
+                    .entity(PermissionEntity.INFO_PANEL)
+                    .permissionGroup(PermissionGroup.INFO_PANEL_FIELD)
+                    .permissionType(PermissionOperationType.VIEW)
+                    .fieldKey(fieldKey)
+                    .fieldLabel(fieldLabel)
+                    .fieldGroup(fieldGroup)
+                    .displayOrder(displayOrder)
+                    .build());
+        }
+        if (writePerm != null) {
+            map.put(writePerm, PermissionMetadata.builder()
+                    .code(writePerm.name())
+                    .description("Edit " + fieldSubject)
+                    .entity(PermissionEntity.INFO_PANEL)
+                    .permissionGroup(PermissionGroup.INFO_PANEL_FIELD)
+                    .permissionType(PermissionOperationType.EDIT)
+                    .fieldKey(fieldKey)
+                    .fieldLabel(fieldLabel)
+                    .fieldGroup(fieldGroup)
+                    .displayOrder(displayOrder + 1)
+                    .build());
+        }
     }
 
     private static void registerLeadField(Map<PermissionType, PermissionMetadata> map,

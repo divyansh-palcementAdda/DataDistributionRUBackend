@@ -40,18 +40,18 @@ public class PermissionMetadataRegistryTest {
                 unmapped.add(type.name() + ": code is null or empty");
             }
 
-            if (meta.getPermissionGroup() == PermissionGroup.LEAD_FIELD) {
+            if (meta.getPermissionGroup() == PermissionGroup.LEAD_FIELD || meta.getPermissionGroup() == PermissionGroup.INFO_PANEL_FIELD) {
                 if (meta.getFieldKey() == null || meta.getFieldKey().isBlank()) {
-                    unmapped.add(type.name() + ": fieldKey is missing for LEAD_FIELD");
+                    unmapped.add(type.name() + ": fieldKey is missing for " + meta.getPermissionGroup());
                 }
                 if (meta.getFieldLabel() == null || meta.getFieldLabel().isBlank()) {
-                    unmapped.add(type.name() + ": fieldLabel is missing for LEAD_FIELD");
+                    unmapped.add(type.name() + ": fieldLabel is missing for " + meta.getPermissionGroup());
                 }
                 if (meta.getFieldGroup() == null || meta.getFieldGroup().isBlank()) {
-                    unmapped.add(type.name() + ": fieldGroup is missing for LEAD_FIELD");
+                    unmapped.add(type.name() + ": fieldGroup is missing for " + meta.getPermissionGroup());
                 }
                 if (meta.getDisplayOrder() == null) {
-                    unmapped.add(type.name() + ": displayOrder is missing for LEAD_FIELD");
+                    unmapped.add(type.name() + ": displayOrder is missing for " + meta.getPermissionGroup());
                 }
             }
         }

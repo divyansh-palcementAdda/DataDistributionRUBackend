@@ -276,13 +276,13 @@ public class DatabaseSeeder implements CommandLineRunner {
 				p.setCode(pName);
 				mod = true;
 			}
-			if (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD) {
+			if (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD || p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.INFO_PANEL_FIELD) {
 				if (p.getFieldKey() == null) {
-					p.setFieldKey(pName.replace("LEAD_FIELD_", "").replace("_READ", "").replace("_WRITE", "").toLowerCase());
+					p.setFieldKey(pName.replace("LEAD_FIELD_", "").replace("INFO_PANEL_FIELD_", "").replace("_READ", "").replace("_WRITE", "").toLowerCase());
 					mod = true;
 				}
 				if (p.getFieldGroup() == null) {
-					p.setFieldGroup("Other Information");
+					p.setFieldGroup(p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.INFO_PANEL_FIELD ? "Course Information" : "Other Information");
 					mod = true;
 				}
 				if (p.getFieldLabel() == null) {
@@ -300,7 +300,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 				.filter(p -> p.getEntity() == null
 						|| p.getPermissionGroup() == null
 						|| p.getPermissionType() == null
-						|| (p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD 
+						|| ((p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.LEAD_FIELD || p.getPermissionGroup() == com.app.datadistribution.enums.PermissionGroup.INFO_PANEL_FIELD)
 							&& (p.getFieldKey() == null || p.getFieldGroup() == null)))
 				.toList();
 
@@ -323,7 +323,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		Set<Permission> adminPermissions = filterPermissions(allPermissions,
 				"USER_", "AUTH_", "LEAD_", "LEADSOURCE_", "LEAD_STATUS_",
 				"BOARD_", "GRADE_", "DASHBOARD_", "COURSE_", "PROGRAM_", "FOLLOWUP_",
-				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_", "EMAIL_");
+				"FOLLOW_UP_", "FEEDBACK_", "DEPARTMENT_", "ROLE_", "PERMISSION_", "DROPDOWN_", "DATA_SEGREGATION_", "USER_ACTIVITY_", "EMAIL_", "INFO_PANEL_");
 		syncRoleDefaultPermissions(RoleType.ADMIN.name(), "Administrator Role", adminPermissions);
 
 		// 3. HOD Role (Department-level Operational & Management Access)
@@ -381,7 +381,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.USER_READ.name())
 							|| n.equals(PermissionType.AUTH_READ.name())
 							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())
-							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name());
+							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name())
+							|| n.startsWith("INFO_PANEL_");
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.HOD.name(), "Head of Department Role", hodPermissions);
@@ -441,7 +442,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name())
 							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())
 							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name())
-							|| n.equals(PermissionType.DATA_SEGREGATION_COURSE_USER_STATUS_ANALYTICS_VIEW.name());
+							|| n.equals(PermissionType.DATA_SEGREGATION_COURSE_USER_STATUS_ANALYTICS_VIEW.name())
+							|| n.equals(PermissionType.INFO_PANEL_VIEW.name())
+							|| (n.startsWith("INFO_PANEL_FIELD_") && n.endsWith("_READ"));
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.COUNSELOR.name(), "Counselor Operational Role", counselorPermissions);

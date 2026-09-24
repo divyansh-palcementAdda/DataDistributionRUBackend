@@ -58,6 +58,8 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
     private final LeadFeedbackRepository feedbackRepository;
     private final UserRepository userRepository;
     private final PlaceholderRenderService placeholderRenderService;
+    @org.springframework.context.annotation.Lazy
+    private final com.app.datadistribution.service.interfaces.ICourseInfoPanelService infoPanelService;
     private final ICourseImageService imageService;
     private final ICourseUSPService uspService;
     private final com.app.datadistribution.service.interfaces.ILeadDataScopeService leadDataScopeService;
@@ -230,6 +232,15 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
         List<CourseUSPDTO> uspDtos = uspService.getUSPsByCourseId(course.getId(), true);
         List<CourseImageDTO> imageDtos = imageService.getImagesByCourseId(course.getId(), true);
 
+        com.app.datadistribution.dto.infopanel.CourseInfoPanelResponseDTO guidancePanel = null;
+        try {
+            if (infoPanelService != null) {
+                guidancePanel = infoPanelService.getInfoPanelByCourseId(course.getId(), null);
+            }
+        } catch (Exception e) {
+            log.warn("Could not load guidance panel: {}", e.getMessage());
+        }
+
         return InfoPanelResponseDTO.builder()
                 .leadId(lead.getId())
                 .leadCode(lead.getLeadCode())
@@ -242,6 +253,7 @@ public class CourseCommunicationServiceImpl implements ICourseCommunicationServi
                 .renderedContent(renderedContent)
                 .usps(uspDtos)
                 .availableImages(imageDtos)
+                .guidancePanel(guidancePanel)
                 .build();
     }
 
