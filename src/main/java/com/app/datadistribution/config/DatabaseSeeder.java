@@ -440,7 +440,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DROPDOWN_BOARD_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name())
 							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())
-							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name());
+							|| n.equals(PermissionType.USER_PROGRAM_MATRIX_VIEW.name())
+							|| n.equals(PermissionType.DATA_SEGREGATION_COURSE_USER_STATUS_ANALYTICS_VIEW.name());
 				})
 				.collect(Collectors.toSet());
 		syncRoleDefaultPermissions(RoleType.COUNSELOR.name(), "Counselor Operational Role", counselorPermissions);
