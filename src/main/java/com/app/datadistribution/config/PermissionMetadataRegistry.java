@@ -379,6 +379,15 @@ public final class PermissionMetadataRegistry {
         registerInfoPanelField(map, PermissionType.INFO_PANEL_FIELD_HIGHEST_PLACEMENT_READ, PermissionType.INFO_PANEL_FIELD_HIGHEST_PLACEMENT_WRITE,
                 "highestPlacement", "Highest Placement", "Competitor Information", 210, "competitor highest placement package");
 
+        // ==========================================
+        // REPORT PERMISSIONS
+        // ==========================================
+        reg(map, PermissionType.REPORT_VIEW, PermissionEntity.REPORT, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View Reports Module");
+        reg(map, PermissionType.REPORT_SELF_VIEW, PermissionEntity.REPORT, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View Self Performance Reports");
+        reg(map, PermissionType.REPORT_DEPARTMENT_VIEW, PermissionEntity.REPORT, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View Department Performance Reports");
+        reg(map, PermissionType.REPORT_ALL_DEPARTMENTS_VIEW, PermissionEntity.REPORT, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View All Departments Performance Reports");
+        reg(map, PermissionType.REPORT_EXPORT, PermissionEntity.REPORT, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.EXPORT, "Export Performance Reports");
+
         return map;
     }
 
