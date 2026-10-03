@@ -18,6 +18,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, JpaSpecif
     Optional<Course> findByCourseCodeIgnoreCaseAndIsDeletedFalse(String courseCode);
     Optional<Course> findByCourseNameIgnoreCase(String courseName);
     Optional<Course> findByCourseNameIgnoreCaseAndIsDeletedFalse(String courseName);
+    List<Course> findAllByIsDeletedFalse();
 
     boolean existsByCourseNameIgnoreCase(String courseName);
     boolean existsByCourseNameIgnoreCaseAndIdNot(String courseName, UUID id);

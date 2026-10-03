@@ -17,6 +17,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import com.app.datadistribution.dto.course.CourseBulkUploadPreviewResponseDTO;
+import com.app.datadistribution.dto.course.CourseBulkUploadResponseDTO;
+import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.service.interfaces.ICourseBulkUploadService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+
 @RestController
 @RequestMapping("/api/courses")
 @RequiredArgsConstructor
@@ -24,6 +33,7 @@ import org.springframework.web.bind.annotation.*;
 public class CourseController {
 
     private final ICourseService courseService;
+    private final ICourseBulkUploadService bulkUploadService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('COURSE_CREATE')")
@@ -97,5 +107,47 @@ public class CourseController {
     public ResponseEntity<ApiResponse<CourseResponseDTO>> toggleActive(@PathVariable("id") UUID id) {
         CourseResponseDTO response = courseService.toggleActive(id);
         return ResponseEntity.ok(ApiResponse.success("Course status toggled successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('COURSE_BULK_UPLOAD') or hasAuthority('COURSE_CREATE') or hasAuthority('COURSE_UPDATE')")
+    @Operation(summary = "Bulk upload and update university courses from Excel")
+    public ResponseEntity<ApiResponse<CourseBulkUploadResponseDTO>> bulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        CourseBulkUploadResponseDTO response = bulkUploadService.bulkUpload(file);
+        return ResponseEntity.ok(ApiResponse.success("Course bulk upload completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('COURSE_BULK_UPLOAD') or hasAuthority('COURSE_CREATE') or hasAuthority('COURSE_UPDATE')")
+    @Operation(summary = "Validate and preview Course Excel import without committing changes")
+    public ResponseEntity<ApiResponse<CourseBulkUploadPreviewResponseDTO>> validateBulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        CourseBulkUploadPreviewResponseDTO response = bulkUploadService.validateExcel(file);
+        return ResponseEntity.ok(ApiResponse.success("Course Excel validation preview generated", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/bulk-upload/template")
+    @PreAuthorize("hasAuthority('COURSE_BULK_UPLOAD_TEMPLATE_DOWNLOAD') or hasAuthority('COURSE_BULK_UPLOAD') or hasAuthority('COURSE_CREATE') or hasAuthority('COURSE_VIEW')")
+    @Operation(summary = "Download official Course bulk upload Excel template")
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] excelBytes = bulkUploadService.generateTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("course_bulk_upload_template.xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/bulk-upload/{importId}/error-file")
+    @PreAuthorize("hasAuthority('COURSE_BULK_UPLOAD') or hasAuthority('COURSE_CREATE') or hasAuthority('COURSE_VIEW')")
+    @Operation(summary = "Download error sheet for an executed or validated course bulk upload")
+    public ResponseEntity<byte[]> downloadErrorFile(@PathVariable("importId") UUID importId) {
+        byte[] errorFileBytes = bulkUploadService.getErrorFile(importId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("course_bulk_upload_errors_" + importId + ".xlsx").build());
+        headers.setContentLength(errorFileBytes.length);
+        return new ResponseEntity<>(errorFileBytes, headers, HttpStatus.OK);
     }
 }

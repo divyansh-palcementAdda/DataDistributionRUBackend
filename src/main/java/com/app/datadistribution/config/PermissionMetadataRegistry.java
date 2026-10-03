@@ -265,6 +265,8 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.COURSE_CREATE, PermissionEntity.COURSE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create a new course");
         reg(map, PermissionType.COURSE_UPDATE, PermissionEntity.COURSE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPDATE, "Update course details");
         reg(map, PermissionType.COURSE_DELETE, PermissionEntity.COURSE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Delete course");
+        reg(map, PermissionType.COURSE_BULK_UPLOAD, PermissionEntity.COURSE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPLOAD, "Bulk upload university courses from Excel");
+        reg(map, PermissionType.COURSE_BULK_UPLOAD_TEMPLATE_DOWNLOAD, PermissionEntity.COURSE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.EXPORT, "Download Course bulk upload Excel template");
 
         reg(map, PermissionType.PROGRAM_VIEW, PermissionEntity.PROGRAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "View academic programs");
         reg(map, PermissionType.PROGRAM_CREATE, PermissionEntity.PROGRAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create academic program");
@@ -328,6 +330,9 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.INFO_PANEL_UPDATE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.UPDATE, "Update course info panel & guidance data");
         reg(map, PermissionType.INFO_PANEL_DELETE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.DELETE, "Delete course info panel");
         reg(map, PermissionType.INFO_PANEL_MANAGE, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.MANAGE, "Full management of course info panels & competitor comparisons");
+        reg(map, PermissionType.COURSE_INFO_PANEL_BULK_UPLOAD, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.UPLOAD, "Bulk upload course info panel and competitor data via Excel");
+        reg(map, PermissionType.COURSE_INFO_PANEL_TEMPLATE_DOWNLOAD, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.EXPORT, "Download Course Info Panel bulk upload Excel template");
+        reg(map, PermissionType.COURSE_INFO_PANEL_ERROR_DOWNLOAD, PermissionEntity.INFO_PANEL, PermissionGroup.INFO_PANEL, PermissionOperationType.EXPORT, "Download Course Info Panel bulk upload error sheet");
 
         // ==========================================
         // INFO PANEL FIELD-LEVEL PERMISSIONS (COURSE INFORMATION)

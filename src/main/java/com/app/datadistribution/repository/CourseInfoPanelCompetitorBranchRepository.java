@@ -13,5 +13,6 @@ import com.app.datadistribution.entity.CourseInfoPanelCompetitorBranch;
 public interface CourseInfoPanelCompetitorBranchRepository extends JpaRepository<CourseInfoPanelCompetitorBranch, UUID> {
     List<CourseInfoPanelCompetitorBranch> findByCompetitorIdAndIsDeletedFalse(UUID competitorId);
     Optional<CourseInfoPanelCompetitorBranch> findByIdAndCompetitorIdAndIsDeletedFalse(UUID id, UUID competitorId);
+    boolean existsByCompetitorIdAndBranchNameIgnoreCaseAndIsDeletedFalse(UUID competitorId, String branchName);
     void deleteByCompetitorId(UUID competitorId);
 }

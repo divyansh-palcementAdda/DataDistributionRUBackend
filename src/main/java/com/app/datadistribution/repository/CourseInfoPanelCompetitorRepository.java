@@ -14,4 +14,5 @@ public interface CourseInfoPanelCompetitorRepository extends JpaRepository<Cours
     List<CourseInfoPanelCompetitor> findByInfoPanelIdAndIsDeletedFalseOrderByDisplayOrderAsc(UUID infoPanelId);
     List<CourseInfoPanelCompetitor> findByInfoPanelIdAndActiveTrueAndIsDeletedFalseOrderByDisplayOrderAsc(UUID infoPanelId);
     Optional<CourseInfoPanelCompetitor> findByIdAndInfoPanelIdAndIsDeletedFalse(UUID id, UUID infoPanelId);
+    Optional<CourseInfoPanelCompetitor> findByInfoPanelIdAndCollegeNameIgnoreCaseAndIsDeletedFalse(UUID infoPanelId, String collegeName);
 }

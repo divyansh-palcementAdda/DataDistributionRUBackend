@@ -28,19 +28,28 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.service.interfaces.ICourseInfoPanelService;
 
+import com.app.datadistribution.dto.infopanel.CourseInfoPanelBulkUploadResponseDTO;
+import com.app.datadistribution.dto.infopanel.CourseInfoPanelPreviewResponseDTO;
+import com.app.datadistribution.service.interfaces.ICourseInfoPanelBulkUploadService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/info-panels")
+@RequestMapping({"/api/info-panels", "/api/course-info-panel"})
 @RequiredArgsConstructor
 @Validated
-@Tag(name = "Info Panel & Caller Guidance", description = "Endpoints for course info panels, caller guidance, and competitor comparisons")
+@Tag(name = "Info Panel & Caller Guidance", description = "Endpoints for course info panels, caller guidance, competitor comparisons, and bulk upload")
 public class CourseInfoPanelController {
 
     private final ICourseInfoPanelService infoPanelService;
+    private final ICourseInfoPanelBulkUploadService bulkUploadService;
 
     @GetMapping("/course/{courseId}")
     @PreAuthorize("hasAuthority('INFO_PANEL_VIEW') or hasAuthority('COURSE_VIEW') or hasAuthority('LEAD_READ')")
@@ -145,5 +154,47 @@ public class CourseInfoPanelController {
             @RequestBody List<UUID> competitorIds) {
         infoPanelService.reorderCompetitors(id, competitorIds);
         return ResponseEntity.ok(ApiResponse.success("Competitors reordered successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('COURSE_INFO_PANEL_BULK_UPLOAD') or hasAuthority('INFO_PANEL_CREATE') or hasAuthority('INFO_PANEL_MANAGE')")
+    @Operation(summary = "Bulk upload and update Course Info Panel and competitor data from Excel")
+    public ResponseEntity<ApiResponse<CourseInfoPanelBulkUploadResponseDTO>> bulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        CourseInfoPanelBulkUploadResponseDTO response = bulkUploadService.bulkUpload(file);
+        return ResponseEntity.ok(ApiResponse.success("Course Info Panel bulk import completed", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('COURSE_INFO_PANEL_BULK_UPLOAD') or hasAuthority('INFO_PANEL_CREATE') or hasAuthority('INFO_PANEL_MANAGE')")
+    @Operation(summary = "Validate and preview Course Info Panel Excel import without committing changes")
+    public ResponseEntity<ApiResponse<CourseInfoPanelPreviewResponseDTO>> validateBulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        CourseInfoPanelPreviewResponseDTO response = bulkUploadService.validateExcel(file);
+        return ResponseEntity.ok(ApiResponse.success("Excel validation preview generated", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/bulk-upload/template")
+    @PreAuthorize("hasAuthority('COURSE_INFO_PANEL_TEMPLATE_DOWNLOAD') or hasAuthority('COURSE_INFO_PANEL_BULK_UPLOAD') or hasAuthority('INFO_PANEL_VIEW') or hasAuthority('INFO_PANEL_MANAGE')")
+    @Operation(summary = "Download official Course Info Panel bulk upload Excel template")
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] excelBytes = bulkUploadService.generateTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("course_info_panel_template.xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/bulk-upload/{importId}/error-file")
+    @PreAuthorize("hasAuthority('COURSE_INFO_PANEL_ERROR_DOWNLOAD') or hasAuthority('COURSE_INFO_PANEL_BULK_UPLOAD') or hasAuthority('INFO_PANEL_MANAGE')")
+    @Operation(summary = "Download error sheet for an executed or validated bulk upload")
+    public ResponseEntity<byte[]> downloadErrorFile(@PathVariable("importId") UUID importId) {
+        byte[] errorFileBytes = bulkUploadService.getErrorFile(importId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("course_info_panel_errors_" + importId + ".xlsx").build());
+        headers.setContentLength(errorFileBytes.length);
+        return new ResponseEntity<>(errorFileBytes, headers, HttpStatus.OK);
     }
 }
