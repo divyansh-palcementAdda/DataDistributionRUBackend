@@ -529,6 +529,95 @@ public class DashboardAnalyticsRepository {
             predicates.add(cb.lessThanOrEqualTo(root.get("updatedAt"), filter.getUpdatedTo().atTime(LocalTime.MAX)));
         }
 
+        // Registration Status filter
+        if (filter.getRegistrationStatus() != null) {
+            predicates.add(cb.equal(root.get("registrationStatus"), filter.getRegistrationStatus()));
+        }
+
+        // Without Course filter
+        if (Boolean.TRUE.equals(filter.getWithoutCourse())) {
+            jakarta.persistence.criteria.Subquery<Integer> anyCourseSub =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> cSubRoot = anyCourseSub.from(Lead.class);
+            SetJoin<Lead, com.app.datadistribution.entity.Course> cJoin = cSubRoot.joinSet("interestedCourses", JoinType.INNER);
+            anyCourseSub.select(cb.literal(1));
+            anyCourseSub.where(
+                    cb.equal(cSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(cJoin.get("isDeleted"))
+            );
+            predicates.add(cb.and(cb.isNull(root.get("course")), cb.not(cb.exists(anyCourseSub))));
+        }
+
+        // Without Course Type / Category filter
+        if (Boolean.TRUE.equals(filter.getWithoutCourseType())) {
+            jakarta.persistence.criteria.Subquery<Integer> ctSub =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> ctSubRoot = ctSub.from(Lead.class);
+            jakarta.persistence.criteria.Join<Lead, com.app.datadistribution.entity.Course> regJoin =
+                    ctSubRoot.join("course", JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Course, CourseType> regCtJoin =
+                    regJoin.join("courseType", JoinType.LEFT);
+            jakarta.persistence.criteria.SetJoin<Lead, com.app.datadistribution.entity.Course> intJoin =
+                    ctSubRoot.joinSet("interestedCourses", JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Course, CourseType> intCtJoin =
+                    intJoin.join("courseType", JoinType.LEFT);
+            ctSub.select(cb.literal(1));
+            ctSub.where(
+                    cb.equal(ctSubRoot.get("id"), root.get("id")),
+                    cb.or(
+                            cb.and(cb.isNotNull(regJoin.get("id")), cb.isNotNull(regCtJoin.get("id"))),
+                            cb.and(cb.isNotNull(intJoin.get("id")), cb.isNotNull(intCtJoin.get("id")))
+                    )
+            );
+            predicates.add(cb.not(cb.exists(ctSub)));
+        }
+
+        // Without Program / Specialization filter
+        if (Boolean.TRUE.equals(filter.getWithoutProgram())) {
+            predicates.add(cb.isNull(root.get("program")));
+        }
+
+        // Without Grade filter
+        if (Boolean.TRUE.equals(filter.getWithoutGrade())) {
+            predicates.add(cb.isNull(root.get("grade")));
+        }
+
+        // Without Board filter
+        if (Boolean.TRUE.equals(filter.getWithoutBoard())) {
+            predicates.add(cb.isNull(root.get("board")));
+        }
+
+        // Unmapped Data filter (leads with missing master data)
+        if (Boolean.TRUE.equals(filter.getUnmapped())) {
+            jakarta.persistence.criteria.Subquery<Integer> anyCourseSub =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> cSubRoot = anyCourseSub.from(Lead.class);
+            SetJoin<Lead, com.app.datadistribution.entity.Course> cJoin = cSubRoot.joinSet("interestedCourses", JoinType.INNER);
+            anyCourseSub.select(cb.literal(1));
+            anyCourseSub.where(
+                    cb.equal(cSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(cJoin.get("isDeleted"))
+            );
+
+            jakarta.persistence.criteria.Subquery<Integer> anySourceSub =
+                    entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
+            jakarta.persistence.criteria.Root<Lead> sSubRoot = anySourceSub.from(Lead.class);
+            SetJoin<Lead, com.app.datadistribution.entity.LeadSource> sJoin = sSubRoot.joinSet("leadSources", JoinType.INNER);
+            anySourceSub.select(cb.literal(1));
+            anySourceSub.where(
+                    cb.equal(sSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(sJoin.get("isDeleted"))
+            );
+
+            predicates.add(cb.or(
+                    cb.and(cb.isNull(root.get("course")), cb.not(cb.exists(anyCourseSub))),
+                    cb.isNull(root.get("program")),
+                    cb.isNull(root.get("grade")),
+                    cb.isNull(root.get("board")),
+                    cb.not(cb.exists(anySourceSub))
+            ));
+        }
+
         // Lead Code filter
         if (filter.getLeadCode() != null && !filter.getLeadCode().isBlank()) {
             predicates.add(cb.equal(cb.lower(root.get("leadCode")), filter.getLeadCode().trim().toLowerCase()));

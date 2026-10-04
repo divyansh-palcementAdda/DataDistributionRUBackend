@@ -117,6 +117,27 @@ public class DashboardController {
                 .ok(ApiResponse.success("Multi-source leads count retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping({ "/leads/registration-rejected/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of all leads with registration check rejected matching filters and user data scope")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getRegistrationRejectedCount(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getRegistrationRejectedLeadsCount(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Registration rejected leads count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
+    @GetMapping({ "/leads/unmapped/count" })
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get count of unmapped leads matching filters, user data scope, and optional dimension (CATEGORY, COURSE, PROGRAM, GRADE, BOARD, ALL)")
+    public ResponseEntity<ApiResponse<DashboardLeadCountResponseDTO>> getUnmappedCount(
+            @RequestParam(value = "dimension", required = false) String dimension,
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        DashboardLeadCountResponseDTO result = dashboardService.getUnmappedLeadsCount(filterRequest, dimension);
+        return ResponseEntity
+                .ok(ApiResponse.success("Unmapped leads count retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping({ "/followups/today/count" })
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
     @Operation(summary = "Get count of today's scheduled follow-ups matching filters and user data scope")

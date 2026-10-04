@@ -97,6 +97,18 @@ public class DashboardAnalyticsFilterRequest {
     private List<UUID> leadStatusHistoryIds;
     private String leadStatusHistory;
 
+    // Registration Status filter
+    private com.app.datadistribution.enums.RegistrationStatus registrationStatus;
+
+    // Unmapped data filters
+    private Boolean unmapped;
+    private Boolean withoutCourse;
+    private Boolean withoutCourseType;
+    private Boolean withoutProgram;
+    private Boolean withoutGrade;
+    private Boolean withoutBoard;
+    private String unmappedDimension;
+
     // Singular & alias setters for Spring MVC parameter binding compatibility
     public void setCourseTypeId(UUID courseTypeId) {
         if (courseTypeId != null) {

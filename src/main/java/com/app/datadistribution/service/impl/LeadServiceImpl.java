@@ -440,6 +440,12 @@ public class LeadServiceImpl implements ILeadService {
             UUID courseTypeId,
             List<UUID> courseTypeIds,
             Boolean withoutCourse,
+            Boolean withoutCourseType,
+            Boolean withoutProgram,
+            Boolean withoutGrade,
+            Boolean withoutBoard,
+            Boolean unmapped,
+            com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             UUID statusId,
             List<UUID> statusIds,
             UUID boardId,
@@ -495,6 +501,24 @@ public class LeadServiceImpl implements ILeadService {
         }
         if (Boolean.TRUE.equals(withoutCourse)) {
             spec = andSpec(spec, filterWithoutCourse());
+        }
+        if (Boolean.TRUE.equals(withoutCourseType)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterWithoutCourseType());
+        }
+        if (Boolean.TRUE.equals(withoutProgram)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterWithoutProgram());
+        }
+        if (Boolean.TRUE.equals(withoutGrade)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterWithoutGrade());
+        }
+        if (Boolean.TRUE.equals(withoutBoard)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterWithoutBoard());
+        }
+        if (Boolean.TRUE.equals(unmapped)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterUnmapped());
+        }
+        if (registrationStatus != null) {
+            spec = andSpec(spec, LeadFilterSpecification.filterByRegistrationStatus(registrationStatus));
         }
         if (statusId != null) {
             spec = andSpec(spec, filterByStatus(statusId));
@@ -1456,6 +1480,22 @@ public class LeadServiceImpl implements ILeadService {
             lead.setVisitTime(null);
             lead.setVisitRemarks(null);
         }
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse updateRemarks(UUID id, String remarks) throws BadRequestException, UnauthorizedException {
+        Lead lead = leadRepository.findById(id)
+                .filter(l -> !l.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + id));
+
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        String trimmed = (remarks != null && !remarks.isBlank()) ? remarks.trim() : null;
+        lead.setRemarks(trimmed);
+        Lead saved = leadRepository.save(lead);
+        return leadMapper.toDto(saved);
     }
 
     private LeadResponse enrichWithActionEnforcement(LeadResponse dto, Lead lead, User currentUser) {

@@ -146,6 +146,11 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
             return unconstrained(lead.getId());
         }
 
+        // Action E: NOT_INTERESTED
+        if (isNotInterestedStatus(currentStatus)) {
+            return unconstrained(lead.getId());
+        }
+
         // 4. Check Follow-Up Qualification (Action B)
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
         LocalDateTime startOfToday = today.atStartOfDay();
@@ -153,21 +158,8 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
 
         List<LeadFollowUp> followUps = leadFollowUpRepository.findByLeadIdOrderByFollowUpDateDesc(lead.getId());
 
-        // Check if there is an active upcoming follow-up scheduled for future (tomorrow or later)
-        boolean hasFutureFollowUp = followUps.stream().anyMatch(f ->
-                !f.isDeleted() &&
-                !f.isCompleted() &&
-                f.getStatus() == FollowUpStatus.UPCOMING &&
-                f.getFollowUpDate() != null &&
-                !f.getFollowUpDate().isBefore(startOfTomorrow)
-        );
-
-        if (hasFutureFollowUp) {
-            return unconstrained(lead.getId());
-        }
-
-        // Check for today's follow-up handling:
-        // Find latest completed follow-up for today
+        // Check for today's follow-up completion:
+        // Find latest completed follow-up for today (whether today's pending or an upcoming follow-up completed manually today)
         Optional<LeadFollowUp> latestCompletedToday = followUps.stream()
                 .filter(f -> !f.isDeleted() && f.isCompleted() && f.getCompletedAt() != null
                         && f.getCompletedAt().toLocalDate().isEqual(today))
@@ -175,8 +167,7 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
 
         if (latestCompletedToday.isPresent()) {
             LocalDateTime completedAt = latestCompletedToday.get().getCompletedAt();
-            // A follow-up was completed today upon opening/handling.
-            // Completing follow-up does NOT automatically unlock the lead (Requirement 6).
+            // A follow-up was completed today. Completing follow-up does NOT automatically unlock the lead (Requirement 6).
             // It only unlocks if the counselor *also* scheduled a new uncompleted follow-up created after that completion!
             boolean hasNewFollowUpScheduledAfterCompletion = followUps.stream().anyMatch(f ->
                     !f.isDeleted() &&
@@ -192,6 +183,19 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
             // Lead still requires action!
             return restricted(lead.getId(), "MANDATORY_LEAD_ACTION",
                     "Follow-up completed. Please update the lead status before leaving this lead.");
+        }
+
+        // Check if there is an active upcoming follow-up scheduled for future (tomorrow or later)
+        boolean hasFutureFollowUp = followUps.stream().anyMatch(f ->
+                !f.isDeleted() &&
+                !f.isCompleted() &&
+                f.getStatus() == FollowUpStatus.UPCOMING &&
+                f.getFollowUpDate() != null &&
+                !f.getFollowUpDate().isBefore(startOfTomorrow)
+        );
+
+        if (hasFutureFollowUp) {
+            return unconstrained(lead.getId());
         }
 
         // Check if a follow-up was newly created TODAY during this session and is still active (not yet completed)
@@ -224,7 +228,7 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
 
     @Override
     public boolean isQualifyingStatus(LeadStatus status) {
-        return isRegisteredStatus(status) || isBadStatus(status) || isNotConnectedStatus(status);
+        return isRegisteredStatus(status) || isBadStatus(status) || isNotConnectedStatus(status) || isNotInterestedStatus(status);
     }
 
     @Override
@@ -242,6 +246,15 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
         String code = status.getCode() != null ? status.getCode().trim().toUpperCase(Locale.ROOT) : "";
         String name = status.getName() != null ? status.getName().trim().toUpperCase(Locale.ROOT) : "";
         return "BAD".equals(code) || "BAD".equals(name);
+    }
+
+    @Override
+    public boolean isNotInterestedStatus(LeadStatus status) {
+        if (status == null) return false;
+        String code = status.getCode() != null ? status.getCode().trim().toUpperCase(Locale.ROOT) : "";
+        String name = status.getName() != null ? status.getName().trim().toUpperCase(Locale.ROOT) : "";
+        return "NOT_INTERESTED".equals(code) || "NOT INTERESTED".equals(name)
+                || code.contains("NOT_INTERESTED") || name.contains("NOT INTERESTED");
     }
 
     @Override

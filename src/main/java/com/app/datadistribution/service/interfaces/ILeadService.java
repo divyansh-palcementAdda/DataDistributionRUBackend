@@ -27,6 +27,12 @@ public interface ILeadService {
             UUID courseTypeId,
             List<UUID> courseTypeIds,
             Boolean withoutCourse,
+            Boolean withoutCourseType,
+            Boolean withoutProgram,
+            Boolean withoutGrade,
+            Boolean withoutBoard,
+            Boolean unmapped,
+            com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             UUID statusId,
             List<UUID> statusIds,
             UUID boardId,
@@ -50,6 +56,49 @@ public interface ILeadService {
             List<UUID> leadStatusHistoryIds,
             String leadStatusHistory
     ) throws UnauthorizedException, BadRequestException;
+
+    default LeadPageResponse getAllLeads(
+            PageRequestDTO pageRequest,
+            List<UUID> leadSourceIds,
+            UUID courseId,
+            List<UUID> interestedCourseIds,
+            UUID registeredCourseId,
+            UUID courseTypeId,
+            List<UUID> courseTypeIds,
+            Boolean withoutCourse,
+            UUID statusId,
+            List<UUID> statusIds,
+            UUID boardId,
+            List<UUID> boardIds,
+            UUID gradeId,
+            List<UUID> gradeIds,
+            List<UUID> departmentIds,
+            List<UUID> assignedUserIds,
+            Boolean allotted,
+            Boolean multiSource,
+            Boolean availed,
+            UUID availedByUserId,
+            List<UUID> availedByUserIds,
+            java.time.LocalDate availedFrom,
+            java.time.LocalDate availedTo,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            java.time.LocalDate updatedFrom,
+            java.time.LocalDate updatedTo,
+            UUID leadStatusHistoryId,
+            List<UUID> leadStatusHistoryIds,
+            String leadStatusHistory
+    ) throws UnauthorizedException, BadRequestException {
+        return getAllLeads(
+                pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId,
+                courseTypeId, courseTypeIds, withoutCourse, null, null, null, null, null, null,
+                statusId, statusIds, boardId, boardIds, gradeId, gradeIds,
+                departmentIds, assignedUserIds, allotted, multiSource, availed,
+                availedByUserId, availedByUserIds, availedFrom, availedTo,
+                startDate, endDate, updatedFrom, updatedTo,
+                leadStatusHistoryId, leadStatusHistoryIds, leadStatusHistory
+        );
+    }
     LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, List<UUID> courseTypeIds, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, List<UUID> departmentIds, List<UUID> assignedUserIds, Boolean allotted, Boolean availed, UUID availedByUserId, List<UUID> availedByUserIds, java.time.LocalDate availedFrom, java.time.LocalDate availedTo, java.time.LocalDate startDate, java.time.LocalDate endDate, java.time.LocalDate updatedFrom, java.time.LocalDate updatedTo) throws UnauthorizedException, BadRequestException;
     LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds, Boolean availed) throws UnauthorizedException, BadRequestException;
     LeadPageResponse getAllLeads(PageRequestDTO pageRequest, List<UUID> leadSourceIds, UUID courseId, List<UUID> interestedCourseIds, UUID registeredCourseId, UUID courseTypeId, Boolean withoutCourse, UUID statusId, List<UUID> statusIds, UUID boardId, List<UUID> boardIds, UUID gradeId, List<UUID> gradeIds) throws UnauthorizedException, BadRequestException;
@@ -66,4 +115,5 @@ public interface ILeadService {
     Map<String, Long> getStatusWiseStats() throws UnauthorizedException, BadRequestException;
     LeadResponse manualApproveRegistration(UUID id, com.app.datadistribution.dto.lead.ManualRegistrationApprovalRequest request) throws UnauthorizedException, BadRequestException;
     LeadResponse retryCmsVerification(UUID id) throws UnauthorizedException, BadRequestException;
+    LeadResponse updateRemarks(UUID id, String remarks) throws BadRequestException, UnauthorizedException;
 }

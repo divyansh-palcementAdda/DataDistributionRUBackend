@@ -28,4 +28,6 @@ public interface ILeadActionEnforcementService {
     boolean isRegisteredStatus(LeadStatus status);
 
     boolean isBadStatus(LeadStatus status);
+
+    boolean isNotInterestedStatus(LeadStatus status);
 }

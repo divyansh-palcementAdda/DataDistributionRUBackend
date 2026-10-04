@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import com.app.datadistribution.common.PageResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -81,7 +82,7 @@ public class DepartmentController {
         summary = "Get paginated departments list",
         description = "Fetches a paginated list of departments supporting sorting, search keyword filtering, and active status filtering."
     )
-    public ResponseEntity<ApiResponse<Page<DepartmentResponse>>> getAllDepartments(
+    public ResponseEntity<ApiResponse<PageResponseDTO<DepartmentResponse>>> getAllDepartments(
             @Parameter(description = "Page number (0-indexed)", example = "0")
             @RequestParam(required = false, defaultValue = "0") int page,
             @Parameter(description = "Page size limit", example = "10")
@@ -102,7 +103,7 @@ public class DepartmentController {
                 .search(search)
                 .build();
         Page<DepartmentResponse> pageResponse = departmentService.getAllDepartments(pageRequest, active, search);
-        return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", pageResponse, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success("Departments retrieved successfully", PageResponseDTO.of(pageResponse.getContent(), pageResponse), HttpStatus.OK.value()));
     }
 
     @GetMapping("/departments/active")

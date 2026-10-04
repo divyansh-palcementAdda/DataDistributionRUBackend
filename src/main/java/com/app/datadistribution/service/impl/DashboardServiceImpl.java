@@ -233,6 +233,62 @@ public class DashboardServiceImpl implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getRegistrationRejectedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("REGISTRATION_REJECTED")
+                .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DashboardLeadCountResponseDTO getUnmappedLeadsCount(DashboardAnalyticsFilterRequest filterRequest, String dimension) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        String effectiveDim = (dimension != null && !dimension.isBlank()) ? dimension.trim().toUpperCase() : "ALL";
+
+        switch (effectiveDim) {
+            case "CATEGORY":
+            case "COURSETYPE":
+            case "COURSE_TYPE":
+                filterRequest.setWithoutCourseType(true);
+                break;
+            case "COURSE":
+            case "COURSES":
+                filterRequest.setWithoutCourse(true);
+                break;
+            case "PROGRAM":
+            case "PROGRAMS":
+            case "SPECIALIZATION":
+                filterRequest.setWithoutProgram(true);
+                break;
+            case "GRADE":
+            case "GRADES":
+                filterRequest.setWithoutGrade(true);
+                break;
+            case "BOARD":
+            case "BOARDS":
+                filterRequest.setWithoutBoard(true);
+                break;
+            case "ALL":
+            default:
+                filterRequest.setUnmapped(true);
+                break;
+        }
+
+        UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);
+        long count = dashboardAnalyticsRepository.fetchTotalMatchingLeads(dataScope, filterRequest);
+        return DashboardLeadCountResponseDTO.builder()
+                .type("UNMAPPED_" + effectiveDim)
+                .count(count)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public DashboardFollowUpCountResponseDTO getTodayFollowUpsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
         if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser(filterRequest);

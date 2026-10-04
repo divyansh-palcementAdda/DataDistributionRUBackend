@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.app.datadistribution.common.ApiResponse;
+import com.app.datadistribution.common.PageResponseDTO;
 import com.app.datadistribution.dto.email.EmailConfigStatusDTO;
 import com.app.datadistribution.dto.email.EmailLogResponseDTO;
 import com.app.datadistribution.dto.email.EmailResponse;
@@ -58,7 +59,7 @@ public class EmailController {
     @GetMapping("/logs")
     @PreAuthorize("hasAuthority('EMAIL_LOG_VIEW') or hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Get paginated audit logs of email deliveries")
-    public ResponseEntity<ApiResponse<Page<EmailLogResponseDTO>>> getEmailLogs(
+    public ResponseEntity<ApiResponse<PageResponseDTO<EmailLogResponseDTO>>> getEmailLogs(
             @RequestParam(value = "status", required = false) EmailStatus status,
             @RequestParam(value = "emailType", required = false) EmailType emailType,
             @RequestParam(value = "search", required = false) String search,
@@ -73,7 +74,7 @@ public class EmailController {
 
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<EmailLogResponseDTO> logs = emailService.getEmailLogs(status, emailType, search, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Email audit logs retrieved successfully", logs, HttpStatus.OK.value()));
+        return ResponseEntity.ok(ApiResponse.success("Email audit logs retrieved successfully", PageResponseDTO.of(logs.getContent(), logs), HttpStatus.OK.value()));
     }
 
     @GetMapping("/config/status")

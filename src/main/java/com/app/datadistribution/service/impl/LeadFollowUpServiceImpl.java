@@ -323,10 +323,13 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
 
         LeadFollowUp saved = leadFollowUpRepository.save(followUp);
 
-        // Sync lead next follow up date
+        // Sync lead next follow up date and remarks
         if (lead != null) {
             LocalDateTime nextActiveDate = leadFollowUpRepository.findEarliestActiveFollowUpDateByLeadId(lead.getId());
             lead.setNextFollowUpDate(nextActiveDate);
+            if (remarks != null && !remarks.isBlank()) {
+                lead.setRemarks(remarks.trim());
+            }
             leadRepository.save(lead);
         }
 
@@ -348,7 +351,15 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
                     .build());
         }
 
-        return leadMapper.toDto(saved);
+        LeadFollowUpResponse responseDto = leadMapper.toDto(saved);
+        if (leadActionEnforcementService != null && lead != null) {
+            com.app.datadistribution.dto.lead.LeadActionEnforcementDTO enforcement =
+                    leadActionEnforcementService.checkActionEnforcement(lead, currentUser);
+            responseDto.setActionEnforcement(enforcement);
+            responseDto.setLeadActionRequired(enforcement.isRestricted());
+        }
+
+        return responseDto;
     }
 
     @Override

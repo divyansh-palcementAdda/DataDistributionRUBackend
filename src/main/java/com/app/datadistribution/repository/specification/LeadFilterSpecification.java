@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.CourseType;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAvailed;
 import com.app.datadistribution.entity.LeadSource;
@@ -176,8 +177,84 @@ public class LeadFilterSpecification {
         };
     }
 
+    public static Specification<Lead> filterByRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus registrationStatus) {
+        return (root, query, cb) -> registrationStatus != null ? cb.equal(root.get("registrationStatus"), registrationStatus) : cb.conjunction();
+    }
+
     public static Specification<Lead> filterWithoutCourse() {
-        return (root, query, cb) -> cb.isNull(root.get("course"));
+        return (root, query, cb) -> {
+            Subquery<Integer> anyCourseSub = query.subquery(Integer.class);
+            Root<Lead> cSubRoot = anyCourseSub.from(Lead.class);
+            SetJoin<Lead, Course> cJoin = cSubRoot.joinSet("interestedCourses", JoinType.INNER);
+            anyCourseSub.select(cb.literal(1));
+            anyCourseSub.where(
+                    cb.equal(cSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(cJoin.get("isDeleted"))
+            );
+            return cb.and(cb.isNull(root.get("course")), cb.not(cb.exists(anyCourseSub)));
+        };
+    }
+
+    public static Specification<Lead> filterWithoutCourseType() {
+        return (root, query, cb) -> {
+            Subquery<Integer> ctSub = query.subquery(Integer.class);
+            Root<Lead> ctSubRoot = ctSub.from(Lead.class);
+            Join<Lead, Course> regJoin = ctSubRoot.join("course", JoinType.LEFT);
+            Join<Course, CourseType> regCtJoin = regJoin.join("courseType", JoinType.LEFT);
+            SetJoin<Lead, Course> intJoin = ctSubRoot.joinSet("interestedCourses", JoinType.LEFT);
+            Join<Course, CourseType> intCtJoin = intJoin.join("courseType", JoinType.LEFT);
+            ctSub.select(cb.literal(1));
+            ctSub.where(
+                    cb.equal(ctSubRoot.get("id"), root.get("id")),
+                    cb.or(
+                            cb.and(cb.isNotNull(regJoin.get("id")), cb.isNotNull(regCtJoin.get("id"))),
+                            cb.and(cb.isNotNull(intJoin.get("id")), cb.isNotNull(intCtJoin.get("id")))
+                    )
+            );
+            return cb.not(cb.exists(ctSub));
+        };
+    }
+
+    public static Specification<Lead> filterWithoutProgram() {
+        return (root, query, cb) -> cb.isNull(root.get("program"));
+    }
+
+    public static Specification<Lead> filterWithoutGrade() {
+        return (root, query, cb) -> cb.isNull(root.get("grade"));
+    }
+
+    public static Specification<Lead> filterWithoutBoard() {
+        return (root, query, cb) -> cb.isNull(root.get("board"));
+    }
+
+    public static Specification<Lead> filterUnmapped() {
+        return (root, query, cb) -> {
+            Subquery<Integer> anyCourseSub = query.subquery(Integer.class);
+            Root<Lead> cSubRoot = anyCourseSub.from(Lead.class);
+            SetJoin<Lead, Course> cJoin = cSubRoot.joinSet("interestedCourses", JoinType.INNER);
+            anyCourseSub.select(cb.literal(1));
+            anyCourseSub.where(
+                    cb.equal(cSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(cJoin.get("isDeleted"))
+            );
+
+            Subquery<Integer> anySourceSub = query.subquery(Integer.class);
+            Root<Lead> sSubRoot = anySourceSub.from(Lead.class);
+            SetJoin<Lead, LeadSource> sJoin = sSubRoot.joinSet("leadSources", JoinType.INNER);
+            anySourceSub.select(cb.literal(1));
+            anySourceSub.where(
+                    cb.equal(sSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(sJoin.get("isDeleted"))
+            );
+
+            return cb.or(
+                    cb.and(cb.isNull(root.get("course")), cb.not(cb.exists(anyCourseSub))),
+                    cb.isNull(root.get("program")),
+                    cb.isNull(root.get("grade")),
+                    cb.isNull(root.get("board")),
+                    cb.not(cb.exists(anySourceSub))
+            );
+        };
     }
 
     public static Specification<Lead> filterByBoard(UUID boardId) {

@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -79,13 +80,29 @@ public class LeadController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('LEAD_UPDATE')")
+    @PreAuthorize("hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ')")
     @Operation(summary = "Update an existing lead")
     public ResponseEntity<ApiResponse<LeadResponse>> update(
             @PathVariable("id") UUID id,
             @Valid @RequestBody LeadRequest request) throws BadRequestException, UnauthorizedException {
         LeadResponse response = leadService.update(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead updated successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PatchMapping("/{id}/remarks")
+    @PreAuthorize("hasAuthority('LEAD_UPDATE') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Update lead remarks")
+    public ResponseEntity<ApiResponse<LeadResponse>> updateRemarks(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) Map<String, Object> body) throws BadRequestException, UnauthorizedException {
+        String remarks = null;
+        if (body != null) {
+            Object val = body.get("remarks");
+            if (val == null) val = body.get("remark");
+            if (val != null) remarks = val.toString();
+        }
+        LeadResponse response = leadService.updateRemarks(id, remarks);
+        return ResponseEntity.ok(ApiResponse.success("Lead remarks updated successfully", response, HttpStatus.OK.value()));
     }
 
     @GetMapping("/{id}")
@@ -124,6 +141,12 @@ public class LeadController {
             @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
             @RequestParam(value = "courseTypeIds", required = false) List<UUID> courseTypeIds,
             @RequestParam(value = "withoutCourse", required = false) Boolean withoutCourse,
+            @RequestParam(value = "withoutCourseType", required = false) Boolean withoutCourseType,
+            @RequestParam(value = "withoutProgram", required = false) Boolean withoutProgram,
+            @RequestParam(value = "withoutGrade", required = false) Boolean withoutGrade,
+            @RequestParam(value = "withoutBoard", required = false) Boolean withoutBoard,
+            @RequestParam(value = "unmapped", required = false) Boolean unmapped,
+            @RequestParam(value = "registrationStatus", required = false) com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             @RequestParam(value = "statusId", required = false) UUID statusId,
             @RequestParam(value = "statusIds", required = false) List<UUID> statusIds,
             @RequestParam(value = "boardId", required = false) UUID boardId,
@@ -203,6 +226,12 @@ public class LeadController {
                 courseTypeId,
                 courseTypeIds,
                 withoutCourse,
+                withoutCourseType,
+                withoutProgram,
+                withoutGrade,
+                withoutBoard,
+                unmapped,
+                registrationStatus,
                 statusId,
                 statusIds,
                 boardId,

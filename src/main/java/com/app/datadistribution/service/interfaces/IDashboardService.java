@@ -17,6 +17,8 @@ public interface IDashboardService {
     DashboardLeadCountResponseDTO getUnallottedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
     DashboardLeadCountResponseDTO getAvailedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
     DashboardLeadCountResponseDTO getMultiSourceLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    DashboardLeadCountResponseDTO getRegistrationRejectedLeadsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    DashboardLeadCountResponseDTO getUnmappedLeadsCount(DashboardAnalyticsFilterRequest filterRequest, String dimension) throws UnauthorizedException, BadRequestException;
     DashboardFollowUpCountResponseDTO getTodayFollowUpsCount(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
 
     List<DashboardCardDTO> getResolvedCards() throws UnauthorizedException, BadRequestException;
