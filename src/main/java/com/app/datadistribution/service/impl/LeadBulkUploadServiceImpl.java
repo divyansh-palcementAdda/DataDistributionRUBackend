@@ -779,11 +779,17 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         if (colIndex == null) return null;
         Cell cell = row.getCell(colIndex);
         if (cell == null || cell.getCellType() == CellType.BLANK) return null;
+        if (cell.getCellType() == CellType.NUMERIC && !org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+            double num = cell.getNumericCellValue();
+            if (num == Math.floor(num) && !Double.isInfinite(num)) {
+                return new java.math.BigDecimal(String.format(java.util.Locale.US, "%.0f", num)).toPlainString();
+            }
+        }
         return formatter.formatCellValue(cell).trim();
     }
 
     private boolean isRowEmpty(Row row, DataFormatter formatter) {
-        if (row == null) return true;
+        if (row == null || row.getFirstCellNum() < 0) return true;
         for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
             Cell cell = row.getCell(c);
             if (cell != null && cell.getCellType() != CellType.BLANK) {

@@ -486,7 +486,39 @@ public class LeadController {
         BulkLeadUploadResponse response = leadBulkUploadService.bulkUploadLeads(
                 file, programId, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
         );
-        return ResponseEntity.ok(ApiResponse.success("Lead bulk upload processed successfully", response, HttpStatus.OK.value()));
+
+        if (response.getSuccessCount() == 0) {
+            String errorMsg = "No leads were created. ";
+            if (response.getTotalRows() == 0) {
+                errorMsg += "The uploaded file contains no data rows.";
+            } else if (response.getDuplicateCount() > 0 && response.getFailedCount() == 0) {
+                errorMsg += "All " + response.getDuplicateCount() + " lead(s) in the file already exist in the system (duplicate phone numbers).";
+            } else if (response.getFailedCount() > 0 && response.getDuplicateCount() == 0) {
+                String firstReason = (response.getFailedRows() != null && !response.getFailedRows().isEmpty())
+                        ? response.getFailedRows().get(0).getReason()
+                        : "validation errors";
+                errorMsg += response.getFailedCount() + " row(s) failed validation (e.g. " + firstReason + ").";
+            } else {
+                errorMsg += response.getFailedCount() + " row(s) failed validation and " + response.getDuplicateCount() + " duplicate(s) were found.";
+            }
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<BulkLeadUploadResponse>builder()
+                            .success(false)
+                            .message(errorMsg)
+                            .data(response)
+                            .status(HttpStatus.BAD_REQUEST.value())
+                            .build());
+        }
+
+        if (response.getFailedCount() > 0 || response.getDuplicateCount() > 0) {
+            String partialMsg = "Lead bulk upload partially processed. " + response.getSuccessCount() + " lead(s) created, "
+                    + response.getDuplicateCount() + " duplicate(s) skipped, "
+                    + response.getFailedCount() + " row(s) failed validation.";
+            return ResponseEntity.ok(ApiResponse.success(partialMsg, response, HttpStatus.OK.value()));
+        }
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Lead bulk upload processed successfully. " + response.getSuccessCount() + " lead(s) created.", response, HttpStatus.CREATED.value()));
     }
 
     @GetMapping("/bulk-upload/template")
