@@ -95,6 +95,15 @@ public class FollowUpController {
         return ResponseEntity.ok(ApiResponse.success("Follow-up marked completed successfully", response, HttpStatus.OK.value()));
     }
 
+    @PostMapping("/{id}/open")
+    @PreAuthorize("hasAuthority('FOLLOW_UP_OPEN') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Open a follow-up and automatically mark it completed if scheduled for today")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.lead.FollowUpOpenResponseDTO>> openFollowUp(
+            @PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
+        com.app.datadistribution.dto.lead.FollowUpOpenResponseDTO response = leadFollowUpService.openFollowUp(id);
+        return ResponseEntity.ok(ApiResponse.success("Follow-up opened and marked as completed", response, HttpStatus.OK.value()));
+    }
+
     @PatchMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('LEAD_FOLLOWUP_CREATE') or hasAuthority('FOLLOWUP_UPDATE')")
     @Operation(summary = "Mark a follow-up as cancelled (PATCH)")

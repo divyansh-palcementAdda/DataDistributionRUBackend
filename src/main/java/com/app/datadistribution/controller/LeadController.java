@@ -67,6 +67,7 @@ public class LeadController {
     private final ILeadDistributionService leadDistributionService;
     private final ICourseTemplateService courseTemplateService;
     private final ILeadBulkUploadService leadBulkUploadService;
+    private final com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('LEAD_CREATE')")
@@ -93,6 +94,15 @@ public class LeadController {
     public ResponseEntity<ApiResponse<LeadResponse>> getById(@PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
         LeadResponse response = leadService.getById(id);
         return ResponseEntity.ok(ApiResponse.success("Lead fetched successfully", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/{id}/action-enforcement")
+    @PreAuthorize("hasAuthority('LEAD_READ') or hasAuthority('LEAD_MANDATORY_ACTION_VIEW')")
+    @Operation(summary = "Get mandatory lead action enforcement state")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.lead.LeadActionEnforcementDTO>> getActionEnforcement(
+            @PathVariable("id") UUID id) throws UnauthorizedException, BadRequestException {
+        com.app.datadistribution.dto.lead.LeadActionEnforcementDTO response = leadActionEnforcementService.checkActionEnforcement(id);
+        return ResponseEntity.ok(ApiResponse.success("Lead action enforcement state fetched successfully", response, HttpStatus.OK.value()));
     }
 
     @GetMapping

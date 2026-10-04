@@ -23,6 +23,7 @@ import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.ILeadFollowUpService;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -52,6 +53,7 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
     private final ILeadDataScopeService leadDataScopeService;
     private final ILeadStatusTransitionService leadStatusTransitionService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
 
     @Override
     @Transactional
@@ -160,7 +162,17 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
                     .build());
         }
 
-        return leadMapper.toDto(saved);
+        LeadFollowUpResponse responseDto = leadMapper.toDto(saved);
+        if (leadActionEnforcementService != null) {
+            com.app.datadistribution.dto.lead.LeadActionEnforcementDTO enforcement =
+                    leadActionEnforcementService.checkActionEnforcement(lead, currentUser);
+            responseDto.setActionEnforcement(enforcement);
+            responseDto.setLeadActionRequired(enforcement.isRestricted());
+            log.info("MANDATORY_LEAD_ACTION_COMPLETED - leadId={}, userId={}, action=FOLLOW_UP, followUpId={}, restricted={}",
+                    lead.getId(), currentUser.getId(), saved.getId(), enforcement.isRestricted());
+        }
+
+        return responseDto;
     }
 
     @Override
@@ -517,6 +529,121 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             default:
                 throw new BadRequestException("Unsupported status update transition to " + target);
         }
+    }
+
+    @Override
+    @Transactional
+    public com.app.datadistribution.dto.lead.FollowUpOpenResponseDTO openFollowUp(UUID followUpId) throws UnauthorizedException, BadRequestException {
+        if (followUpId == null) {
+            throw new BadRequestException("Follow-up ID is required.");
+        }
+
+        LeadFollowUp followUp = leadFollowUpRepository.findById(followUpId)
+                .filter(f -> !f.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Follow-up not found with id: " + followUpId));
+
+        Lead lead = followUp.getLead();
+        if (lead == null || lead.isDeleted()) {
+            throw new ResourcesNotFoundException("Associated lead not found or deleted for follow-up: " + followUpId);
+        }
+
+        User currentUser = getCurrentUserEntity();
+
+        // 1. Validate assigned user (or admin/hod)
+        boolean isAssignedUser = (lead.getAssignedTo() != null && currentUser != null && lead.getAssignedTo().getId().equals(currentUser.getId()))
+                || (followUp.getAssignedTo() != null && currentUser != null && followUp.getAssignedTo().getId().equals(currentUser.getId()));
+        UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
+        boolean isPrivileged = dataScope != null && (dataScope.isAdmin() || dataScope.isHod());
+        if (!isAssignedUser && !isPrivileged) {
+            throw new UnauthorizedException("Only the assigned counselor can open and complete this follow-up.");
+        }
+
+        // 2. Validate follow-up is for today (Asia/Kolkata timezone)
+        java.time.ZoneId businessZone = java.time.ZoneId.of("Asia/Kolkata");
+        LocalDate today = LocalDate.now(businessZone);
+        if (followUp.getFollowUpDate() == null) {
+            throw new BadRequestException("Follow-up has no scheduled date.");
+        }
+        LocalDate scheduledDate = followUp.getFollowUpDate().toLocalDate();
+
+        if (scheduledDate.isAfter(today)) {
+            throw new BadRequestException("Future follow-ups scheduled for " + scheduledDate + " cannot be automatically completed upon opening.");
+        }
+        if (scheduledDate.isBefore(today)) {
+            throw new BadRequestException("Past/missed follow-ups cannot be automatically completed upon opening.");
+        }
+
+        // 3. Validate status invariants
+        if (followUp.getStatus() == FollowUpStatus.CANCELLED) {
+            throw new BadRequestException("Cancelled follow-ups cannot be completed upon opening.");
+        }
+        if (followUp.getStatus() == FollowUpStatus.NOT_CONNECTED) {
+            throw new BadRequestException("Not Connected follow-ups cannot be completed upon opening.");
+        }
+
+        // 4. Idempotent check for rapid double-clicks (Case 17)
+        if (followUp.isCompleted() && followUp.getStatus() == FollowUpStatus.COMPLETED) {
+            com.app.datadistribution.dto.lead.LeadActionEnforcementDTO enforcement =
+                    leadActionEnforcementService.checkActionEnforcement(lead, currentUser);
+            return com.app.datadistribution.dto.lead.FollowUpOpenResponseDTO.builder()
+                    .followUpId(followUp.getId())
+                    .leadId(lead.getId())
+                    .status(followUp.getStatus())
+                    .completed(true)
+                    .completedAt(followUp.getCompletedAt())
+                    .leadActionRequired(enforcement.isRestricted())
+                    .actionEnforcement(enforcement)
+                    .build();
+        }
+
+        // 5. Mark COMPLETED
+        LocalDateTime completedAt = LocalDateTime.now(businessZone);
+        followUp.setStatus(FollowUpStatus.COMPLETED);
+        followUp.setCompleted(true);
+        followUp.setCompletedAt(completedAt);
+
+        String currentRemarks = followUp.getRemarks();
+        String openRemarks = "Follow-up opened and automatically marked as completed by assigned counselor";
+        followUp.setRemarks(currentRemarks != null && !currentRemarks.isBlank() ? currentRemarks + " | " + openRemarks : openRemarks);
+
+        LeadFollowUp saved = leadFollowUpRepository.save(followUp);
+
+        // 6. Sync lead next follow-up date
+        LocalDateTime nextActiveDate = leadFollowUpRepository.findEarliestActiveFollowUpDateByLeadId(lead.getId());
+        lead.setNextFollowUpDate(nextActiveDate);
+        leadRepository.save(lead);
+
+        // 7. Publish event for notification/audit
+        if (eventPublisher != null) {
+            User assigned = followUp.getAssignedTo() != null ? followUp.getAssignedTo() : lead.getAssignedTo();
+            eventPublisher.publishEvent(FollowUpCompletedEvent.builder()
+                    .followUpId(saved.getId())
+                    .leadId(lead.getId())
+                    .assignedUserId(assigned != null ? assigned.getId() : null)
+                    .scheduledDate(followUp.getFollowUpDate())
+                    .completedAt(completedAt)
+                    .remarks(saved.getRemarks())
+                    .finalStatus("COMPLETED")
+                    .completedByUserId(currentUser.getId())
+                    .build());
+        }
+
+        log.info("Follow-up {} automatically marked COMPLETED upon being opened by user {} for lead {}",
+                followUp.getId(), currentUser.getUsername(), lead.getLeadCode());
+
+        // 8. Lead still requires action (Requirement 6)
+        com.app.datadistribution.dto.lead.LeadActionEnforcementDTO enforcement =
+                leadActionEnforcementService.checkActionEnforcement(lead, currentUser);
+
+        return com.app.datadistribution.dto.lead.FollowUpOpenResponseDTO.builder()
+                .followUpId(saved.getId())
+                .leadId(lead.getId())
+                .status(saved.getStatus())
+                .completed(saved.isCompleted())
+                .completedAt(saved.getCompletedAt())
+                .leadActionRequired(enforcement.isRestricted())
+                .actionEnforcement(enforcement)
+                .build();
     }
 
     private User getCurrentUserEntity() throws UnauthorizedException {

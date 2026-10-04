@@ -104,6 +104,8 @@ public class LeadServiceImpl implements ILeadService {
     private final com.app.datadistribution.service.interfaces.ILocationService locationService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.app.datadistribution.service.interfaces.ILeadFieldSecurityService leadFieldSecurityService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -355,14 +357,15 @@ public class LeadServiceImpl implements ILeadService {
             lead.setNextFollowUpDate(request.getNextFollowUpDate());
         }
 
+        User currentUser = null;
+        try {
+            currentUser = getCurrentUserEntity();
+        } catch (Exception e) {
+            log.warn("Could not resolve authenticated user for lead update");
+        }
+
         Lead updated;
         if (newStatus != null && (oldStatus == null || !oldStatus.getId().equals(newStatus.getId()))) {
-            User currentUser = null;
-            try {
-                currentUser = getCurrentUserEntity();
-            } catch (Exception e) {
-                log.warn("Could not resolve authenticated user for lead update status audit");
-            }
             String remark = request.getRemarks() != null && !request.getRemarks().isBlank()
                     ? request.getRemarks()
                     : "Lead status updated via general lead update.";
@@ -371,7 +374,7 @@ public class LeadServiceImpl implements ILeadService {
         } else {
             updated = leadRepository.save(lead);
         }
-        LeadResponse responseDto = leadMapper.toDto(updated);
+        LeadResponse responseDto = enrichWithActionEnforcement(leadMapper.toDto(updated), updated, currentUser);
         if (leadFieldSecurityService != null) {
             return leadFieldSecurityService.sanitizeResponse(responseDto);
         }
@@ -396,6 +399,11 @@ public class LeadServiceImpl implements ILeadService {
                         dto.setAvailedAt(la.getAvailedAt());
                         dto.setAvailedBy(userMapper.toSummaryDto(la.getAvailedByUser()));
                     });
+        }
+        try {
+            User currentUser = getCurrentUserEntity();
+            enrichWithActionEnforcement(dto, lead, currentUser);
+        } catch (Exception ignored) {
         }
         if (leadFieldSecurityService != null) {
             return leadFieldSecurityService.sanitizeResponse(dto);
@@ -765,7 +773,7 @@ public class LeadServiceImpl implements ILeadService {
             if (isRegisteredStatus(newStatus)) {
                 if (!statusChanged && lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED) {
                     log.info("[changeStatus] Lead {} is already REGISTERED and verified. Idempotent return.", lead.getLeadCode());
-                    return leadMapper.toDto(lead);
+                    return enrichWithActionEnforcement(leadMapper.toDto(lead), lead, currentUser);
                 }
 
                 com.app.datadistribution.integration.cms.dto.StudentVerificationRequest verificationReq =
@@ -860,7 +868,7 @@ public class LeadServiceImpl implements ILeadService {
             log.info("[changeStatus] Saved LeadFeedback [ID: {}] for lead {}",
                     savedFeedback != null ? savedFeedback.getId() : "persisted", lead.getLeadCode());
 
-            LeadResponse response = leadMapper.toDto(updated);
+            LeadResponse response = enrichWithActionEnforcement(leadMapper.toDto(updated), updated, currentUser);
             log.info("[changeStatus] Successfully completed status change for lead {}. Returned DTO status: {}",
                     lead.getLeadCode(), (response != null && response.getCurrentStatus() != null) ? response.getCurrentStatus().getName() : "null");
             return response;
@@ -932,7 +940,7 @@ public class LeadServiceImpl implements ILeadService {
         leadFeedbackRepository.save(fb);
 
         log.info("Lead {} registration manually approved by user {}", lead.getLeadCode(), currentUser.getUsername());
-        return leadMapper.toDto(updated);
+        return enrichWithActionEnforcement(leadMapper.toDto(updated), updated, currentUser);
     }
 
     @Override
@@ -999,7 +1007,7 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("REGISTERED status not found"));
 
             Lead updated = changeLeadStatusInternal(lead, registeredStatus, currentUser, "Student verified with CMS on retry.");
-            return leadMapper.toDto(updated);
+            return enrichWithActionEnforcement(leadMapper.toDto(updated), updated, currentUser);
         } else {
             lead.setRegistrationStatus(com.app.datadistribution.enums.RegistrationStatus.CHECK_REJECTED);
             String reason = verificationResp.getMessage() != null && !verificationResp.getMessage().isBlank()
@@ -1448,5 +1456,18 @@ public class LeadServiceImpl implements ILeadService {
             lead.setVisitTime(null);
             lead.setVisitRemarks(null);
         }
+    }
+
+    private LeadResponse enrichWithActionEnforcement(LeadResponse dto, Lead lead, User currentUser) {
+        if (dto != null && lead != null && leadActionEnforcementService != null) {
+            try {
+                if (currentUser == null) {
+                    currentUser = getCurrentUserEntity();
+                }
+                dto.setActionEnforcement(leadActionEnforcementService.checkActionEnforcement(lead, currentUser));
+            } catch (Exception ignored) {
+            }
+        }
+        return dto;
     }
 }

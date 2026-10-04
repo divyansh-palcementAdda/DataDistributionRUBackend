@@ -239,6 +239,7 @@ public interface LeadMapper {
 
     // --- LeadFollowUp ---
     @Mapping(source = "createdByUser", target = "createdBy")
+    @Mapping(source = "lead.id", target = "leadId")
     LeadFollowUpResponse toDto(LeadFollowUp followUp);
 
     default CourseSummaryDTO mapCourse(Course course) {

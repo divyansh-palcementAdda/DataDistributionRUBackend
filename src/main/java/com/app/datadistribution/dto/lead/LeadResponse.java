@@ -74,6 +74,8 @@ public class LeadResponse {
     private Integer cmsMatchScore;
     private String cmsMatchedStudentData;
 
+    private LeadActionEnforcementDTO actionEnforcement;
+
 
 
     @JsonProperty("lastConnected")

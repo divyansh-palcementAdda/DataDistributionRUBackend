@@ -144,12 +144,16 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.LEAD_BULK_REASSIGN, PermissionEntity.LEAD, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.ASSIGN, "Bulk reassign selected leads to counselors");
         reg(map, PermissionType.LEAD_INTERESTED_COURSE_UPDATE, PermissionEntity.LEAD, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPDATE, "Update interested courses on a lead");
         reg(map, PermissionType.LEAD_REGISTERED_COURSE_UPDATE, PermissionEntity.LEAD, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPDATE, "Update registered courses on a lead");
+        reg(map, PermissionType.LEAD_MANDATORY_ACTION_VIEW, PermissionEntity.LEAD, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View mandatory lead action enforcement status");
+        reg(map, PermissionType.LEAD_MANDATORY_ACTION_MANAGE, PermissionEntity.LEAD, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.MANAGE, "Manage and configure mandatory lead action enforcement rules");
 
         // Follow Up
         reg(map, PermissionType.FOLLOWUP_VIEW, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View scheduled follow-ups");
         reg(map, PermissionType.FOLLOWUP_CREATE, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.CREATE, "Create follow-up task");
         reg(map, PermissionType.FOLLOWUP_UPDATE, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPDATE, "Update follow-up status or schedule");
         reg(map, PermissionType.FOLLOWUP_DELETE, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.DELETE, "Cancel or delete follow-up task");
+        reg(map, PermissionType.FOLLOW_UP_OPEN, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "Open scheduled follow-up for handling");
+        reg(map, PermissionType.FOLLOW_UP_AUTO_COMPLETE, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPDATE, "Automatically mark follow-up completed upon opening");
         reg(map, PermissionType.FOLLOW_UP_REASSIGN, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.ASSIGN, "Reassign follow-up task to another counselor");
         reg(map, PermissionType.FOLLOW_UP_BULK_REASSIGN, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.ASSIGN, "Bulk reassign follow-ups across counselors");
         reg(map, PermissionType.FOLLOW_UP_REASSIGN_OVERRIDE_WORKLOAD, PermissionEntity.FOLLOW_UP, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.MANAGE, "Override counselor workload limit when reassigning follow-ups");
