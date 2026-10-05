@@ -48,6 +48,10 @@ class UserServiceDepartmentValidationTest {
     private UserMapper userMapper;
     @Mock
     private IActivityLogService activityLogService;
+    @Mock
+    private com.app.datadistribution.security.UserSecurityValidator userSecurityValidator;
+    @Mock
+    private com.app.datadistribution.config.UserManagementProperties userManagementProperties;
 
     @InjectMocks
     private UserServiceImpl userService;

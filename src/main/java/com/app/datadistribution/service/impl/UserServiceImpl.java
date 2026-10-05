@@ -17,6 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.config.UserManagementProperties;
+import com.app.datadistribution.dto.user.RoleOptionDTO;
+import com.app.datadistribution.dto.user.UserCreationOptionsResponse;
 import com.app.datadistribution.dto.user.UserPageResponse;
 import com.app.datadistribution.dto.user.UserRequest;
 import com.app.datadistribution.dto.user.UserResponse;
@@ -34,9 +37,12 @@ import com.app.datadistribution.mapper.UserMapper;
 import com.app.datadistribution.repository.DepartmentRepository;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.security.UserSecurityValidator;
 import com.app.datadistribution.service.interfaces.IActivityLogService;
 import com.app.datadistribution.service.interfaces.IUserService;
 
+import java.util.Collections;
+import java.util.Comparator;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +59,8 @@ public class UserServiceImpl implements IUserService {
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final IActivityLogService activityLogService;
+    private final UserSecurityValidator userSecurityValidator;
+    private final UserManagementProperties userManagementProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -129,6 +137,7 @@ public class UserServiceImpl implements IUserService {
     @Transactional
     public UserResponse createUser(UserRequest request) throws BadRequestException {
     	System.err.println("User create api showing userRequest :- "+ request);
+        userSecurityValidator.validateRoleAssignment(request.getRoles(), Collections.emptySet());
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
         }
@@ -207,6 +216,11 @@ public class UserServiceImpl implements IUserService {
         User user = userRepository.findById(userId)
                 .filter(u -> !u.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("User not found with id: " + userId));
+
+        userSecurityValidator.validateRoleAssignment(
+                request.getRoles(),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+        );
 
         if (!user.getUsername().equalsIgnoreCase(request.getUsername()) && userRepository.existsByUsername(request.getUsername())) {
             throw new DuplicateResourceException("Username is already taken: " + request.getUsername());
@@ -303,6 +317,11 @@ public class UserServiceImpl implements IUserService {
         Role role = roleRepository.findByIdAndIsDeletedFalse(roleId)
                 .orElseThrow(() -> new ResourcesNotFoundException("Role not found with id: " + roleId));
 
+        userSecurityValidator.validateRoleAssignment(
+                Collections.singleton(role.getName()),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+        );
+
         if (!role.isActive()) {
             throw new BadRequestException("Cannot assign inactive role '" + role.getName() + "' to user");
         }
@@ -317,6 +336,27 @@ public class UserServiceImpl implements IUserService {
         log.info("Assigned role '{}' to user '{}'", role.getName(), user.getUsername());
         activityLogService.logActivity(ActivityType.USER_ROLE_CHANGED, 
                 String.format("Changed role of user '%s' to '%s'", user.getUsername(), role.getName()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserCreationOptionsResponse getUserCreationOptions() {
+        List<RoleOptionDTO> roleOptions = roleRepository.findAll().stream()
+                .filter(r -> r != null && r.isActive() && !r.isDeleted())
+                .filter(userSecurityValidator::isRoleAllowedForCreation)
+                .sorted(Comparator.comparing(Role::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .map(r -> RoleOptionDTO.builder()
+                        .id(r.getId())
+                        .code(r.getName())
+                        .name(r.getName())
+                        .description(r.getDescription())
+                        .build())
+                .collect(Collectors.toList());
+
+        return UserCreationOptionsResponse.builder()
+                .roles(roleOptions)
+                .allowAdminCreation(userManagementProperties.isAllowAdminCreation())
+                .build();
     }
 
     private UserPageResponse toUserPageResponse(Page<User> userPage) {

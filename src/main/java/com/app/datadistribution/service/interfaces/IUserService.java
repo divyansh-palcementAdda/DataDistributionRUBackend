@@ -26,4 +26,7 @@ public interface IUserService {
     void deleteUser(UUID userId) throws ResourcesNotFoundException;
 
     void assignRole(UUID userId, UUID roleId) throws ResourcesNotFoundException, BadRequestException;
+
+    com.app.datadistribution.dto.user.UserCreationOptionsResponse getUserCreationOptions();
 }
+

@@ -81,6 +81,7 @@ public class DropdownServiceImpl implements IDropdownService {
     private final IUserDataScopeService userDataScopeService;
     private final ILeadDataScopeService leadDataScopeService;
     private final com.app.datadistribution.service.interfaces.ILocationService locationService;
+    private final com.app.datadistribution.security.UserSecurityValidator userSecurityValidator;
 
     @Override
     public List<UserDropdownResponse> getUsersDropdown(UUID departmentId, String role, String search)
@@ -487,6 +488,7 @@ public class DropdownServiceImpl implements IDropdownService {
     public List<DropdownOptionResponse> getRolesDropdown(String search) {
         List<Role> roles = roleRepository.findAll().stream()
                 .filter(r -> r != null && r.isActive() && !r.isDeleted())
+                .filter(r -> userSecurityValidator == null || userSecurityValidator.isRoleAllowedForCreation(r))
                 .filter(r -> {
                     if (search == null || search.isBlank()) return true;
                     String pattern = search.trim().toLowerCase();
@@ -499,7 +501,7 @@ public class DropdownServiceImpl implements IDropdownService {
                 .map(r -> DropdownOptionResponse.builder()
                         .id(r.getId())
                         .name(r.getName())
-                        .code(null)
+                        .code(r.getName())
                         .build())
                 .collect(Collectors.toList());
     }

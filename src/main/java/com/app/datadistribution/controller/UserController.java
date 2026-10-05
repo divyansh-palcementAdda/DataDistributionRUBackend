@@ -129,6 +129,14 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", response, HttpStatus.OK.value()));
     }
 
+    @GetMapping("/creation-options")
+    @PreAuthorize("hasAuthority('USER_READ') or hasAuthority('USER_CREATE')")
+    @Operation(summary = "Get user creation options including available roles and configuration status")
+    public ResponseEntity<ApiResponse<com.app.datadistribution.dto.user.UserCreationOptionsResponse>> getUserCreationOptions() {
+        com.app.datadistribution.dto.user.UserCreationOptionsResponse response = userService.getUserCreationOptions();
+        return ResponseEntity.ok(ApiResponse.success("User creation options retrieved successfully", response, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('USER_READ')")
     @Operation(summary = "Get user details by ID")

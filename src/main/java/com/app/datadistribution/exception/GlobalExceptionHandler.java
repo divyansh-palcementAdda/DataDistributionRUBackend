@@ -114,8 +114,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({AccessDeniedException.class, com.app.datadistribution.exception.AccessDeniedException.class})
 	public ResponseEntity<ApiResponse<Void>> handleAccessDenied(Exception ex) {
 		log.warn("Access denied: {}", ex.getMessage());
+		String message = ex.getMessage();
+		if (message == null || message.isBlank()) {
+			message = "Access Denied";
+		}
 		return ResponseEntity.status(HttpStatus.FORBIDDEN)
-				.body(ApiResponse.error("Access Denied: " + ex.getMessage(), HttpStatus.FORBIDDEN.value()));
+				.body(ApiResponse.error(message, HttpStatus.FORBIDDEN.value()));
 	}
 
 	@ExceptionHandler(DataIntegrityViolationException.class)

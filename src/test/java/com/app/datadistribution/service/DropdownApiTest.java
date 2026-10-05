@@ -93,6 +93,8 @@ class DropdownApiTest {
     private IUserDataScopeService userDataScopeService;
     @Mock
     private ILeadDataScopeService leadDataScopeService;
+    @Mock
+    private com.app.datadistribution.security.UserSecurityValidator userSecurityValidator;
 
     @InjectMocks
     private DropdownServiceImpl dropdownService;
@@ -300,6 +302,7 @@ class DropdownApiTest {
         Role role = Role.builder().name("COUNSELOR").active(true).build();
         role.setId(UUID.randomUUID());
         when(roleRepository.findAll()).thenReturn(List.of(role));
+        when(userSecurityValidator.isRoleAllowedForCreation(any())).thenReturn(true);
         List<DropdownOptionResponse> roles = dropdownService.getRolesDropdown(null);
         assertEquals(1, roles.size());
         assertEquals("COUNSELOR", roles.get(0).getName());
