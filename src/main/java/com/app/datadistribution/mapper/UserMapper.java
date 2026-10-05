@@ -24,9 +24,10 @@ public interface UserMapper {
     UserResponse toDto(User user);
 
     /**
-     * Maps only safe, non-sensitive fields. Used for all nested user references
-     * (createdBy, assignedTo, changedBy, etc.) in response DTOs.
+     * Maps safe summary fields. Used for nested user references and department user listings.
      */
+    @Mapping(source = "roles", target = "roles", qualifiedByName = "mapRolesToNames")
+    @Mapping(source = "roles", target = "role", qualifiedByName = "mapPrimaryRole")
     UserSummaryResponse toSummaryDto(User user);
 
     @Mapping(target = "roles", ignore = true)
@@ -45,6 +46,19 @@ public interface UserMapper {
         return roles.stream()
                 .map(Role::getName)
                 .collect(Collectors.toSet());
+    }
+
+    @Named("mapPrimaryRole")
+    default String mapPrimaryRole(Set<Role> roles) {
+        if (roles == null || roles.isEmpty()) return null;
+        for (Role r : roles) {
+            String name = r.getName();
+            if ("SUPER_ADMIN".equalsIgnoreCase(name) || "ADMIN".equalsIgnoreCase(name)
+                    || "HOD".equalsIgnoreCase(name) || "COUNSELOR".equalsIgnoreCase(name)) {
+                return name;
+            }
+        }
+        return roles.iterator().next().getName();
     }
 
     @Named("mapRolesToPermissions")

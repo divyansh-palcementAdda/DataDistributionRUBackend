@@ -1,5 +1,7 @@
 package com.app.datadistribution.dto.user;
 
+import com.app.datadistribution.enums.HodAccessType;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,8 +11,7 @@ import lombok.Setter;
 
 /**
  * Lightweight user summary used in nested/contextual references (createdBy, assignedTo,
- * changedBy, etc.). Does NOT expose sensitive fields like roles, permissions, or auth metadata.
- * For full user details use {@link UserResponse} via the /api/users endpoints.
+ * changedBy, etc.) and department user listings.
  */
 @Getter
 @Setter
@@ -24,5 +25,10 @@ public class UserSummaryResponse {
     private String lastName;
     private String username;
     private String email;
+    private String phone;
+    private Boolean active;
     private String profileImage;
+    private Set<String> roles;
+    private String role;
+    private HodAccessType hodAccessType;
 }
