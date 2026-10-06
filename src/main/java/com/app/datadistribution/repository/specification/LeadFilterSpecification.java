@@ -14,6 +14,7 @@ import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAvailed;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.Program;
 
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -215,8 +216,34 @@ public class LeadFilterSpecification {
         };
     }
 
+    public static Specification<Lead> filterByProgramIds(java.util.Collection<UUID> programIds) {
+        if (programIds == null || programIds.isEmpty()) return null;
+        return (root, query, cb) -> {
+            query.distinct(true);
+            jakarta.persistence.criteria.SetJoin<Lead, Program> progSetJoin = root.joinSet("programs", JoinType.LEFT);
+            jakarta.persistence.criteria.Join<Lead, Program> progJoin = root.join("program", JoinType.LEFT);
+            return cb.or(
+                progSetJoin.get("id").in(programIds),
+                progJoin.get("id").in(programIds)
+            );
+        };
+    }
+
     public static Specification<Lead> filterWithoutProgram() {
-        return (root, query, cb) -> cb.isNull(root.get("program"));
+        return (root, query, cb) -> {
+            Subquery<Integer> progSub = query.subquery(Integer.class);
+            Root<Lead> pSubRoot = progSub.from(Lead.class);
+            jakarta.persistence.criteria.SetJoin<Lead, Program> pJoin = pSubRoot.joinSet("programs", JoinType.INNER);
+            progSub.select(cb.literal(1));
+            progSub.where(
+                    cb.equal(pSubRoot.get("id"), root.get("id")),
+                    cb.isFalse(pJoin.get("isDeleted"))
+            );
+            return cb.and(
+                    cb.isNull(root.get("program")),
+                    cb.not(cb.exists(progSub))
+            );
+        };
     }
 
     public static Specification<Lead> filterWithoutGrade() {

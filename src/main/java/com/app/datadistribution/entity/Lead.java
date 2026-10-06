@@ -135,6 +135,41 @@ public class Lead extends BaseEntity {
     @JoinColumn(name = "program_id")
     private Program program;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "lead_programs",
+        joinColumns = @JoinColumn(name = "lead_id"),
+        inverseJoinColumns = @JoinColumn(name = "program_id")
+    )
+    @Builder.Default
+    private Set<Program> programs = new HashSet<>();
+
+    public Set<Program> getPrograms() {
+        if (this.programs == null) {
+            this.programs = new HashSet<>();
+        }
+        return this.programs;
+    }
+
+    public void setPrograms(Set<Program> programs) {
+        this.programs = programs != null ? new HashSet<>(programs) : new HashSet<>();
+        if (this.programs.isEmpty()) {
+            this.program = null;
+        } else {
+            this.program = this.programs.iterator().next();
+        }
+    }
+
+    public void setProgram(Program program) {
+        this.program = program;
+        if (program != null) {
+            if (this.programs == null) {
+                this.programs = new HashSet<>();
+            }
+            this.programs.add(program);
+        }
+    }
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department;

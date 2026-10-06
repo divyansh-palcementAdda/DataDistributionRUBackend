@@ -34,6 +34,22 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, JpaSpecif
         return findActiveCoursesByProgramId(programId, Status.ACTIVE);
     }
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"programs", "courseType"})
+    @Query("SELECT DISTINCT c FROM Course c JOIN c.programs p WHERE p.id IN :programIds AND c.isDeleted = false AND c.status = :status ORDER BY c.courseName ASC")
+    List<Course> findActiveCoursesByProgramIds(@Param("programIds") java.util.Collection<UUID> programIds, @Param("status") Status status);
+
+    default List<Course> findActiveCoursesByProgramIds(java.util.Collection<UUID> programIds) {
+        return findActiveCoursesByProgramIds(programIds, Status.ACTIVE);
+    }
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"programs", "courseType"})
+    @Query("SELECT c FROM Course c WHERE c.isDeleted = false AND c.status = :status ORDER BY c.courseName ASC")
+    List<Course> findActiveCoursesWithProgramsAndType(@Param("status") Status status);
+
+    default List<Course> findActiveCoursesWithProgramsAndType() {
+        return findActiveCoursesWithProgramsAndType(Status.ACTIVE);
+    }
+
     @Query("SELECT c FROM Course c JOIN c.programs p WHERE p.id = :programId AND c.courseType.id = :courseTypeId AND c.isDeleted = false AND c.status = :status ORDER BY c.courseName ASC")
     List<Course> findActiveCoursesByProgramIdAndCourseTypeId(@Param("programId") UUID programId, @Param("courseTypeId") UUID courseTypeId, @Param("status") Status status);
 

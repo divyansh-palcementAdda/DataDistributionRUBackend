@@ -1,5 +1,21 @@
 package com.app.datadistribution.service.impl;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.app.datadistribution.dto.dropdown.CourseDropdownResponse;
 import com.app.datadistribution.dto.dropdown.DropdownOptionResponse;
 import com.app.datadistribution.dto.dropdown.DropdownPageResponse;
@@ -21,8 +37,8 @@ import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.SentimentCategory;
 import com.app.datadistribution.enums.Status;
-import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.AccessDeniedException;
+import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.UnauthorizedException;
 import com.app.datadistribution.repository.BoardRepository;
 import com.app.datadistribution.repository.CourseRepository;
@@ -38,28 +54,15 @@ import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
-import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.IDropdownService;
 import com.app.datadistribution.service.interfaces.ILeadDataScopeService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
+
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -389,15 +392,24 @@ public class DropdownServiceImpl implements IDropdownService {
     }
 
     @Override
-    public List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, String search) {
+    public List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, List<UUID> programIds, String search) {
         List<Course> courses;
-        if (programId != null) {
-            courses = courseRepository.findActiveCoursesByProgramId(programId).stream()
+        List<UUID> effectiveProgIds = (programIds != null && !programIds.isEmpty())
+                ? programIds.stream().filter(Objects::nonNull).collect(Collectors.toList())
+                : (programId != null ? List.of(programId) : Collections.emptyList());
+
+        if (!effectiveProgIds.isEmpty()) {
+            courses = courseRepository.findActiveCoursesByProgramIds(effectiveProgIds).stream()
                     .filter(c -> courseTypeId == null || (c.getCourseType() != null && courseTypeId.equals(c.getCourseType().getId())))
                     .collect(Collectors.toList());
         } else {
-            courses = courseRepository.findAll().stream()
-                    .filter(c -> c != null && c.getStatus() == Status.ACTIVE && !c.isDeleted())
+            List<Course> activeCourses = courseRepository.findActiveCoursesWithProgramsAndType();
+            if (activeCourses == null || activeCourses.isEmpty()) {
+                activeCourses = courseRepository.findAll().stream()
+                        .filter(c -> c != null && c.getStatus() == Status.ACTIVE && !c.isDeleted())
+                        .collect(Collectors.toList());
+            }
+            courses = activeCourses.stream()
                     .filter(c -> courseTypeId == null || (c.getCourseType() != null && courseTypeId.equals(c.getCourseType().getId())))
                     .collect(Collectors.toList());
         }
@@ -410,13 +422,19 @@ public class DropdownServiceImpl implements IDropdownService {
                             || (c.getCourseCode() != null && c.getCourseCode().toLowerCase().contains(pattern));
                 })
                 .sorted(Comparator.comparing(Course::getCourseName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .map(c -> CourseDropdownResponse.builder()
-                        .id(c.getId())
-                        .name(c.getCourseName())
-                        .code(c.getCourseCode())
-                        .courseTypeId(c.getCourseType() != null ? c.getCourseType().getId() : null)
-                        .courseTypeName(c.getCourseType() != null ? c.getCourseType().getName() : null)
-                        .build())
+                .map(c -> {
+                    List<UUID> mappedProgIds = c.getPrograms() != null
+                            ? c.getPrograms().stream().filter(p -> p != null && !p.isDeleted() && p.isActive()).map(Program::getId).collect(Collectors.toList())
+                            : Collections.emptyList();
+                    return CourseDropdownResponse.builder()
+                            .id(c.getId())
+                            .name(c.getCourseName())
+                            .code(c.getCourseCode())
+                            .courseTypeId(c.getCourseType() != null ? c.getCourseType().getId() : null)
+                            .courseTypeName(c.getCourseType() != null ? c.getCourseType().getName() : null)
+                            .programIds(mappedProgIds)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 

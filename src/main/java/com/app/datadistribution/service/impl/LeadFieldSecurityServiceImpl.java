@@ -1,21 +1,28 @@
 package com.app.datadistribution.service.impl;
 
-import com.app.datadistribution.dto.lead.LeadRequest;
-import com.app.datadistribution.dto.lead.LeadResponse;
-import com.app.datadistribution.entity.Course;
-import com.app.datadistribution.entity.Lead;
-import com.app.datadistribution.entity.LeadSource;
-import com.app.datadistribution.enums.PermissionType;
-import com.app.datadistribution.exception.UnauthorizedException;
-import com.app.datadistribution.service.interfaces.ILeadFieldSecurityService;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import com.app.datadistribution.dto.lead.LeadRequest;
+import com.app.datadistribution.dto.lead.LeadResponse;
+import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.LeadSource;
+import com.app.datadistribution.entity.Program;
+import com.app.datadistribution.enums.PermissionType;
+import com.app.datadistribution.exception.UnauthorizedException;
+import com.app.datadistribution.service.interfaces.ILeadFieldSecurityService;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @Slf4j
@@ -171,8 +178,16 @@ public class LeadFieldSecurityServiceImpl implements ILeadFieldSecurityService {
         }
 
         // 13. Program
-        UUID existingProgramId = existingLead.getProgram() != null ? existingLead.getProgram().getId() : null;
-        if (request.getProgramId() != null && isDifferent(existingProgramId, request.getProgramId())) {
+        Set<UUID> existingProgramIds = existingLead.getPrograms() != null
+                ? existingLead.getPrograms().stream().map(Program::getId).collect(Collectors.toSet())
+                : new HashSet<>();
+        if (existingLead.getProgram() != null) {
+            existingProgramIds.add(existingLead.getProgram().getId());
+        }
+        List<UUID> reqProgIds = request.getProgramIds();
+        if (reqProgIds != null && isDifferentCollections(existingProgramIds, reqProgIds)) {
+            checkWritePermission(authorities, PermissionType.LEAD_FIELD_PROGRAM_WRITE, "Program");
+        } else if (request.getProgramId() != null && isDifferent(existingLead.getProgram() != null ? existingLead.getProgram().getId() : null, request.getProgramId())) {
             checkWritePermission(authorities, PermissionType.LEAD_FIELD_PROGRAM_WRITE, "Program");
         }
 
@@ -271,6 +286,7 @@ public class LeadFieldSecurityServiceImpl implements ILeadFieldSecurityService {
         // Academic
         if (!authorities.contains(PermissionType.LEAD_FIELD_PROGRAM_READ.name())) {
             r.setProgram(null);
+            r.setPrograms(null);
         }
         if (!authorities.contains(PermissionType.LEAD_FIELD_COURSE_TYPE_READ.name())) {
             r.setInterestedCourseTypes(null);

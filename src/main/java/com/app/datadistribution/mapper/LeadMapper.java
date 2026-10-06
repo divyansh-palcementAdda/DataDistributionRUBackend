@@ -145,6 +145,25 @@ public interface LeadMapper {
                     .build();
         }
 
+        List<com.app.datadistribution.dto.program.ProgramSummaryDTO> programsDtos = null;
+        if (lead.getPrograms() != null && !lead.getPrograms().isEmpty()) {
+            programsDtos = lead.getPrograms().stream()
+                    .filter(p -> p != null && !p.isDeleted())
+                    .map(p -> com.app.datadistribution.dto.program.ProgramSummaryDTO.builder()
+                            .id(p.getId())
+                            .name(p.getName())
+                            .code(p.getCode())
+                            .status(p.getStatus())
+                            .build())
+                    .collect(java.util.stream.Collectors.toList());
+        } else if (programDto != null) {
+            programsDtos = java.util.List.of(programDto);
+        }
+
+        if (programDto == null && programsDtos != null && !programsDtos.isEmpty()) {
+            programDto = programsDtos.get(0);
+        }
+
         UserMapper userMapper = org.mapstruct.factory.Mappers.getMapper(UserMapper.class);
 
         boolean isAvailed = false;
@@ -186,6 +205,7 @@ public interface LeadMapper {
                 .course(registeredCourseDto)
                 .registeredCourse(registeredCourseDto)
                 .program(programDto)
+                .programs(programsDtos)
                 .board(toDto(lead.getBoard()))
                 .stream(toDto(lead.getStream()))
                 .grade(toDto(lead.getGrade()))
@@ -225,6 +245,7 @@ public interface LeadMapper {
     @Mapping(target = "stream", ignore = true)
     @Mapping(target = "grade", ignore = true)
     @Mapping(target = "program", ignore = true)
+    @Mapping(target = "programs", ignore = true)
     @Mapping(target = "department", ignore = true)
     @Mapping(target = "assignedTo", ignore = true)
     @Mapping(target = "createdByUser", ignore = true)

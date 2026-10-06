@@ -122,9 +122,10 @@ public class DropdownController {
     public ResponseEntity<ApiResponse<List<CourseDropdownResponse>>> getCoursesDropdown(
             @RequestParam(required = false) UUID courseTypeId,
             @RequestParam(required = false) UUID programId,
+            @RequestParam(required = false) List<UUID> programIds,
             @RequestParam(required = false) String search) {
 
-        List<CourseDropdownResponse> data = dropdownService.getCoursesDropdown(courseTypeId, programId, search);
+        List<CourseDropdownResponse> data = dropdownService.getCoursesDropdown(courseTypeId, programId, programIds, search);
         return ResponseEntity.ok(ApiResponse.success("Courses dropdown retrieved successfully", data, 200));
     }
 

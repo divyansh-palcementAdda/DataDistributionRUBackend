@@ -94,7 +94,7 @@ public class ProgramCourseMappingTest {
     @DisplayName("Should successfully validate course mapped to program")
     void testResolveAndValidate_Success() throws BadRequestException {
         when(programRepository.findById(somId)).thenReturn(Optional.of(programSOM));
-        when(programRepository.isCourseMappedToProgram(somId, mbaId)).thenReturn(true);
+        when(programRepository.isCourseMappedToAnyProgram(anyCollection(), eq(mbaId))).thenReturn(true);
 
         Program result = programCourseResolver.resolveAndValidate(somId, mbaId, List.of(mbaId));
 
@@ -106,14 +106,14 @@ public class ProgramCourseMappingTest {
     @DisplayName("Should reject course that is NOT mapped to the selected program")
     void testResolveAndValidate_CourseNotMapped_ThrowsBadRequestException() {
         when(programRepository.findById(somId)).thenReturn(Optional.of(programSOM));
-        when(programRepository.isCourseMappedToProgram(somId, btechId)).thenReturn(false);
+        when(programRepository.isCourseMappedToAnyProgram(anyCollection(), eq(btechId))).thenReturn(false);
         when(courseRepository.findById(btechId)).thenReturn(Optional.of(courseBTech));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 programCourseResolver.resolveAndValidate(somId, btechId, null)
         );
 
-        assertTrue(ex.getMessage().contains("is not mapped to Program"));
+        assertTrue(ex.getMessage().contains("is not mapped to selected Program(s)"));
         assertTrue(ex.getMessage().contains("Bachelor of Technology in CS"));
         assertTrue(ex.getMessage().contains("School of Management"));
     }
@@ -122,8 +122,8 @@ public class ProgramCourseMappingTest {
     @DisplayName("Should reject interested course not mapped to the program")
     void testResolveAndValidate_InterestedCourseNotMapped_ThrowsBadRequestException() {
         when(programRepository.findById(somId)).thenReturn(Optional.of(programSOM));
-        when(programRepository.isCourseMappedToProgram(somId, mbaId)).thenReturn(true);
-        when(programRepository.isCourseMappedToProgram(somId, llbId)).thenReturn(false);
+        when(programRepository.isCourseMappedToAnyProgram(anyCollection(), eq(mbaId))).thenReturn(true);
+        when(programRepository.isCourseMappedToAnyProgram(anyCollection(), eq(llbId))).thenReturn(false);
         when(courseRepository.findById(llbId)).thenReturn(Optional.of(courseLLB));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
@@ -137,8 +137,8 @@ public class ProgramCourseMappingTest {
     @Test
     @DisplayName("Should resolve program by case-insensitive name or code")
     void testResolveProgramByNameOrCode() {
-        when(programRepository.findByNameIgnoreCase("School of Management")).thenReturn(Optional.of(programSOM));
-        when(programRepository.findByCodeIgnoreCase("som")).thenReturn(Optional.of(programSOM));
+        when(programRepository.findByNameIgnoreCaseAndIsDeletedFalse("School of Management")).thenReturn(Optional.of(programSOM));
+        when(programRepository.findByCodeIgnoreCaseAndIsDeletedFalse("som")).thenReturn(Optional.of(programSOM));
 
         Optional<Program> byName = programCourseResolver.resolveProgramByNameOrCode(" School of Management ");
         Optional<Program> byCode = programCourseResolver.resolveProgramByNameOrCode("som");
@@ -153,8 +153,8 @@ public class ProgramCourseMappingTest {
     @Test
     @DisplayName("Should resolve course by case-insensitive name or code")
     void testResolveCourseByNameOrCode() {
-        when(courseRepository.findByCourseNameIgnoreCase("Master of Business Administration")).thenReturn(Optional.of(courseMBA));
-        when(courseRepository.findByCourseCodeIgnoreCase("mba")).thenReturn(Optional.of(courseMBA));
+        when(courseRepository.findByCourseNameIgnoreCaseAndIsDeletedFalse("Master of Business Administration")).thenReturn(Optional.of(courseMBA));
+        when(courseRepository.findByCourseCodeIgnoreCaseAndIsDeletedFalse("mba")).thenReturn(Optional.of(courseMBA));
 
         Optional<Course> byName = programCourseResolver.resolveCourseByNameOrCode(" Master of Business Administration ");
         Optional<Course> byCode = programCourseResolver.resolveCourseByNameOrCode("mba");
@@ -164,5 +164,88 @@ public class ProgramCourseMappingTest {
 
         assertTrue(byCode.isPresent());
         assertEquals("Master of Business Administration", byCode.get().getCourseName());
+    }
+
+    @Test
+    @DisplayName("Should successfully validate when multiple programs are selected and course belongs to one of them")
+    void testResolveMultiPrograms_Success() throws BadRequestException {
+        when(programRepository.findById(somId)).thenReturn(Optional.of(programSOM));
+        when(programRepository.findById(soetId)).thenReturn(Optional.of(programSOET));
+        when(programRepository.isCourseMappedToAnyProgram(anySet(), eq(mbaId))).thenReturn(true);
+
+        Set<Program> result = programCourseResolver.resolveLeadProgramCourseRelationship(
+                List.of(somId, soetId), mbaId, null);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains(programSOM));
+        assertTrue(result.contains(programSOET));
+    }
+
+    @Test
+    @DisplayName("Should reject course if it is not mapped to any of the selected multiple programs")
+    void testResolveMultiPrograms_CourseMismatch_ThrowsBadRequestException() {
+        when(programRepository.findById(soetId)).thenReturn(Optional.of(programSOET));
+        when(programRepository.isCourseMappedToAnyProgram(anySet(), eq(mbaId))).thenReturn(false);
+        when(courseRepository.findById(mbaId)).thenReturn(Optional.of(courseMBA));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                programCourseResolver.resolveLeadProgramCourseRelationship(List.of(soetId), mbaId, null)
+        );
+
+        assertTrue(ex.getMessage().contains("COURSE_PROGRAM_MISMATCH"));
+        assertTrue(ex.getMessage().contains("Master of Business Administration"));
+    }
+
+    @Test
+    @DisplayName("Should auto-resolve program when course is selected directly without programs")
+    void testCourseSelectedDirectly_AutoResolvesPrograms() throws BadRequestException {
+        when(programRepository.findActiveProgramsByCourseId(mbaId)).thenReturn(List.of(programSOM));
+
+        Set<Program> result = programCourseResolver.resolveLeadProgramCourseRelationship(
+                Collections.emptyList(), mbaId, null);
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertTrue(result.contains(programSOM));
+    }
+
+    @Test
+    @DisplayName("Should auto-resolve all programs when course is mapped to multiple programs")
+    void testCourseMappedToMultiplePrograms_AutoResolvesAll() throws BadRequestException {
+        when(programRepository.findActiveProgramsByCourseId(mbaId)).thenReturn(List.of(programSOM, programSOET));
+
+        Set<Program> result = programCourseResolver.resolveLeadProgramCourseRelationship(
+                Collections.emptyList(), mbaId, null);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains(programSOM));
+        assertTrue(result.contains(programSOET));
+    }
+
+    @Test
+    @DisplayName("Should return empty set when neither program nor course is selected")
+    void testNoProgramNoCourse_ReturnsEmptySet() throws BadRequestException {
+        Set<Program> result = programCourseResolver.resolveLeadProgramCourseRelationship(
+                Collections.emptyList(), null, null);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should resolve multiple programs from comma-separated string for bulk upload")
+    void testResolveProgramsByNameOrCodes_CommaSeparated() throws BadRequestException {
+        when(programRepository.findByNameIgnoreCaseAndIsDeletedFalse("School of Management")).thenReturn(Optional.of(programSOM));
+        when(programRepository.findByNameIgnoreCaseAndIsDeletedFalse("School of Engineering & Technology")).thenReturn(Optional.of(programSOET));
+
+        Set<Program> result = programCourseResolver.resolveProgramsByNameOrCodes(
+                List.of("School of Management, School of Engineering & Technology"));
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains(programSOM));
+        assertTrue(result.contains(programSOET));
     }
 }

@@ -50,6 +50,12 @@ public interface ProgramRepository extends JpaRepository<Program, UUID>, JpaSpec
     @Query("SELECT p FROM Program p JOIN p.courses c WHERE c.id = :courseId AND p.isDeleted = false AND p.status = 'ACTIVE'")
     List<Program> findActiveProgramsByCourseId(@Param("courseId") UUID courseId);
 
+    @Query("SELECT DISTINCT p FROM Program p JOIN p.courses c WHERE c.id IN :courseIds AND p.isDeleted = false AND p.status = 'ACTIVE'")
+    List<Program> findActiveProgramsByCourseIds(@Param("courseIds") java.util.Collection<UUID> courseIds);
+
     @Query("SELECT COUNT(c) > 0 FROM Program p JOIN p.courses c WHERE p.id = :programId AND c.id = :courseId AND p.isDeleted = false AND c.isDeleted = false")
     boolean isCourseMappedToProgram(@Param("programId") UUID programId, @Param("courseId") UUID courseId);
+
+    @Query("SELECT COUNT(c) > 0 FROM Program p JOIN p.courses c WHERE p.id IN :programIds AND c.id = :courseId AND p.isDeleted = false AND c.isDeleted = false")
+    boolean isCourseMappedToAnyProgram(@Param("programIds") java.util.Collection<UUID> programIds, @Param("courseId") UUID courseId);
 }

@@ -62,6 +62,10 @@ public class Program extends BaseEntity {
     @Builder.Default
     private Set<Lead> leads = new HashSet<>();
 
+    @ManyToMany(mappedBy = "programs", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<Lead> leadsWithPrograms = new HashSet<>();
+
     public boolean isActive() {
         return this.status == Status.ACTIVE;
     }

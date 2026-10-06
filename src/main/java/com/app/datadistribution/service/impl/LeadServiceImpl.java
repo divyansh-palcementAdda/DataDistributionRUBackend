@@ -174,8 +174,10 @@ public class LeadServiceImpl implements ILeadService {
 
         UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
         
-        // Validate Program -> Course mapping
-        Program program = programCourseResolver.resolveAndValidate(request.getProgramId(), regCourseId, request.getInterestedCourseIds());
+        // Validate and canonically resolve Lead Program <-> Course relationship
+        Set<Program> programs = programCourseResolver.resolveLeadProgramCourseRelationship(
+                request.getProgramIds(), regCourseId, request.getInterestedCourseIds());
+        Program program = programs.isEmpty() ? null : programs.iterator().next();
 
         Course course = null;
         if (regCourseId != null) {
@@ -215,6 +217,7 @@ public class LeadServiceImpl implements ILeadService {
         lead.setInterestedCourses(interestedCourses);
         lead.setAssignedTo(assignedTo);
         lead.setCreatedByUser(currentUser);
+        lead.setPrograms(programs);
         lead.setProgram(program);
         lead.setCourse(course);
         lead.setBoard(board);
@@ -299,13 +302,21 @@ public class LeadServiceImpl implements ILeadService {
 
         UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId() : request.getCourseId();
         
-        // Validate Program -> Course mapping for update
-        Program program = null;
-        if (request.getProgramId() != null) {
-            program = programCourseResolver.resolveAndValidate(request.getProgramId(), regCourseId, request.getInterestedCourseIds());
-        } else if (lead.getProgram() != null && regCourseId != null) {
-            programCourseResolver.resolveAndValidate(lead.getProgram().getId(), regCourseId, request.getInterestedCourseIds());
-            program = lead.getProgram();
+        // Canonical Program <-> Course resolution & validation for update
+        Set<Program> programs = null;
+        List<UUID> reqProgIds = request.getProgramIds();
+        if (reqProgIds != null) {
+            programs = programCourseResolver.resolveLeadProgramCourseRelationship(
+                    reqProgIds, regCourseId, request.getInterestedCourseIds());
+        } else if (regCourseId != null) {
+            Set<UUID> existingProgIds = lead.getPrograms() != null
+                    ? lead.getPrograms().stream().map(Program::getId).collect(Collectors.toSet())
+                    : new HashSet<>();
+            if (lead.getProgram() != null) {
+                existingProgIds.add(lead.getProgram().getId());
+            }
+            programs = programCourseResolver.resolveLeadProgramCourseRelationship(
+                    existingProgIds, regCourseId, request.getInterestedCourseIds());
         }
 
         Course course = null;
@@ -361,8 +372,8 @@ public class LeadServiceImpl implements ILeadService {
         lead.setSourceDetails(request.getSourceDetails());
         lead.setRemarks(request.getRemarks());
         lead.setAssignedTo(assignedTo);
-        if (request.getProgramId() != null || program != null) {
-            lead.setProgram(program);
+        if (programs != null) {
+            lead.setPrograms(programs);
         }
         lead.setCourse(course);
         lead.setBoard(board);

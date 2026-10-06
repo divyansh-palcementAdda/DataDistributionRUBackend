@@ -259,6 +259,7 @@ class DropdownApiTest {
         course2.setId(UUID.randomUUID());
 
         when(courseRepository.findAll()).thenReturn(List.of(course1, course2));
+        when(courseRepository.findActiveCoursesWithProgramsAndType()).thenReturn(List.of(course1, course2));
 
         List<CourseDropdownResponse> result = dropdownService.getCoursesDropdown(type1.getId(), null);
 

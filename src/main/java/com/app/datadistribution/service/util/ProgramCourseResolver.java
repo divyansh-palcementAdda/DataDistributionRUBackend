@@ -10,10 +10,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Canonical service component for Program <-> Course bidirectional resolution and validation.
+ * Serves as the single source of truth across Lead Create, Lead Update, and Bulk Upload.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -23,42 +26,93 @@ public class ProgramCourseResolver {
     private final CourseRepository courseRepository;
 
     /**
-     * Resolves and validates that the course (and any interested courses) are mapped to the program if program is provided.
+     * Single canonical resolution method for Lead <-> Program <-> Course relationships.
+     * Enforces consistency and derives programs when courses are directly selected.
      *
-     * @param programId UUID of the program (nullable)
-     * @param courseId UUID of primary course (nullable)
-     * @param interestedCourseIds List of interested course UUIDs (nullable)
-     * @return Resolved Program entity, or null if programId is null
-     * @throws BadRequestException 
+     * @param explicitProgramIds Program UUIDs chosen by user / client (can be null/empty)
+     * @param primaryCourseId Primary registered course UUID (nullable)
+     * @param interestedCourseIds Additional interested course UUIDs (nullable)
+     * @return Validated, canonical Set of Program entities to be persisted with the Lead
+     * @throws BadRequestException if Course and Program are mutually inconsistent
      */
-    public Program resolveAndValidate(UUID programId, UUID courseId, Collection<UUID> interestedCourseIds) throws BadRequestException {
-        if (programId == null) {
-            return null;
-        }
+    public Set<Program> resolveLeadProgramCourseRelationship(
+            Collection<UUID> explicitProgramIds,
+            UUID primaryCourseId,
+            Collection<UUID> interestedCourseIds) throws BadRequestException {
 
-        Program program = programRepository.findById(programId)
-                .orElseThrow(() -> new ResourceNotFoundException("Program not found with ID: " + programId));
+        Set<UUID> cleanProgIds = (explicitProgramIds != null)
+                ? explicitProgramIds.stream().filter(Objects::nonNull).collect(Collectors.toSet())
+                : Collections.emptySet();
 
-        if (courseId != null) {
-            boolean isMapped = programRepository.isCourseMappedToProgram(programId, courseId);
-            if (!isMapped) {
-                Course course = courseRepository.findById(courseId).orElse(null);
-                String courseName = (course != null) ? course.getCourseName() : courseId.toString();
-                throw new BadRequestException("Course '" + courseName + "' is not mapped to Program '" + program.getName() + "'.");
+        Set<UUID> cleanInterestedCourseIds = (interestedCourseIds != null)
+                ? interestedCourseIds.stream().filter(Objects::nonNull).collect(Collectors.toSet())
+                : Collections.emptySet();
+
+        // Case 1: Explicit programs provided
+        if (!cleanProgIds.isEmpty()) {
+            Set<Program> explicitPrograms = new HashSet<>();
+            for (UUID pId : cleanProgIds) {
+                Program program = programRepository.findById(pId)
+                        .filter(p -> !p.isDeleted())
+                        .orElseThrow(() -> new ResourceNotFoundException("Program not found with ID: " + pId));
+                if (!program.isActive()) {
+                    throw new BadRequestException("Cannot select inactive Program: " + program.getName());
+                }
+                explicitPrograms.add(program);
             }
-        }
 
-        if (interestedCourseIds != null && !interestedCourseIds.isEmpty()) {
-            for (UUID cId : interestedCourseIds) {
-                if (cId != null && !programRepository.isCourseMappedToProgram(programId, cId)) {
-                    Course course = courseRepository.findById(cId).orElse(null);
-                    String courseName = (course != null) ? course.getCourseName() : cId.toString();
-                    throw new BadRequestException("Interested Course '" + courseName + "' is not mapped to Program '" + program.getName() + "'.");
+            // Consistency Validation: If primary course is selected, ensure it belongs to AT LEAST ONE selected program
+            if (primaryCourseId != null) {
+                boolean isMapped = programRepository.isCourseMappedToAnyProgram(cleanProgIds, primaryCourseId);
+                if (!isMapped) {
+                    Course course = courseRepository.findById(primaryCourseId).orElse(null);
+                    String courseName = (course != null) ? course.getCourseName() : primaryCourseId.toString();
+                    String programNames = explicitPrograms.stream().map(Program::getName).collect(Collectors.joining(", "));
+                    throw new BadRequestException("COURSE_PROGRAM_MISMATCH: Course '" + courseName + "' is not mapped to selected Program(s) [" + programNames + "].");
                 }
             }
+
+            // Consistency Validation: If interested courses are selected, ensure each belongs to AT LEAST ONE selected program
+            if (!cleanInterestedCourseIds.isEmpty()) {
+                for (UUID cId : cleanInterestedCourseIds) {
+                    boolean isMapped = programRepository.isCourseMappedToAnyProgram(cleanProgIds, cId);
+                    if (!isMapped) {
+                        Course course = courseRepository.findById(cId).orElse(null);
+                        String courseName = (course != null) ? course.getCourseName() : cId.toString();
+                        String programNames = explicitPrograms.stream().map(Program::getName).collect(Collectors.joining(", "));
+                        throw new BadRequestException("COURSE_PROGRAM_MISMATCH: Interested Course '" + courseName + "' is not mapped to selected Program(s) [" + programNames + "].");
+                    }
+                }
+            }
+
+            return explicitPrograms;
         }
 
-        return program;
+        // Case 2: No explicit programs provided, but Course is selected directly (Course -> Program auto-resolution)
+        Set<Program> autoResolvedPrograms = new HashSet<>();
+        if (primaryCourseId != null) {
+            List<Program> mapped = programRepository.findActiveProgramsByCourseId(primaryCourseId);
+            autoResolvedPrograms.addAll(mapped);
+        }
+
+        if (!cleanInterestedCourseIds.isEmpty() && autoResolvedPrograms.isEmpty()) {
+            List<Program> mapped = programRepository.findActiveProgramsByCourseIds(cleanInterestedCourseIds);
+            autoResolvedPrograms.addAll(mapped);
+        }
+
+        return autoResolvedPrograms;
+    }
+
+    /**
+     * Backward-compatible delegation method for single programId.
+     */
+    public Program resolveAndValidate(UUID programId, UUID courseId, Collection<UUID> interestedCourseIds) throws BadRequestException {
+        if (programId == null && courseId == null) {
+            return null;
+        }
+        Collection<UUID> progIds = programId != null ? List.of(programId) : Collections.emptyList();
+        Set<Program> resolved = resolveLeadProgramCourseRelationship(progIds, courseId, interestedCourseIds);
+        return resolved.isEmpty() ? null : resolved.iterator().next();
     }
 
     /**
@@ -69,8 +123,30 @@ public class ProgramCourseResolver {
             return Optional.empty();
         }
         String clean = nameOrCode.trim();
-        return programRepository.findByNameIgnoreCase(clean)
-                .or(() -> programRepository.findByCodeIgnoreCase(clean));
+        return programRepository.findByNameIgnoreCaseAndIsDeletedFalse(clean)
+                .or(() -> programRepository.findByCodeIgnoreCaseAndIsDeletedFalse(clean))
+                .filter(Program::isActive);
+    }
+
+    /**
+     * Resolves multiple Programs by comma-separated or list of names/codes.
+     */
+    public Set<Program> resolveProgramsByNameOrCodes(Collection<String> namesOrCodes) throws BadRequestException {
+        if (namesOrCodes == null || namesOrCodes.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<Program> result = new HashSet<>();
+        for (String raw : namesOrCodes) {
+            if (raw == null || raw.isBlank()) continue;
+            for (String token : raw.split(",")) {
+                String clean = token.trim();
+                if (clean.isEmpty()) continue;
+                Program prog = resolveProgramByNameOrCode(clean)
+                        .orElseThrow(() -> new BadRequestException("Program '" + clean + "' not found or is inactive"));
+                result.add(prog);
+            }
+        }
+        return result;
     }
 
     /**
@@ -81,8 +157,9 @@ public class ProgramCourseResolver {
             return Optional.empty();
         }
         String clean = nameOrCode.trim();
-        return courseRepository.findByCourseNameIgnoreCase(clean)
-                .or(() -> courseRepository.findByCourseCodeIgnoreCase(clean));
+        return courseRepository.findByCourseNameIgnoreCaseAndIsDeletedFalse(clean)
+                .or(() -> courseRepository.findByCourseCodeIgnoreCaseAndIsDeletedFalse(clean))
+                .filter(Course::isActive);
     }
 
     /**
@@ -93,5 +170,16 @@ public class ProgramCourseResolver {
             return true; // No restriction if program or course is null
         }
         return programRepository.isCourseMappedToProgram(program.getId(), course.getId());
+    }
+
+    /**
+     * Validates if a course is mapped to ANY program in a set of programs.
+     */
+    public boolean isCourseMappedToAnyProgram(Collection<Program> programs, Course course) {
+        if (programs == null || programs.isEmpty() || course == null) {
+            return true;
+        }
+        Set<UUID> progIds = programs.stream().map(Program::getId).collect(Collectors.toSet());
+        return programRepository.isCourseMappedToAnyProgram(progIds, course.getId());
     }
 }

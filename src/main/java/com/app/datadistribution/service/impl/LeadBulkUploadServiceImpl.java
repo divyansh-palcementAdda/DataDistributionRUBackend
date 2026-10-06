@@ -3,6 +3,7 @@ package com.app.datadistribution.service.impl;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -288,21 +289,35 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 }
 
                 // Row-Level Program & Course Canonical Entity Resolution & Validation
-                Program rowProgram = selectedProgram;
+                Set<Program> rowPrograms = new HashSet<>();
+                boolean programParseError = false;
                 if (programVal != null && !programVal.isBlank()) {
-                    rowProgram = programCourseResolver.resolveProgramByNameOrCode(programVal)
-                            .filter(p -> !p.isDeleted() && p.getStatus() == Status.ACTIVE)
-                            .orElse(null);
-                    if (rowProgram == null) {
-                        failedCount++;
-                        failedRows.add(BulkLeadUploadRowError.builder()
-                                .rowNumber(displayRowNumber)
-                                .field("program")
-                                .value(programVal)
-                                .reason("Program '" + programVal + "' not found or is inactive")
-                                .build());
-                        continue;
+                    String[] programTokens = programVal.split(",");
+                    for (String token : programTokens) {
+                        String clean = token.trim();
+                        if (clean.isEmpty()) continue;
+                        Program p = programCourseResolver.resolveProgramByNameOrCode(clean)
+                                .filter(prog -> !prog.isDeleted() && prog.getStatus() == Status.ACTIVE)
+                                .orElse(null);
+                        if (p == null) {
+                            failedCount++;
+                            failedRows.add(BulkLeadUploadRowError.builder()
+                                    .rowNumber(displayRowNumber)
+                                    .field("program")
+                                    .value(clean)
+                                    .reason("Program '" + clean + "' not found or is inactive")
+                                    .build());
+                            programParseError = true;
+                            break;
+                        }
+                        rowPrograms.add(p);
                     }
+                } else if (selectedProgram != null) {
+                    rowPrograms.add(selectedProgram);
+                }
+
+                if (programParseError) {
+                    continue;
                 }
 
                 Course rowCourse = null;
@@ -322,19 +337,32 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                     }
                 }
 
-                // Check Program -> Course mapping
-                if (rowProgram != null && rowCourse != null) {
-                    if (!programCourseResolver.isCourseMappedToProgram(rowProgram, rowCourse)) {
+                // If Program is blank but Course is present: Auto-resolve Program(s) canonically from Course
+                if (rowPrograms.isEmpty() && rowCourse != null) {
+                    try {
+                        rowPrograms = programCourseResolver.resolveLeadProgramCourseRelationship(
+                                Collections.emptyList(), rowCourse.getId(), Collections.emptyList());
+                    } catch (Exception e) {
+                        log.warn("Failed to auto-resolve program from course '{}' at row {}: {}", rowCourse.getCourseName(), displayRowNumber, e.getMessage());
+                    }
+                }
+
+                // Check Program <-> Course mapping consistency
+                if (!rowPrograms.isEmpty() && rowCourse != null) {
+                    if (!programCourseResolver.isCourseMappedToAnyProgram(rowPrograms, rowCourse)) {
                         failedCount++;
+                        String progNames = rowPrograms.stream().map(Program::getName).collect(Collectors.joining(", "));
                         failedRows.add(BulkLeadUploadRowError.builder()
                                 .rowNumber(displayRowNumber)
                                 .field("courseInterested")
                                 .value(courseNameInput)
-                                .reason("Course '" + rowCourse.getCourseName() + "' is not mapped to Program '" + rowProgram.getName() + "'")
+                                .reason("COURSE_PROGRAM_MISMATCH: Course '" + rowCourse.getCourseName() + "' is not mapped to Program(s) [" + progNames + "]")
                                 .build());
                         continue;
                     }
                 }
+
+                Program rowProgram = rowPrograms.isEmpty() ? null : rowPrograms.iterator().next();
 
                 Stream rowStream = selectedStream;
                 if (streamVal != null && !streamVal.isBlank()) {
@@ -376,6 +404,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         .country(country != null && !country.isBlank() ? country.trim() : null)
                         .sourceDetails(sourceDetails != null && !sourceDetails.isBlank() ? sourceDetails.trim() : null)
                         .program(rowProgram)
+                        .programs(rowPrograms)
                         .course(rowCourse)
                         .interestedCourses(interestedCourses)
                         .remarks(remarks != null && !remarks.isBlank() ? remarks.trim() : null)

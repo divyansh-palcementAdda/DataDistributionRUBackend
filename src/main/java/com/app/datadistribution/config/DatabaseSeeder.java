@@ -105,6 +105,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedBoards();
 //		seedGrades();
 		seedPrograms();
+		backfillLeadPrograms();
 		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
@@ -980,6 +981,28 @@ public class DatabaseSeeder implements CommandLineRunner {
 					.build();
 			programRepository.save(program);
 			log.info("Seeded default program: {} ({})", name, code);
+		}
+	}
+
+	private void backfillLeadPrograms() {
+		try {
+			entityManager.createNativeQuery(
+				"INSERT IGNORE INTO lead_programs (lead_id, program_id) " +
+				"SELECT id, program_id FROM leads " +
+				"WHERE program_id IS NOT NULL AND is_deleted = false"
+			).executeUpdate();
+
+			entityManager.createNativeQuery(
+				"INSERT IGNORE INTO lead_programs (lead_id, program_id) " +
+				"SELECT l.id, pc.program_id " +
+				"FROM leads l " +
+				"JOIN program_courses pc ON l.course_id = pc.course_id " +
+				"LEFT JOIN lead_programs lp ON l.id = lp.lead_id " +
+				"WHERE lp.lead_id IS NULL AND l.course_id IS NOT NULL AND l.is_deleted = false"
+			).executeUpdate();
+			log.info("Backfilled lead_programs table successfully.");
+		} catch (Exception e) {
+			log.warn("Non-destructive lead_programs backfill skipped or completed: {}", e.getMessage());
 		}
 	}
 }

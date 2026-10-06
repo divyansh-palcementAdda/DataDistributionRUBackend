@@ -30,10 +30,14 @@ public interface IDropdownService {
 
     List<DropdownOptionResponse> getProgramsDropdown(String search);
 
-    List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, String search);
+    List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, List<UUID> programIds, String search);
+
+    default List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, UUID programId, String search) {
+        return getCoursesDropdown(courseTypeId, programId, null, search);
+    }
 
     default List<CourseDropdownResponse> getCoursesDropdown(UUID courseTypeId, String search) {
-        return getCoursesDropdown(courseTypeId, null, search);
+        return getCoursesDropdown(courseTypeId, null, null, search);
     }
 
     List<DropdownOptionResponse> getCourseTypesDropdown(String search);

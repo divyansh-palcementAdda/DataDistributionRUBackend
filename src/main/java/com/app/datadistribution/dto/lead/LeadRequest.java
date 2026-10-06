@@ -75,6 +75,27 @@ public class LeadRequest {
     private UUID registeredCourseId;
 
     private UUID programId;
+    private List<UUID> programIds;
+
+    public List<UUID> getProgramIds() {
+        if (programIds != null && !programIds.isEmpty()) {
+            return programIds;
+        }
+        if (programId != null) {
+            return List.of(programId);
+        }
+        return programIds;
+    }
+
+    public UUID getProgramId() {
+        if (programId != null) {
+            return programId;
+        }
+        if (programIds != null && !programIds.isEmpty()) {
+            return programIds.get(0);
+        }
+        return null;
+    }
 
     private UUID boardId;
     private UUID streamId;

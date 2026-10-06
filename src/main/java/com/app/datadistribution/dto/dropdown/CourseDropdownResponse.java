@@ -21,4 +21,5 @@ public class CourseDropdownResponse {
     private String code;
     private UUID courseTypeId;
     private String courseTypeName;
+    private java.util.List<UUID> programIds;
 }

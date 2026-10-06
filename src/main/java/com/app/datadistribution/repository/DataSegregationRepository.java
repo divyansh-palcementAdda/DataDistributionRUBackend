@@ -1676,10 +1676,10 @@ public class DataSegregationRepository {
 
         // Program filter
         if (filter.getProgramId() != null) {
-            filterClause.append(" AND l.program_id = :programId ");
+            filterClause.append(" AND (l.program_id = :programId OR EXISTS (SELECT 1 FROM lead_programs lp WHERE lp.lead_id = l.id AND lp.program_id = :programId)) ");
             params.put("programId", filter.getProgramId());
         } else if (filter.getProgramIds() != null && !filter.getProgramIds().isEmpty()) {
-            filterClause.append(" AND l.program_id IN (:programIds) ");
+            filterClause.append(" AND (l.program_id IN (:programIds) OR EXISTS (SELECT 1 FROM lead_programs lp WHERE lp.lead_id = l.id AND lp.program_id IN (:programIds))) ");
             params.put("programIds", filter.getProgramIds());
         }
 
