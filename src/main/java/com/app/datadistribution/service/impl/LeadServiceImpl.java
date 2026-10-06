@@ -37,6 +37,7 @@ import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.Grade;
 import com.app.datadistribution.entity.Lead;
+import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
 import com.app.datadistribution.entity.LeadAvailed;
 import com.app.datadistribution.entity.LeadFeedback;
@@ -62,6 +63,7 @@ import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.LeadStatusHistoryRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
+import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.repository.specification.LeadFilterSpecification;
 import com.app.datadistribution.service.dto.UserDataScope;
@@ -87,6 +89,7 @@ public class LeadServiceImpl implements ILeadService {
     private final LeadSourceRepository leadSourceRepository;
     private final LeadStatusRepository leadStatusRepository;
     private final BoardRepository boardRepository;
+    private final StreamRepository streamRepository;
     private final GradeRepository gradeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
@@ -188,6 +191,13 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("Board not found with id: " + request.getBoardId()));
         }
 
+        Stream stream = null;
+        if (request.getStreamId() != null) {
+            stream = streamRepository.findById(request.getStreamId())
+                    .filter(s -> !s.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Stream not found with id: " + request.getStreamId()));
+        }
+
         Grade grade = null;
         if (request.getGradeId() != null) {
             grade = gradeRepository.findById(request.getGradeId())
@@ -208,6 +218,7 @@ public class LeadServiceImpl implements ILeadService {
         lead.setProgram(program);
         lead.setCourse(course);
         lead.setBoard(board);
+        lead.setStream(stream);
         lead.setGrade(grade);
         lead.setDepartment(department);
         lead.setCurrentStatus(initialStatus);
@@ -311,6 +322,13 @@ public class LeadServiceImpl implements ILeadService {
                     .orElseThrow(() -> new ResourcesNotFoundException("Board not found with id: " + request.getBoardId()));
         }
 
+        Stream stream = null;
+        if (request.getStreamId() != null) {
+            stream = streamRepository.findById(request.getStreamId())
+                    .filter(s -> !s.isDeleted())
+                    .orElseThrow(() -> new ResourcesNotFoundException("Stream not found with id: " + request.getStreamId()));
+        }
+
         Grade grade = null;
         if (request.getGradeId() != null) {
             grade = gradeRepository.findById(request.getGradeId())
@@ -348,6 +366,7 @@ public class LeadServiceImpl implements ILeadService {
         }
         lead.setCourse(course);
         lead.setBoard(board);
+        lead.setStream(stream);
         lead.setGrade(grade);
         // Synchronize Department with assigned user (Source of Truth)
         department = LeadDepartmentResolver.resolveDepartmentForUser(assignedTo, department != null ? department : lead.getDepartment());
@@ -444,12 +463,15 @@ public class LeadServiceImpl implements ILeadService {
             Boolean withoutProgram,
             Boolean withoutGrade,
             Boolean withoutBoard,
+            Boolean withoutStream,
             Boolean unmapped,
             com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             UUID statusId,
             List<UUID> statusIds,
             UUID boardId,
             List<UUID> boardIds,
+            UUID streamId,
+            List<UUID> streamIds,
             UUID gradeId,
             List<UUID> gradeIds,
             List<UUID> departmentIds,
@@ -514,6 +536,9 @@ public class LeadServiceImpl implements ILeadService {
         if (Boolean.TRUE.equals(withoutBoard)) {
             spec = andSpec(spec, LeadFilterSpecification.filterWithoutBoard());
         }
+        if (Boolean.TRUE.equals(withoutStream)) {
+            spec = andSpec(spec, LeadFilterSpecification.filterWithoutStream());
+        }
         if (Boolean.TRUE.equals(unmapped)) {
             spec = andSpec(spec, LeadFilterSpecification.filterUnmapped());
         }
@@ -529,6 +554,11 @@ public class LeadServiceImpl implements ILeadService {
             spec = andSpec(spec, filterByBoard(boardId));
         } else if (boardIds != null && !boardIds.isEmpty()) {
             spec = andSpec(spec, filterByBoardIds(boardIds));
+        }
+        if (streamId != null) {
+            spec = andSpec(spec, LeadFilterSpecification.filterByStream(streamId));
+        } else if (streamIds != null && !streamIds.isEmpty()) {
+            spec = andSpec(spec, LeadFilterSpecification.filterByStreamIds(streamIds));
         }
         if (gradeId != null) {
             spec = andSpec(spec, filterByGrade(gradeId));

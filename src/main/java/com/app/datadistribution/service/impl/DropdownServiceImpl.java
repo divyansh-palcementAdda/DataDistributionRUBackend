@@ -17,6 +17,7 @@ import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.Permission;
 import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.Role;
+import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.SentimentCategory;
 import com.app.datadistribution.enums.Status;
@@ -34,6 +35,7 @@ import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.PermissionRepository;
 import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.RoleRepository;
+import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
@@ -74,6 +76,7 @@ public class DropdownServiceImpl implements IDropdownService {
     private final CourseTypeRepository courseTypeRepository;
     private final ProgramRepository programRepository;
     private final BoardRepository boardRepository;
+    private final StreamRepository streamRepository;
     private final GradeRepository gradeRepository;
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -457,6 +460,29 @@ public class DropdownServiceImpl implements IDropdownService {
                         .id(b.getId())
                         .name(b.getName())
                         .code(b.getCode())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DropdownOptionResponse> getStreamsDropdown(String search) {
+        List<Stream> streams = streamRepository.findAll().stream()
+                .filter(s -> s != null && s.isActive() && !s.isDeleted())
+                .filter(s -> {
+                    if (search == null || search.isBlank()) return true;
+                    String pattern = search.trim().toLowerCase();
+                    return (s.getName() != null && s.getName().toLowerCase().contains(pattern))
+                            || (s.getCode() != null && s.getCode().toLowerCase().contains(pattern));
+                })
+                .sorted(Comparator.comparing(Stream::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Stream::getName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .collect(Collectors.toList());
+
+        return streams.stream()
+                .map(s -> DropdownOptionResponse.builder()
+                        .id(s.getId())
+                        .name(s.getName())
+                        .code(s.getCode())
                         .build())
                 .collect(Collectors.toList());
     }

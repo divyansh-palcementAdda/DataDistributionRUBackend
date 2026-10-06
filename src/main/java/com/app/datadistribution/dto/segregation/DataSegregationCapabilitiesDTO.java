@@ -17,6 +17,7 @@ public class DataSegregationCapabilitiesDTO {
     private boolean canViewCourseType;
     private boolean canViewSource;
     private boolean canViewBoard;
+    private boolean canViewStream;
     private boolean canViewGrade;
     private boolean canViewUserAnalytics;
     private boolean canViewLeadStatusAnalytics;

@@ -22,6 +22,7 @@ import com.app.datadistribution.entity.Grade;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
+import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.DashboardGroupBy;
 import com.app.datadistribution.service.dto.UserDataScope;
@@ -134,6 +135,14 @@ public class DashboardAnalyticsRepository {
             }
             case BOARD: {
                 Join<Lead, Board> join = root.join("board", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
+                codePath = join.get("code");
+                break;
+            }
+            case STREAM: {
+                Join<Lead, Stream> join = root.join("stream", JoinType.INNER);
                 predicates.add(cb.equal(join.get("isDeleted"), false));
                 idPath = join.get("id");
                 namePath = join.get("name");
@@ -317,6 +326,13 @@ public class DashboardAnalyticsRepository {
         // Multi-value Board filter
         if (filter.getBoardIds() != null && !filter.getBoardIds().isEmpty()) {
             predicates.add(root.get("board").get("id").in(filter.getBoardIds()));
+        }
+
+        // Multi-value Stream filter
+        if (filter.getStreamIds() != null && !filter.getStreamIds().isEmpty()) {
+            predicates.add(root.get("stream").get("id").in(filter.getStreamIds()));
+        } else if (filter.getStreamId() != null) {
+            predicates.add(cb.equal(root.get("stream").get("id"), filter.getStreamId()));
         }
 
         // Multi-value Grade filter
@@ -587,6 +603,11 @@ public class DashboardAnalyticsRepository {
             predicates.add(cb.isNull(root.get("board")));
         }
 
+        // Without Stream filter
+        if (Boolean.TRUE.equals(filter.getWithoutStream())) {
+            predicates.add(cb.isNull(root.get("stream")));
+        }
+
         // Unmapped Data filter (leads with missing master data)
         if (Boolean.TRUE.equals(filter.getUnmapped())) {
             jakarta.persistence.criteria.Subquery<Integer> anyCourseSub =
@@ -614,6 +635,7 @@ public class DashboardAnalyticsRepository {
                     cb.isNull(root.get("program")),
                     cb.isNull(root.get("grade")),
                     cb.isNull(root.get("board")),
+                    cb.isNull(root.get("stream")),
                     cb.not(cb.exists(anySourceSub))
             ));
         }

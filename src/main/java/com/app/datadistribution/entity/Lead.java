@@ -31,6 +31,7 @@ import lombok.Setter;
     @Index(name = "idx_lead_department", columnList = "department_id"),
     @Index(name = "idx_lead_program", columnList = "program_id"),
     @Index(name = "idx_lead_status", columnList = "lead_status_id"),
+    @Index(name = "idx_lead_stream", columnList = "stream_id"),
     @Index(name = "idx_lead_is_deleted", columnList = "is_deleted"),
     @Index(name = "idx_lead_created_by", columnList = "created_by_user_id")
 })
@@ -121,6 +122,10 @@ public class Lead extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "board_id")
     private Board board;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stream_id")
+    private Stream stream;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grade_id")

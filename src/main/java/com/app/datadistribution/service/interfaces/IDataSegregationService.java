@@ -25,13 +25,23 @@ public interface IDataSegregationService {
 
     SegregationMatrixResponseDTO getSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException, BadRequestException;
 
+    SegregationMatrixResponseDTO getSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException, BadRequestException;
+
     UserSegregationAnalyticsDTO getUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException, BadRequestException;
+
+    UserSegregationAnalyticsDTO getUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException, BadRequestException;
 
     List<LeadStatusAnalyticsDTO> getLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException, BadRequestException;
 
+    List<LeadStatusAnalyticsDTO> getLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException, BadRequestException;
+
     CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
 
+    CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
+
     CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
+
+    CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId, String search, int page, int size, String sortBy, String sortDirection) throws UnauthorizedException, BadRequestException;
 
     UserAllocationSummaryDTO getUserAllocationSummary(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
 

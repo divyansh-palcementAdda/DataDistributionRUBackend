@@ -83,6 +83,9 @@ public final class PermissionMetadataRegistry {
         registerLeadField(map, PermissionType.LEAD_FIELD_BOARD_READ, PermissionType.LEAD_FIELD_BOARD_WRITE,
                 "board", "Board", "Academic & Course Information", 130, "educational examination board");
 
+        registerLeadField(map, PermissionType.LEAD_FIELD_STREAM_READ, PermissionType.LEAD_FIELD_STREAM_WRITE,
+                "stream", "Stream", "Academic & Course Information", 135, "academic stream / branch");
+
         registerLeadField(map, PermissionType.LEAD_FIELD_GRADE_READ, PermissionType.LEAD_FIELD_GRADE_WRITE,
                 "grade", "Grade", "Academic & Course Information", 140, "academic grade / score");
 
@@ -186,6 +189,7 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.DATA_SEGREGATION_COURSE_TYPE_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View segregation breakdown by course type");
         reg(map, PermissionType.DATA_SEGREGATION_SOURCE_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View segregation breakdown by lead source");
         reg(map, PermissionType.DATA_SEGREGATION_BOARD_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View segregation breakdown by board");
+        reg(map, PermissionType.DATA_SEGREGATION_STREAM_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View segregation breakdown by stream");
         reg(map, PermissionType.DATA_SEGREGATION_GRADE_VIEW, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View segregation breakdown by grade");
         reg(map, PermissionType.DATA_SEGREGATION_USER_ANALYTICS, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View counselor performance analytics segregation");
         reg(map, PermissionType.DATA_SEGREGATION_LEAD_STATUS_ANALYTICS, PermissionEntity.DATA_SEGREGATION, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View status conversion analytics segregation");
@@ -301,11 +305,16 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.COURSE_USP_UPDATE, PermissionEntity.COURSE_USP, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPDATE, "Update course USP");
         reg(map, PermissionType.COURSE_USP_DELETE, PermissionEntity.COURSE_USP, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Delete course USP");
 
-        // Boards & Grades
+        // Boards, Streams & Grades
         reg(map, PermissionType.BOARD_VIEW, PermissionEntity.BOARD, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "View education boards");
         reg(map, PermissionType.BOARD_CREATE, PermissionEntity.BOARD, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create education board");
         reg(map, PermissionType.BOARD_UPDATE, PermissionEntity.BOARD, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPDATE, "Update education board");
         reg(map, PermissionType.BOARD_DELETE, PermissionEntity.BOARD, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Delete education board");
+
+        reg(map, PermissionType.STREAM_VIEW, PermissionEntity.STREAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "View academic streams");
+        reg(map, PermissionType.STREAM_CREATE, PermissionEntity.STREAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create academic stream");
+        reg(map, PermissionType.STREAM_UPDATE, PermissionEntity.STREAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPDATE, "Update academic stream");
+        reg(map, PermissionType.STREAM_DELETE, PermissionEntity.STREAM, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Delete academic stream");
 
         reg(map, PermissionType.GRADE_VIEW, PermissionEntity.GRADE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "View academic grades");
         reg(map, PermissionType.GRADE_CREATE, PermissionEntity.GRADE, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create academic grade");
@@ -321,6 +330,7 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.DROPDOWN_STATUS_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access lead statuses dropdown options");
         reg(map, PermissionType.DROPDOWN_SOURCE_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access lead sources dropdown options");
         reg(map, PermissionType.DROPDOWN_GRADE_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access grades dropdown options");
+        reg(map, PermissionType.DROPDOWN_STREAM_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access streams dropdown options");
         reg(map, PermissionType.DROPDOWN_BOARD_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access boards dropdown options");
         reg(map, PermissionType.DROPDOWN_COURSE_TYPE_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access course types dropdown options");
         reg(map, PermissionType.DROPDOWN_ROLE_VIEW, PermissionEntity.DROPDOWN, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "Access roles dropdown options");

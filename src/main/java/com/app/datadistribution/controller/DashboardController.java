@@ -181,6 +181,17 @@ public class DashboardController {
                 .ok(ApiResponse.success("Board breakdown retrieved successfully", result, HttpStatus.OK.value()));
     }
 
+    @GetMapping("/stream")
+    @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
+    @Operation(summary = "Get stream breakdown count for current user scope with dynamic filters")
+    public ResponseEntity<ApiResponse<List<GroupCountDTO>>> getStreamBreakdown(
+            @Valid DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+
+        List<GroupCountDTO> result = dashboardService.getStreamBreakdown(filterRequest);
+        return ResponseEntity
+                .ok(ApiResponse.success("Stream breakdown retrieved successfully", result, HttpStatus.OK.value()));
+    }
+
     @GetMapping("/grade")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW')")
     @Operation(summary = "Get grade breakdown count for current user scope with dynamic filters")

@@ -40,6 +40,8 @@ public interface IDropdownService {
 
     List<DropdownOptionResponse> getBoardsDropdown(String search);
 
+    List<DropdownOptionResponse> getStreamsDropdown(String search);
+
     List<DropdownOptionResponse> getGradesDropdown(String search);
 
     List<DropdownOptionResponse> getRolesDropdown(String search);

@@ -145,12 +145,15 @@ public class LeadController {
             @RequestParam(value = "withoutProgram", required = false) Boolean withoutProgram,
             @RequestParam(value = "withoutGrade", required = false) Boolean withoutGrade,
             @RequestParam(value = "withoutBoard", required = false) Boolean withoutBoard,
+            @RequestParam(value = "withoutStream", required = false) Boolean withoutStream,
             @RequestParam(value = "unmapped", required = false) Boolean unmapped,
             @RequestParam(value = "registrationStatus", required = false) com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             @RequestParam(value = "statusId", required = false) UUID statusId,
             @RequestParam(value = "statusIds", required = false) List<UUID> statusIds,
             @RequestParam(value = "boardId", required = false) UUID boardId,
             @RequestParam(value = "boardIds", required = false) List<UUID> boardIds,
+            @RequestParam(value = "streamId", required = false) UUID streamId,
+            @RequestParam(value = "streamIds", required = false) List<UUID> streamIds,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
             @RequestParam(value = "gradeIds", required = false) List<UUID> gradeIds,
             @RequestParam(value = "departmentId", required = false) UUID departmentId,
@@ -230,12 +233,15 @@ public class LeadController {
                 withoutProgram,
                 withoutGrade,
                 withoutBoard,
+                withoutStream,
                 unmapped,
                 registrationStatus,
                 statusId,
                 statusIds,
                 boardId,
                 boardIds,
+                streamId,
+                streamIds,
                 gradeId,
                 gradeIds,
                 deptIdsToFilter,
@@ -504,6 +510,7 @@ public class LeadController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "programId", required = false) UUID programId,
             @RequestParam(value = "courseTypeId", required = false) UUID courseTypeId,
+            @RequestParam(value = "streamId", required = false) UUID streamId,
             @RequestParam(value = "gradeId", required = false) UUID gradeId,
             @RequestParam(value = "boardId", required = false) UUID boardId,
             @RequestParam(value = "leadSourceId", required = false) UUID leadSourceId,
@@ -513,7 +520,7 @@ public class LeadController {
             @RequestParam(value = "assignedToUserId", required = false) UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
 
         BulkLeadUploadResponse response = leadBulkUploadService.bulkUploadLeads(
-                file, programId, courseTypeId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
+                file, programId, courseTypeId, streamId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
         );
 
         if (response.getSuccessCount() == 0) {

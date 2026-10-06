@@ -273,6 +273,10 @@ public class DashboardServiceImpl implements IDashboardService {
             case "BOARDS":
                 filterRequest.setWithoutBoard(true);
                 break;
+            case "STREAM":
+            case "STREAMS":
+                filterRequest.setWithoutStream(true);
+                break;
             case "ALL":
             default:
                 filterRequest.setUnmapped(true);
@@ -365,6 +369,25 @@ public class DashboardServiceImpl implements IDashboardService {
                 .groupBy(DashboardGroupBy.BOARD)
                 .build();
         return getBoardBreakdown(req);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getStreamBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException {
+        if (filterRequest == null) filterRequest = new DashboardAnalyticsFilterRequest();
+        filterRequest.setGroupBy(DashboardGroupBy.STREAM);
+        return getAnalytics(filterRequest).getData();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupCountDTO> getStreamBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException {
+        DashboardAnalyticsFilterRequest req = DashboardAnalyticsFilterRequest.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .groupBy(DashboardGroupBy.STREAM)
+                .build();
+        return getStreamBreakdown(req);
     }
 
     @Override

@@ -95,6 +95,7 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
                     .canViewCourseType(false)
                     .canViewSource(false)
                     .canViewBoard(false)
+                    .canViewStream(false)
                     .canViewGrade(false)
                     .canViewUserAnalytics(false)
                     .canViewLeadStatusAnalytics(false)
@@ -106,6 +107,7 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         boolean canCourseType = hasFullFlow || authorities.contains(PermissionType.DATA_SEGREGATION_COURSE_TYPE_VIEW.name());
         boolean canSource = hasFullFlow || authorities.contains(PermissionType.DATA_SEGREGATION_SOURCE_VIEW.name());
         boolean canBoard = hasFullFlow || authorities.contains(PermissionType.DATA_SEGREGATION_BOARD_VIEW.name());
+        boolean canStream = hasFullFlow || authorities.contains(PermissionType.DATA_SEGREGATION_STREAM_VIEW.name());
         boolean canGrade = hasFullFlow || authorities.contains(PermissionType.DATA_SEGREGATION_GRADE_VIEW.name());
 
         boolean canUserAnalytics = hasFullFlow
@@ -130,6 +132,7 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
                 .canViewCourseType(canCourseType)
                 .canViewSource(canSource)
                 .canViewBoard(canBoard)
+                .canViewStream(canStream)
                 .canViewGrade(canGrade)
                 .canViewUserAnalytics(canUserAnalytics)
                 .canViewLeadStatusAnalytics(canLeadStatusAnalytics)
@@ -157,6 +160,11 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
 
     @Override
     public void validateMatrixAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateMatrixAccess(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    public void validateMatrixAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException {
         validateBaseAccess();
         DataSegregationCapabilitiesDTO caps = getCapabilities();
 
@@ -169,6 +177,9 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         if (boardId != null && !caps.isCanViewBoard()) {
             throw new UnauthorizedException("You do not have permission to view Board segregation.");
         }
+        if (streamId != null && !caps.isCanViewStream()) {
+            throw new UnauthorizedException("You do not have permission to view Stream segregation.");
+        }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation.");
         }
@@ -176,6 +187,11 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
 
     @Override
     public void validateUserAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateUserAnalyticsAccess(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    public void validateUserAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException {
         validateBaseAccess();
         DataSegregationCapabilitiesDTO caps = getCapabilities();
 
@@ -191,6 +207,9 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         if (boardId != null && !caps.isCanViewBoard()) {
             throw new UnauthorizedException("You do not have permission to view Board segregation analytics.");
         }
+        if (streamId != null && !caps.isCanViewStream()) {
+            throw new UnauthorizedException("You do not have permission to view Stream segregation analytics.");
+        }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation analytics.");
         }
@@ -198,6 +217,11 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
 
     @Override
     public void validateLeadStatusAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateLeadStatusAnalyticsAccess(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    public void validateLeadStatusAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException {
         validateBaseAccess();
         DataSegregationCapabilitiesDTO caps = getCapabilities();
 
@@ -213,6 +237,9 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         if (boardId != null && !caps.isCanViewBoard()) {
             throw new UnauthorizedException("You do not have permission to view Board segregation status analytics.");
         }
+        if (streamId != null && !caps.isCanViewStream()) {
+            throw new UnauthorizedException("You do not have permission to view Stream segregation status analytics.");
+        }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation status analytics.");
         }
@@ -220,6 +247,11 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
 
     @Override
     public void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateCourseAccess(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    public void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException {
         validateBaseAccess();
         DataSegregationCapabilitiesDTO caps = getCapabilities();
 
@@ -235,6 +267,9 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         if (boardId != null && !caps.isCanViewBoard()) {
             throw new UnauthorizedException("You do not have permission to view Board segregation.");
         }
+        if (streamId != null && !caps.isCanViewStream()) {
+            throw new UnauthorizedException("You do not have permission to view Stream segregation.");
+        }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation.");
         }
@@ -242,6 +277,11 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
 
     @Override
     public void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException {
+        validateCourseUserAccess(courseTypeId, courseId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    public void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException {
         validateBaseAccess();
         DataSegregationCapabilitiesDTO caps = getCapabilities();
 
@@ -256,6 +296,9 @@ public class DataSegregationPermissionServiceImpl implements IDataSegregationPer
         }
         if (boardId != null && !caps.isCanViewBoard()) {
             throw new UnauthorizedException("You do not have permission to view Board segregation.");
+        }
+        if (streamId != null && !caps.isCanViewStream()) {
+            throw new UnauthorizedException("You do not have permission to view Stream segregation.");
         }
         if (gradeId != null && !caps.isCanViewGrade()) {
             throw new UnauthorizedException("You do not have permission to view Grade segregation.");

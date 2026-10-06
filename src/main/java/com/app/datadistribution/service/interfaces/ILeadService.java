@@ -31,6 +31,48 @@ public interface ILeadService {
             Boolean withoutProgram,
             Boolean withoutGrade,
             Boolean withoutBoard,
+            Boolean withoutStream,
+            Boolean unmapped,
+            com.app.datadistribution.enums.RegistrationStatus registrationStatus,
+            UUID statusId,
+            List<UUID> statusIds,
+            UUID boardId,
+            List<UUID> boardIds,
+            UUID streamId,
+            List<UUID> streamIds,
+            UUID gradeId,
+            List<UUID> gradeIds,
+            List<UUID> departmentIds,
+            List<UUID> assignedUserIds,
+            Boolean allotted,
+            Boolean multiSource,
+            Boolean availed,
+            UUID availedByUserId,
+            List<UUID> availedByUserIds,
+            java.time.LocalDate availedFrom,
+            java.time.LocalDate availedTo,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            java.time.LocalDate updatedFrom,
+            java.time.LocalDate updatedTo,
+            UUID leadStatusHistoryId,
+            List<UUID> leadStatusHistoryIds,
+            String leadStatusHistory
+    ) throws UnauthorizedException, BadRequestException;
+
+    default LeadPageResponse getAllLeads(
+            PageRequestDTO pageRequest,
+            List<UUID> leadSourceIds,
+            UUID courseId,
+            List<UUID> interestedCourseIds,
+            UUID registeredCourseId,
+            UUID courseTypeId,
+            List<UUID> courseTypeIds,
+            Boolean withoutCourse,
+            Boolean withoutCourseType,
+            Boolean withoutProgram,
+            Boolean withoutGrade,
+            Boolean withoutBoard,
             Boolean unmapped,
             com.app.datadistribution.enums.RegistrationStatus registrationStatus,
             UUID statusId,
@@ -55,7 +97,17 @@ public interface ILeadService {
             UUID leadStatusHistoryId,
             List<UUID> leadStatusHistoryIds,
             String leadStatusHistory
-    ) throws UnauthorizedException, BadRequestException;
+    ) throws UnauthorizedException, BadRequestException {
+        return getAllLeads(
+                pageRequest, leadSourceIds, courseId, interestedCourseIds, registeredCourseId,
+                courseTypeId, courseTypeIds, withoutCourse, withoutCourseType, withoutProgram, withoutGrade, withoutBoard, null, unmapped,
+                registrationStatus, statusId, statusIds, boardId, boardIds, null, null, gradeId, gradeIds,
+                departmentIds, assignedUserIds, allotted, multiSource, availed,
+                availedByUserId, availedByUserIds, availedFrom, availedTo,
+                startDate, endDate, updatedFrom, updatedTo,
+                leadStatusHistoryId, leadStatusHistoryIds, leadStatusHistory
+        );
+    }
 
     default LeadPageResponse getAllLeads(
             PageRequestDTO pageRequest,

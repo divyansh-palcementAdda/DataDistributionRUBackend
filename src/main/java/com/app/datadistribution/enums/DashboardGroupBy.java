@@ -7,6 +7,7 @@ public enum DashboardGroupBy {
     REGISTERED_COURSE,
     COURSE_TYPE,
     BOARD,
+    STREAM,
     GRADE,
     DEPARTMENT,
     ASSIGNED_USER;

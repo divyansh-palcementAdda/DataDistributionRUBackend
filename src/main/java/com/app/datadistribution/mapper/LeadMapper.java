@@ -24,6 +24,8 @@ import com.app.datadistribution.dto.lead.LeadSourceResponse;
 import com.app.datadistribution.dto.lead.LeadStatusHistoryResponse;
 import com.app.datadistribution.dto.lead.LeadStatusRequest;
 import com.app.datadistribution.dto.lead.LeadStatusResponse;
+import com.app.datadistribution.dto.stream.StreamRequest;
+import com.app.datadistribution.dto.stream.StreamResponse;
 import com.app.datadistribution.entity.Board;
 import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.Grade;
@@ -35,6 +37,7 @@ import com.app.datadistribution.entity.LeadFollowUp;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
+import com.app.datadistribution.entity.Stream;
 
 @Mapper(componentModel = "spring", uses = {UserMapper.class}, builder = @org.mapstruct.Builder(disableBuilder = true))
 public interface LeadMapper {
@@ -48,6 +51,15 @@ public interface LeadMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "deleted", ignore = true)
     Board toEntity(BoardRequest dto);
+
+    // --- Stream ---
+    StreamResponse toDto(Stream stream);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "deleted", ignore = true)
+    Stream toEntity(StreamRequest dto);
 
     // --- Grade ---
     GradeResponse toDto(Grade grade);
@@ -175,6 +187,7 @@ public interface LeadMapper {
                 .registeredCourse(registeredCourseDto)
                 .program(programDto)
                 .board(toDto(lead.getBoard()))
+                .stream(toDto(lead.getStream()))
                 .grade(toDto(lead.getGrade()))
                 .department(departmentDto)
                 .remarks(lead.getRemarks())
@@ -209,6 +222,7 @@ public interface LeadMapper {
     @Mapping(target = "interestedCourses", ignore = true)
     @Mapping(target = "currentStatus", ignore = true)
     @Mapping(target = "board", ignore = true)
+    @Mapping(target = "stream", ignore = true)
     @Mapping(target = "grade", ignore = true)
     @Mapping(target = "program", ignore = true)
     @Mapping(target = "department", ignore = true)

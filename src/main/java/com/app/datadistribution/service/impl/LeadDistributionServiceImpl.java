@@ -279,6 +279,12 @@ public class LeadDistributionServiceImpl implements ILeadDistributionService {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("board").get("id"), filters.getBoardId()));
         }
 
+        if (filters.getStreamIds() != null && !filters.getStreamIds().isEmpty()) {
+            spec = spec.and((root, query, cb) -> root.get("stream").get("id").in(filters.getStreamIds()));
+        } else if (filters.getStreamId() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("stream").get("id"), filters.getStreamId()));
+        }
+
         if (filters.getLeadSourceIds() != null && !filters.getLeadSourceIds().isEmpty()) {
             spec = spec.and((root, query, cb) -> {
                 query.distinct(true);

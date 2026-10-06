@@ -29,12 +29,14 @@ import com.app.datadistribution.dto.segregation.LeadStatusAnalyticsDTO;
 import com.app.datadistribution.dto.segregation.LeadStatusColumnDTO;
 import com.app.datadistribution.dto.segregation.SegregationMatrixResponseDTO;
 import com.app.datadistribution.dto.segregation.SourceNodeDTO;
+import com.app.datadistribution.dto.segregation.StreamNodeDTO;
 import com.app.datadistribution.dto.segregation.UserAllocationRowDTO;
 import com.app.datadistribution.dto.segregation.UserAllocationSummaryDTO;
 import com.app.datadistribution.dto.segregation.UserAllocationUsersResponseDTO;
 import com.app.datadistribution.dto.segregation.UserAnalyticsRowDTO;
 import com.app.datadistribution.dto.segregation.UserSegregationAnalyticsDTO;
 import com.app.datadistribution.entity.Board;
+import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.Course;
 import com.app.datadistribution.entity.CourseType;
 import com.app.datadistribution.entity.Department;
@@ -115,24 +117,37 @@ public class DataSegregationRepository {
     /**
      * Fetch hierarchical segregation matrix for the given Course Type, Lead Source, Board, and Grade.
      */
+    /**
+     * Fetch hierarchical segregation matrix for the given Course Type, Lead Source, Board, and Grade.
+     */
     public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, UserDataScope dataScope) {
+        return fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, null, gradeId, dataScope);
+    }
+
+    public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId, UserDataScope dataScope) {
         DataSegregationCapabilitiesDTO defaultCaps = DataSegregationCapabilitiesDTO.builder()
                 .canView(true)
                 .canViewFullFlow(true)
                 .canViewCourseType(true)
                 .canViewSource(true)
                 .canViewBoard(true)
+                .canViewStream(true)
                 .canViewGrade(true)
                 .canViewUserAnalytics(true)
                 .canViewLeadStatusAnalytics(true)
                 .build();
-        return fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId, dataScope, defaultCaps);
+        return fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, streamId, gradeId, dataScope, defaultCaps);
     }
 
     /**
      * Fetch hierarchical segregation matrix with explicit granular flow capability enforcement.
      */
     public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                              UserDataScope dataScope, DataSegregationCapabilitiesDTO capabilities) {
+        return fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, null, gradeId, dataScope, capabilities);
+    }
+
+    public SegregationMatrixResponseDTO fetchSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId,
                                                               UserDataScope dataScope, DataSegregationCapabilitiesDTO capabilities) {
         CourseType courseType = courseTypeRepository.findById(courseTypeId).orElse(null);
         String courseTypeName = courseType != null ? courseType.getName() : "Unknown";
@@ -142,7 +157,7 @@ public class DataSegregationRepository {
         // 1. Overall counts for the selected scope
         CriteriaQuery<Tuple> summaryQuery = cb.createTupleQuery();
         Root<Lead> summaryRoot = summaryQuery.from(Lead.class);
-        List<Predicate> summaryPreds = buildScopeAndFilterPredicates(cb, summaryRoot, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> summaryPreds = buildScopeAndFilterPredicates(cb, summaryRoot, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         Subquery<UUID> availedSubquery = buildAvailedSubquery(cb, summaryQuery, summaryRoot);
 
@@ -174,13 +189,14 @@ public class DataSegregationRepository {
         }
 
         boolean canViewBoard = capabilities == null || capabilities.isCanViewBoard();
+        boolean canViewStream = capabilities == null || capabilities.isCanViewStream();
         boolean canViewGrade = capabilities == null || capabilities.isCanViewGrade();
 
         // 2. Fetch grouped breakdown rows according to permitted depth
         CriteriaQuery<Tuple> matrixQuery = cb.createTupleQuery();
         Root<Lead> root = matrixQuery.from(Lead.class);
 
-        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         SetJoin<Lead, LeadSource> sourceJoin = root.joinSet("leadSources", JoinType.INNER);
         preds.add(cb.equal(sourceJoin.get("isDeleted"), false));
@@ -208,6 +224,17 @@ public class DataSegregationRepository {
             groupBys.add(bJoin.get("code"));
         }
 
+        Join<Lead, Stream> stJoin = null;
+        if (canViewBoard && canViewStream) {
+            stJoin = root.join("stream", JoinType.LEFT);
+            selections.add(stJoin.get("id").alias("streamId"));
+            selections.add(stJoin.get("name").alias("streamName"));
+            selections.add(stJoin.get("code").alias("streamCode"));
+            groupBys.add(stJoin.get("id"));
+            groupBys.add(stJoin.get("name"));
+            groupBys.add(stJoin.get("code"));
+        }
+
         Join<Lead, Grade> gJoin = null;
         if (canViewBoard && canViewGrade) {
             gJoin = root.join("grade", JoinType.LEFT);
@@ -231,6 +258,7 @@ public class DataSegregationRepository {
         // 3. Assemble Hierarchical Response Tree
         Map<UUID, SourceNodeDTO> sourceMap = new LinkedHashMap<>();
         Map<UUID, Map<UUID, BoardNodeDTO>> boardMapBySource = new HashMap<>();
+        Map<UUID, Map<UUID, StreamNodeDTO>> streamMapByBoard = new HashMap<>();
 
         for (Tuple t : tuples) {
             UUID sId = t.get("sourceId", UUID.class);
@@ -277,6 +305,7 @@ public class DataSegregationRepository {
                                 .allotted(0)
                                 .unallotted(0)
                                 .availed(0)
+                                .streams(new ArrayList<>())
                                 .grades(new ArrayList<>())
                                 .build();
                         sourceNode.getBoards().add(node);
@@ -288,8 +317,52 @@ public class DataSegregationRepository {
                     boardNode.setUnallotted(boardNode.getUnallotted() + countUnallotted);
                     boardNode.setAvailed(boardNode.getAvailed() + countAvailed);
 
-                    // Grade Node (if grade permitted and present)
-                    if (canViewGrade) {
+                    if (canViewStream) {
+                        UUID stId = t.get("streamId", UUID.class);
+                        String stName = t.get("streamName", String.class);
+                        String stCode = t.get("streamCode", String.class);
+
+                        UUID safeStreamId = stId != null ? stId : UUID.fromString("00000000-0000-0000-0000-000000000001");
+                        Map<UUID, StreamNodeDTO> streamMap = streamMapByBoard.computeIfAbsent(safeBoardId, k -> new LinkedHashMap<>());
+                        StreamNodeDTO streamNode = streamMap.computeIfAbsent(safeStreamId, id -> {
+                            StreamNodeDTO sn = StreamNodeDTO.builder()
+                                    .streamId(stId)
+                                    .streamName(stName != null ? stName : "No Stream")
+                                    .streamCode(stCode)
+                                    .total(0)
+                                    .allotted(0)
+                                    .unallotted(0)
+                                    .availed(0)
+                                    .grades(new ArrayList<>())
+                                    .build();
+                            boardNode.getStreams().add(sn);
+                            return sn;
+                        });
+
+                        streamNode.setTotal(streamNode.getTotal() + countTotal);
+                        streamNode.setAllotted(streamNode.getAllotted() + countAllotted);
+                        streamNode.setUnallotted(streamNode.getUnallotted() + countUnallotted);
+                        streamNode.setAvailed(streamNode.getAvailed() + countAvailed);
+
+                        if (canViewGrade) {
+                            UUID grId = t.get("gradeId", UUID.class);
+                            String grName = t.get("gradeName", String.class);
+                            String grCode = t.get("gradeCode", String.class);
+
+                            if (grId != null || grName != null) {
+                                GradeNodeDTO gradeNode = GradeNodeDTO.builder()
+                                        .gradeId(grId)
+                                        .gradeName(grName != null ? grName : "Other Grade")
+                                        .gradeCode(grCode)
+                                        .total(countTotal)
+                                        .allotted(countAllotted)
+                                        .unallotted(countUnallotted)
+                                        .availed(countAvailed)
+                                        .build();
+                                streamNode.getGrades().add(gradeNode);
+                            }
+                        }
+                    } else if (canViewGrade) {
                         UUID grId = t.get("gradeId", UUID.class);
                         String grName = t.get("gradeName", String.class);
                         String grCode = t.get("gradeCode", String.class);
@@ -326,10 +399,15 @@ public class DataSegregationRepository {
                 .build();
     }
 
+
     /**
      * Fetch user analytics breakdown for the given scope.
      */
     public UserSegregationAnalyticsDTO fetchUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, UserDataScope dataScope) {
+        return fetchUserAnalytics(courseTypeId, leadSourceId, boardId, null, gradeId, dataScope);
+    }
+
+    public UserSegregationAnalyticsDTO fetchUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId, UserDataScope dataScope) {
         List<LeadStatus> activeStatuses = leadStatusRepository.findAll().stream()
                 .filter(s -> !s.isDeleted() && s.isActive())
                 .sorted(Comparator.comparing(LeadStatus::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -350,7 +428,7 @@ public class DataSegregationRepository {
         // Query per-user aggregates (Total, Allotted, Availed)
         CriteriaQuery<Tuple> userSummaryQuery = cb.createTupleQuery();
         Root<Lead> root = userSummaryQuery.from(Lead.class);
-        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
         preds.add(cb.isNotNull(root.get("assignedTo"))); // Only assigned leads for user analytics
 
         Join<Lead, User> userJoin = root.join("assignedTo", JoinType.INNER);
@@ -374,7 +452,7 @@ public class DataSegregationRepository {
         // Query per-user per-status breakdown
         CriteriaQuery<Tuple> statusBreakdownQuery = cb.createTupleQuery();
         Root<Lead> statusRoot = statusBreakdownQuery.from(Lead.class);
-        List<Predicate> statusPreds = buildScopeAndFilterPredicates(cb, statusRoot, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> statusPreds = buildScopeAndFilterPredicates(cb, statusRoot, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
         statusPreds.add(cb.isNotNull(statusRoot.get("assignedTo")));
 
         Join<Lead, User> statusUserJoin = statusRoot.join("assignedTo", JoinType.INNER);
@@ -450,6 +528,7 @@ public class DataSegregationRepository {
                 .courseTypeId(courseTypeId)
                 .leadSourceId(leadSourceId)
                 .boardId(boardId)
+                .streamId(streamId)
                 .gradeId(gradeId)
                 .statusColumns(statusColumns)
                 .users(userRows)
@@ -460,6 +539,10 @@ public class DataSegregationRepository {
      * Fetch lead status analytics for the given scope.
      */
     public List<LeadStatusAnalyticsDTO> fetchLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId, UserDataScope dataScope) {
+        return fetchLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, null, gradeId, dataScope);
+    }
+
+    public List<LeadStatusAnalyticsDTO> fetchLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId, UserDataScope dataScope) {
         List<LeadStatus> activeStatuses = leadStatusRepository.findAll().stream()
                 .filter(s -> !s.isDeleted() && s.isActive())
                 .sorted(Comparator.comparing(LeadStatus::getDisplayOrder, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -469,7 +552,7 @@ public class DataSegregationRepository {
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<Lead> root = query.from(Lead.class);
 
-        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> preds = buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
         Join<Lead, LeadStatus> statusJoin = root.join("currentStatus", JoinType.INNER);
         preds.add(cb.equal(statusJoin.get("isDeleted"), false));
 
@@ -540,6 +623,11 @@ public class DataSegregationRepository {
 
     private List<Predicate> buildScopeAndFilterPredicates(CriteriaBuilder cb, Root<Lead> root, UserDataScope dataScope,
                                                          UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) {
+        return buildScopeAndFilterPredicates(cb, root, dataScope, courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    private List<Predicate> buildScopeAndFilterPredicates(CriteriaBuilder cb, Root<Lead> root, UserDataScope dataScope,
+                                                         UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) {
         List<Predicate> predicates = buildBaseScopePredicates(cb, root, dataScope);
 
         // Course Type filter
@@ -564,6 +652,11 @@ public class DataSegregationRepository {
             predicates.add(cb.equal(root.get("board").get("id"), boardId));
         }
 
+        // Stream filter
+        if (streamId != null) {
+            predicates.add(cb.equal(root.get("stream").get("id"), streamId));
+        }
+
         // Grade filter
         if (gradeId != null) {
             predicates.add(cb.equal(root.get("grade").get("id"), gradeId));
@@ -579,6 +672,12 @@ public class DataSegregationRepository {
     public CourseSegregationResponseDTO fetchCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId,
                                                                   String search, int page, int size,
                                                                   String sortBy, String sortDirection, UserDataScope dataScope) {
+        return fetchCourseWiseSegregation(courseTypeId, leadSourceId, boardId, null, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+    }
+
+    public CourseSegregationResponseDTO fetchCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId,
+                                                                  String search, int page, int size,
+                                                                  String sortBy, String sortDirection, UserDataScope dataScope) {
         CourseType courseType = courseTypeRepository.findById(courseTypeId).orElse(null);
         String courseTypeName = courseType != null ? courseType.getName() : "Unknown";
 
@@ -592,6 +691,11 @@ public class DataSegregationRepository {
             Board b = entityManager.find(Board.class, boardId);
             boardName = b != null ? b.getName() : null;
         }
+        String streamName = null;
+        if (streamId != null) {
+            Stream s = entityManager.find(Stream.class, streamId);
+            streamName = s != null ? s.getName() : null;
+        }
         String gradeName = null;
         if (gradeId != null) {
             Grade g = entityManager.find(Grade.class, gradeId);
@@ -603,7 +707,7 @@ public class DataSegregationRepository {
         // 1. Category overall summary
         CriteriaQuery<Tuple> summaryQuery = cb.createTupleQuery();
         Root<Lead> summaryRoot = summaryQuery.from(Lead.class);
-        List<Predicate> summaryPreds = buildScopeAndFilterPredicates(cb, summaryRoot, dataScope, courseTypeId, leadSourceId, boardId, gradeId);
+        List<Predicate> summaryPreds = buildScopeAndFilterPredicates(cb, summaryRoot, dataScope, courseTypeId, leadSourceId, boardId, streamId, gradeId);
         Subquery<UUID> availedSubquery = buildAvailedSubquery(cb, summaryQuery, summaryRoot);
 
         summaryQuery.multiselect(
@@ -648,6 +752,10 @@ public class DataSegregationRepository {
         if (boardId != null) {
             filterClause.append(" AND l.board_id = :boardId ");
             scopeParams.put("boardId", boardId);
+        }
+        if (streamId != null) {
+            filterClause.append(" AND l.stream_id = :streamId ");
+            scopeParams.put("streamId", streamId);
         }
         if (gradeId != null) {
             filterClause.append(" AND l.grade_id = :gradeId ");
@@ -871,6 +979,8 @@ public class DataSegregationRepository {
                 .leadSourceName(leadSourceName)
                 .boardId(boardId)
                 .boardName(boardName)
+                .streamId(streamId)
+                .streamName(streamName)
                 .gradeId(gradeId)
                 .gradeName(gradeName)
                 .totalLeads(totalOverall)
@@ -883,6 +993,12 @@ public class DataSegregationRepository {
     }
 
     public CourseUserSegregationResponseDTO fetchCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                                          String search, int page, int size,
+                                                                          String sortBy, String sortDirection, UserDataScope dataScope) {
+        return fetchCourseUserWiseSegregation(courseId, leadSourceId, boardId, null, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+    }
+
+    public CourseUserSegregationResponseDTO fetchCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId,
                                                                           String search, int page, int size,
                                                                           String sortBy, String sortDirection, UserDataScope dataScope) {
         Course course = entityManager.find(Course.class, courseId);
@@ -900,6 +1016,11 @@ public class DataSegregationRepository {
         if (boardId != null) {
             Board b = entityManager.find(Board.class, boardId);
             boardName = b != null ? b.getName() : null;
+        }
+        String streamName = null;
+        if (streamId != null) {
+            Stream s = entityManager.find(Stream.class, streamId);
+            streamName = s != null ? s.getName() : null;
         }
         String gradeName = null;
         if (gradeId != null) {
@@ -936,6 +1057,10 @@ public class DataSegregationRepository {
         if (boardId != null) {
             filterClause.append(" AND l.board_id = :boardId ");
             scopeParams.put("boardId", boardId);
+        }
+        if (streamId != null) {
+            filterClause.append(" AND l.stream_id = :streamId ");
+            scopeParams.put("streamId", streamId);
         }
         if (gradeId != null) {
             filterClause.append(" AND l.grade_id = :gradeId ");
@@ -1232,6 +1357,8 @@ public class DataSegregationRepository {
                 .leadSourceName(leadSourceName)
                 .boardId(boardId)
                 .boardName(boardName)
+                .streamId(streamId)
+                .streamName(streamName)
                 .gradeId(gradeId)
                 .gradeName(gradeName)
                 .totalLeads(totalLeads)
@@ -1521,6 +1648,18 @@ public class DataSegregationRepository {
         if (filter.getBoardIds() != null && !filter.getBoardIds().isEmpty()) {
             filterClause.append(" AND l.board_id IN (:boardIds) ");
             params.put("boardIds", filter.getBoardIds());
+        }
+
+        // Stream filter
+        if (filter.getStreamId() != null) {
+            filterClause.append(" AND l.stream_id = :streamId ");
+            params.put("streamId", filter.getStreamId());
+        } else if (filter.getStreamIds() != null && !filter.getStreamIds().isEmpty()) {
+            filterClause.append(" AND l.stream_id IN (:streamIds) ");
+            params.put("streamIds", filter.getStreamIds());
+        }
+        if (Boolean.TRUE.equals(filter.getWithoutStream())) {
+            filterClause.append(" AND l.stream_id IS NULL ");
         }
 
         // Grade filter

@@ -1,10 +1,18 @@
 package com.app.datadistribution.service;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +35,6 @@ import com.app.datadistribution.dto.user.UserCreationOptionsResponse;
 import com.app.datadistribution.dto.user.UserRequest;
 import com.app.datadistribution.dto.user.UserResponse;
 import com.app.datadistribution.dto.user.UserUpdateRequest;
-import com.app.datadistribution.entity.Department;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.RoleType;
@@ -86,7 +93,7 @@ class ConfigurableAdminUserCreationTest {
         dropdownService = new DropdownServiceImpl(
                 userRepository,
                 departmentRepository,
-                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null,
                 roleRepository,
                 null, null, null, null,
                 validator

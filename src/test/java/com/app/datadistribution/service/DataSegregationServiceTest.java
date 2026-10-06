@@ -29,6 +29,7 @@ import com.app.datadistribution.repository.CourseTypeRepository;
 import com.app.datadistribution.repository.DataSegregationRepository;
 import com.app.datadistribution.repository.GradeRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
+import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.impl.DataSegregationServiceImpl;
@@ -51,6 +52,9 @@ public class DataSegregationServiceTest {
 
     @Mock
     private BoardRepository boardRepository;
+
+    @Mock
+    private StreamRepository streamRepository;
 
     @Mock
     private GradeRepository gradeRepository;
@@ -125,7 +129,7 @@ public class DataSegregationServiceTest {
                 .availedLeads(15)
                 .build();
 
-        when(segregationRepository.fetchSegregationMatrix(eq(courseTypeId), eq(null), eq(null), eq(null), eq(testScope), any()))
+        when(segregationRepository.fetchSegregationMatrix(eq(courseTypeId), eq(null), eq(null), eq(null), eq(null), eq(testScope), any()))
                 .thenReturn(mockResponse);
 
         SegregationMatrixResponseDTO result = segregationService.getSegregationMatrix(courseTypeId, null, null, null);
@@ -149,7 +153,7 @@ public class DataSegregationServiceTest {
                 .leadSourceId(leadSourceId)
                 .build();
 
-        when(segregationRepository.fetchUserAnalytics(eq(courseTypeId), eq(leadSourceId), eq(null), eq(null), eq(testScope)))
+        when(segregationRepository.fetchUserAnalytics(eq(courseTypeId), eq(leadSourceId), eq(null), eq(null), eq(null), eq(testScope)))
                 .thenReturn(mockResponse);
 
         UserSegregationAnalyticsDTO result = segregationService.getUserAnalytics(courseTypeId, leadSourceId, null, null);
@@ -170,7 +174,7 @@ public class DataSegregationServiceTest {
                 LeadStatusAnalyticsDTO.builder().name("CONNECTED").code("CONNECTED").count(15).build()
         );
 
-        when(segregationRepository.fetchLeadStatusAnalytics(eq(courseTypeId), eq(leadSourceId), eq(null), eq(null), eq(testScope)))
+        when(segregationRepository.fetchLeadStatusAnalytics(eq(courseTypeId), eq(leadSourceId), eq(null), eq(null), eq(null), eq(testScope)))
                 .thenReturn(mockResponse);
 
         List<LeadStatusAnalyticsDTO> result = segregationService.getLeadStatusAnalytics(courseTypeId, leadSourceId, null, null);

@@ -24,5 +24,8 @@ public class BoardNodeDTO {
     private long availed;
 
     @Builder.Default
+    private List<StreamNodeDTO> streams = new ArrayList<>();
+
+    @Builder.Default
     private List<GradeNodeDTO> grades = new ArrayList<>();
 }

@@ -25,6 +25,8 @@ public class LeadStatusAnalyticsFilterRequest {
     private UUID courseTypeId;
     private UUID leadSourceId;
     private UUID boardId;
+    private UUID streamId;
+    private List<UUID> streamIds;
     private UUID gradeId;
     private UUID assignedUserId;
 
@@ -101,6 +103,25 @@ public class LeadStatusAnalyticsFilterRequest {
 
     public void setLeadStatusIds(List<UUID> leadStatusIds) {
         this.statusIds = leadStatusIds;
+    }
+
+    public void setStreamIds(List<UUID> streamIds) {
+        this.streamIds = streamIds;
+        if (streamIds != null && !streamIds.isEmpty() && this.streamId == null) {
+            this.streamId = streamIds.get(0);
+        }
+    }
+
+    public void setStreamId(UUID streamId) {
+        this.streamId = streamId;
+        if (streamId != null) {
+            if (this.streamIds == null) {
+                this.streamIds = new ArrayList<>();
+            }
+            if (!this.streamIds.contains(streamId)) {
+                this.streamIds.add(streamId);
+            }
+        }
     }
 
     public LocalDate getEffectiveStartDate() {

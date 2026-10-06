@@ -77,6 +77,7 @@ public class LeadRequest {
     private UUID programId;
 
     private UUID boardId;
+    private UUID streamId;
     private UUID gradeId;
     private UUID departmentId;
 

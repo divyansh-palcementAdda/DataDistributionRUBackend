@@ -32,6 +32,9 @@ public interface IDashboardService {
     List<GroupCountDTO> getBoardBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
     List<GroupCountDTO> getBoardBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
 
+    List<GroupCountDTO> getStreamBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
+    List<GroupCountDTO> getStreamBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
+
     List<GroupCountDTO> getGradeBreakdown(DashboardAnalyticsFilterRequest filterRequest) throws UnauthorizedException, BadRequestException;
     List<GroupCountDTO> getGradeBreakdown(LocalDate startDate, LocalDate endDate) throws UnauthorizedException, BadRequestException;
 

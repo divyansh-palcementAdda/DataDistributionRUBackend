@@ -241,6 +241,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 				else if (pName.contains("DASHBOARD")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.DASHBOARD);
 				else if (pName.contains("SEGREGATION") || pName.startsWith("DATA_")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.DATA_SEGREGATION);
 				else if (pName.contains("EMAIL")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.EMAIL);
+				else if (pName.contains("BOARD")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.BOARD);
+				else if (pName.contains("STREAM")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.STREAM);
+				else if (pName.contains("GRADE")) p.setEntity(com.app.datadistribution.enums.PermissionEntity.GRADE);
 				else p.setEntity(com.app.datadistribution.enums.PermissionEntity.SYSTEM);
 				mod = true;
 			}
@@ -376,6 +379,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.startsWith("LEAD_STATUS_")
 							|| n.startsWith("LEADSOURCE_")
 							|| n.startsWith("BOARD_")
+							|| n.startsWith("STREAM_")
 							|| n.startsWith("GRADE_")
 							|| (n.startsWith("DROPDOWN_") && !n.equals(PermissionType.DROPDOWN_ROLE_VIEW.name()) && !n.equals(PermissionType.DROPDOWN_PERMISSION_VIEW.name()))
 							|| n.equals(PermissionType.USER_READ.name())
@@ -434,6 +438,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.LEAD_STATUS_HISTORY_VIEW.name())
 							|| n.equals(PermissionType.LEADSOURCE_READ.name())
 							|| n.equals(PermissionType.BOARD_VIEW.name())
+							|| n.equals(PermissionType.STREAM_VIEW.name())
 							|| n.equals(PermissionType.GRADE_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_USER_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_DEPARTMENT_VIEW.name())
@@ -442,6 +447,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 							|| n.equals(PermissionType.DROPDOWN_STATUS_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_SOURCE_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_GRADE_VIEW.name())
+							|| n.equals(PermissionType.DROPDOWN_STREAM_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_BOARD_VIEW.name())
 							|| n.equals(PermissionType.DROPDOWN_COURSE_TYPE_VIEW.name())
 							|| n.equals(PermissionType.USER_COURSE_MATRIX_VIEW.name())

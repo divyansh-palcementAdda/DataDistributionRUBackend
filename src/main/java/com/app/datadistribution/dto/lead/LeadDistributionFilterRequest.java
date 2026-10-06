@@ -24,6 +24,8 @@ public class LeadDistributionFilterRequest {
     private UUID gradeId;
     private List<UUID> boardIds;
     private UUID boardId;
+    private List<UUID> streamIds;
+    private UUID streamId;
     private List<UUID> leadSourceIds;
     private UUID leadSourceId;
     private List<UUID> leadStatusIds;

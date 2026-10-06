@@ -33,23 +33,33 @@ public interface IDataSegregationPermissionService {
      */
     void validateMatrixAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
 
+    void validateMatrixAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException;
+
     /**
      * Validate request parameters against user's permitted flow hierarchy for user analytics.
      */
     void validateUserAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
+
+    void validateUserAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException;
 
     /**
      * Validate request parameters against user's permitted flow hierarchy for lead status analytics.
      */
     void validateLeadStatusAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
 
+    void validateLeadStatusAnalyticsAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException;
+
     /**
      * Validate request parameters against user's permitted flow hierarchy for course-wise segregation.
      */
     void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
 
+    void validateCourseAccess(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException;
+
     /**
      * Validate request parameters against user's permitted flow hierarchy for course user-wise segregation.
      */
     void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId) throws UnauthorizedException;
+
+    void validateCourseUserAccess(UUID courseTypeId, UUID courseId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) throws UnauthorizedException;
 }

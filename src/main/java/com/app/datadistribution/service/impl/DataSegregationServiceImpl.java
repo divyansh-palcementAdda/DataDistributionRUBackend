@@ -27,6 +27,7 @@ import com.app.datadistribution.repository.CourseTypeRepository;
 import com.app.datadistribution.repository.DataSegregationRepository;
 import com.app.datadistribution.repository.GradeRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
+import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.service.dto.UserDataScope;
 import com.app.datadistribution.service.interfaces.IDataSegregationPermissionService;
 import com.app.datadistribution.service.interfaces.IDataSegregationService;
@@ -47,6 +48,7 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
     private final CourseRepository courseRepository;
     private final LeadSourceRepository leadSourceRepository;
     private final BoardRepository boardRepository;
+    private final StreamRepository streamRepository;
     private final GradeRepository gradeRepository;
 
     @Override
@@ -66,21 +68,35 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
     @Transactional(readOnly = true)
     public SegregationMatrixResponseDTO getSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId)
             throws UnauthorizedException, BadRequestException {
+        return getSegregationMatrix(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SegregationMatrixResponseDTO getSegregationMatrix(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId)
+            throws UnauthorizedException, BadRequestException {
         if (courseTypeId == null) {
             throw new BadRequestException("courseTypeId is required for data segregation matrix.");
         }
 
-        segregationPermissionService.validateMatrixAccess(courseTypeId, leadSourceId, boardId, gradeId);
-        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+        segregationPermissionService.validateMatrixAccess(courseTypeId, leadSourceId, boardId, streamId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         DataSegregationCapabilitiesDTO capabilities = segregationPermissionService.getCapabilities();
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId, dataScope, capabilities);
+        return segregationRepository.fetchSegregationMatrix(courseTypeId, leadSourceId, boardId, streamId, gradeId, dataScope, capabilities);
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserSegregationAnalyticsDTO getUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId)
+            throws UnauthorizedException, BadRequestException {
+        return getUserAnalytics(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserSegregationAnalyticsDTO getUserAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId)
             throws UnauthorizedException, BadRequestException {
         if (courseTypeId == null) {
             throw new BadRequestException("courseTypeId is required for user analytics.");
@@ -89,16 +105,23 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
             throw new BadRequestException("leadSourceId is required for user analytics.");
         }
 
-        segregationPermissionService.validateUserAnalyticsAccess(courseTypeId, leadSourceId, boardId, gradeId);
-        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+        segregationPermissionService.validateUserAnalyticsAccess(courseTypeId, leadSourceId, boardId, streamId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchUserAnalytics(courseTypeId, leadSourceId, boardId, gradeId, dataScope);
+        return segregationRepository.fetchUserAnalytics(courseTypeId, leadSourceId, boardId, streamId, gradeId, dataScope);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LeadStatusAnalyticsDTO> getLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId)
+            throws UnauthorizedException, BadRequestException {
+        return getLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LeadStatusAnalyticsDTO> getLeadStatusAnalytics(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId)
             throws UnauthorizedException, BadRequestException {
         if (courseTypeId == null) {
             throw new BadRequestException("courseTypeId is required for lead status analytics.");
@@ -107,11 +130,11 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
             throw new BadRequestException("leadSourceId is required for lead status analytics.");
         }
 
-        segregationPermissionService.validateLeadStatusAnalyticsAccess(courseTypeId, leadSourceId, boardId, gradeId);
-        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+        segregationPermissionService.validateLeadStatusAnalyticsAccess(courseTypeId, leadSourceId, boardId, streamId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, gradeId, dataScope);
+        return segregationRepository.fetchLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, streamId, gradeId, dataScope);
     }
 
     @Override
@@ -119,20 +142,36 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
     public CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId,
                                                                 String search, int page, int size, String sortBy, String sortDirection)
             throws UnauthorizedException, BadRequestException {
+        return getCourseWiseSegregation(courseTypeId, leadSourceId, boardId, null, gradeId, search, page, size, sortBy, sortDirection);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CourseSegregationResponseDTO getCourseWiseSegregation(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId,
+                                                                String search, int page, int size, String sortBy, String sortDirection)
+            throws UnauthorizedException, BadRequestException {
         if (courseTypeId == null) {
             throw new BadRequestException("courseTypeId is required for course-wise segregation.");
         }
 
-        segregationPermissionService.validateCourseAccess(courseTypeId, leadSourceId, boardId, gradeId);
-        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+        segregationPermissionService.validateCourseAccess(courseTypeId, leadSourceId, boardId, streamId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchCourseWiseSegregation(courseTypeId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+        return segregationRepository.fetchCourseWiseSegregation(courseTypeId, leadSourceId, boardId, streamId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID gradeId,
+                                                                        String search, int page, int size, String sortBy, String sortDirection)
+            throws UnauthorizedException, BadRequestException {
+        return getCourseUserWiseSegregation(courseId, leadSourceId, boardId, null, gradeId, search, page, size, sortBy, sortDirection);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CourseUserSegregationResponseDTO getCourseUserWiseSegregation(UUID courseId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId,
                                                                         String search, int page, int size, String sortBy, String sortDirection)
             throws UnauthorizedException, BadRequestException {
         if (courseId == null) {
@@ -143,11 +182,11 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
                 .orElseThrow(() -> new ResourcesNotFoundException("Course not found with id: " + courseId));
 
         UUID courseTypeId = course.getCourseType() != null ? course.getCourseType().getId() : null;
-        segregationPermissionService.validateCourseUserAccess(courseTypeId, courseId, leadSourceId, boardId, gradeId);
-        validateEntities(courseTypeId, leadSourceId, boardId, gradeId);
+        segregationPermissionService.validateCourseUserAccess(courseTypeId, courseId, leadSourceId, boardId, streamId, gradeId);
+        validateEntities(courseTypeId, leadSourceId, boardId, streamId, gradeId);
 
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
-        return segregationRepository.fetchCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
+        return segregationRepository.fetchCourseUserWiseSegregation(courseId, leadSourceId, boardId, streamId, gradeId, search, page, size, sortBy, sortDirection, dataScope);
     }
 
     @Override
@@ -173,6 +212,10 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
     }
 
     private void validateEntities(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID gradeId) {
+        validateEntities(courseTypeId, leadSourceId, boardId, null, gradeId);
+    }
+
+    private void validateEntities(UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) {
         if (courseTypeId != null && !courseTypeRepository.existsById(courseTypeId)) {
             throw new ResourcesNotFoundException("Course Type not found with id: " + courseTypeId);
         }
@@ -181,6 +224,9 @@ public class DataSegregationServiceImpl implements IDataSegregationService {
         }
         if (boardId != null && !boardRepository.existsById(boardId)) {
             throw new ResourcesNotFoundException("Board not found with id: " + boardId);
+        }
+        if (streamId != null && !streamRepository.existsById(streamId)) {
+            throw new ResourcesNotFoundException("Stream not found with id: " + streamId);
         }
         if (gradeId != null && !gradeRepository.existsById(gradeId)) {
             throw new ResourcesNotFoundException("Grade not found with id: " + gradeId);

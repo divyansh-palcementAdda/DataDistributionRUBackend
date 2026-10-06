@@ -25,6 +25,7 @@ public class DashboardAnalyticsFilterRequest {
     private List<UUID> registeredCourseIds;  // Registered course
     private List<UUID> courseTypeIds;
     private List<UUID> boardIds;
+    private List<UUID> streamIds;
     private List<UUID> gradeIds;
     private List<UUID> departmentIds;
     private List<UUID> programIds;
@@ -107,6 +108,7 @@ public class DashboardAnalyticsFilterRequest {
     private Boolean withoutProgram;
     private Boolean withoutGrade;
     private Boolean withoutBoard;
+    private Boolean withoutStream;
     private String unmappedDimension;
 
     // Singular & alias setters for Spring MVC parameter binding compatibility
@@ -178,6 +180,35 @@ public class DashboardAnalyticsFilterRequest {
                 this.boardIds.add(boardId);
             }
         }
+    }
+
+    public void setStreamId(UUID streamId) {
+        if (streamId != null) {
+            if (this.streamIds == null) {
+                this.streamIds = new java.util.ArrayList<>();
+            }
+            if (!this.streamIds.contains(streamId)) {
+                this.streamIds.add(streamId);
+            }
+        }
+    }
+
+    public void setStreamIds(List<UUID> streamIds) {
+        if (streamIds != null && !streamIds.isEmpty()) {
+            if (this.streamIds == null) {
+                this.streamIds = new java.util.ArrayList<>(streamIds);
+            } else {
+                for (UUID id : streamIds) {
+                    if (!this.streamIds.contains(id)) {
+                        this.streamIds.add(id);
+                    }
+                }
+            }
+        }
+    }
+
+    public UUID getStreamId() {
+        return (this.streamIds != null && !this.streamIds.isEmpty()) ? this.streamIds.get(0) : null;
     }
 
     public void setGradeId(UUID gradeId) {

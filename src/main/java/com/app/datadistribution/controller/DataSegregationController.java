@@ -59,14 +59,15 @@ public class DataSegregationController {
 
     @GetMapping("/matrix")
     @PreAuthorize("hasAuthority('DATA_SEGREGATION_VIEW') or hasAuthority('DATA_SEGREGATION_FULL_FLOW_VIEW')")
-    @Operation(summary = "Get hierarchical lead segregation matrix (Course Type -> Source -> Board -> Grade)")
+    @Operation(summary = "Get hierarchical lead segregation matrix (Course Type -> Source -> Board -> Stream -> Grade)")
     public ResponseEntity<ApiResponse<SegregationMatrixResponseDTO>> getMatrix(
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
             @RequestParam(name = "leadSourceId", required = false) UUID leadSourceId,
             @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "streamId", required = false) UUID streamId,
             @RequestParam(name = "gradeId", required = false) UUID gradeId)
             throws UnauthorizedException, BadRequestException {
-        SegregationMatrixResponseDTO response = segregationService.getSegregationMatrix(courseTypeId, leadSourceId, boardId, gradeId);
+        SegregationMatrixResponseDTO response = segregationService.getSegregationMatrix(courseTypeId, leadSourceId, boardId, streamId, gradeId);
         return ResponseEntity.ok(ApiResponse.success("Data segregation matrix retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -77,9 +78,10 @@ public class DataSegregationController {
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
             @RequestParam(name = "leadSourceId") UUID leadSourceId,
             @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "streamId", required = false) UUID streamId,
             @RequestParam(name = "gradeId", required = false) UUID gradeId)
             throws UnauthorizedException, BadRequestException {
-        UserSegregationAnalyticsDTO response = segregationService.getUserAnalytics(courseTypeId, leadSourceId, boardId, gradeId);
+        UserSegregationAnalyticsDTO response = segregationService.getUserAnalytics(courseTypeId, leadSourceId, boardId, streamId, gradeId);
         return ResponseEntity.ok(ApiResponse.success("User segregation analytics retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -90,9 +92,10 @@ public class DataSegregationController {
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
             @RequestParam(name = "leadSourceId") UUID leadSourceId,
             @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "streamId", required = false) UUID streamId,
             @RequestParam(name = "gradeId", required = false) UUID gradeId)
             throws UnauthorizedException, BadRequestException {
-        List<LeadStatusAnalyticsDTO> response = segregationService.getLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, gradeId);
+        List<LeadStatusAnalyticsDTO> response = segregationService.getLeadStatusAnalytics(courseTypeId, leadSourceId, boardId, streamId, gradeId);
         return ResponseEntity.ok(ApiResponse.success("Lead status analytics retrieved successfully", response, HttpStatus.OK.value()));
     }
 
@@ -103,6 +106,7 @@ public class DataSegregationController {
             @RequestParam(name = "courseTypeId") UUID courseTypeId,
             @RequestParam(name = "leadSourceId", required = false) UUID leadSourceId,
             @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "streamId", required = false) UUID streamId,
             @RequestParam(name = "gradeId", required = false) UUID gradeId,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -110,7 +114,7 @@ public class DataSegregationController {
             @RequestParam(name = "sortBy", defaultValue = "total") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "desc") String sortDirection)
             throws UnauthorizedException, BadRequestException {
-        CourseSegregationResponseDTO response = segregationService.getCourseWiseSegregation(courseTypeId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection);
+        CourseSegregationResponseDTO response = segregationService.getCourseWiseSegregation(courseTypeId, leadSourceId, boardId, streamId, gradeId, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(ApiResponse.success("Course-wise segregation fetched successfully", response, HttpStatus.OK.value()));
     }
 
@@ -121,6 +125,7 @@ public class DataSegregationController {
             @PathVariable(name = "courseId") UUID courseId,
             @RequestParam(name = "leadSourceId", required = false) UUID leadSourceId,
             @RequestParam(name = "boardId", required = false) UUID boardId,
+            @RequestParam(name = "streamId", required = false) UUID streamId,
             @RequestParam(name = "gradeId", required = false) UUID gradeId,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "page", defaultValue = "0") int page,
@@ -128,7 +133,7 @@ public class DataSegregationController {
             @RequestParam(name = "sortBy", defaultValue = "total") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "desc") String sortDirection)
             throws UnauthorizedException, BadRequestException {
-        CourseUserSegregationResponseDTO response = segregationService.getCourseUserWiseSegregation(courseId, leadSourceId, boardId, gradeId, search, page, size, sortBy, sortDirection);
+        CourseUserSegregationResponseDTO response = segregationService.getCourseUserWiseSegregation(courseId, leadSourceId, boardId, streamId, gradeId, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(ApiResponse.success("Course user-wise segregation fetched successfully", response, HttpStatus.OK.value()));
     }
 

@@ -443,6 +443,14 @@ public class LeadStatusAnalyticsRepository {
             params.put("boardId", filter.getBoardId());
         }
 
+        if (filter.getStreamIds() != null && !filter.getStreamIds().isEmpty()) {
+            filterClause.append(" AND l.stream_id IN (:streamIds) ");
+            params.put("streamIds", filter.getStreamIds());
+        } else if (filter.getStreamId() != null) {
+            filterClause.append(" AND l.stream_id = :streamId ");
+            params.put("streamId", filter.getStreamId());
+        }
+
         if (filter.getGradeId() != null) {
             filterClause.append(" AND l.grade_id = :gradeId ");
             params.put("gradeId", filter.getGradeId());

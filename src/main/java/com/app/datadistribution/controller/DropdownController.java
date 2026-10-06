@@ -148,6 +148,16 @@ public class DropdownController {
         return ResponseEntity.ok(ApiResponse.success("Boards dropdown retrieved successfully", data, 200));
     }
 
+    @GetMapping("/streams")
+    @PreAuthorize("hasAuthority('DROPDOWN_STREAM_VIEW') or hasAuthority('STREAM_VIEW') or hasAuthority('LEAD_READ')")
+    @Operation(summary = "Get Streams Dropdown", description = "Retrieves active streams")
+    public ResponseEntity<ApiResponse<List<DropdownOptionResponse>>> getStreamsDropdown(
+            @RequestParam(required = false) String search) {
+
+        List<DropdownOptionResponse> data = dropdownService.getStreamsDropdown(search);
+        return ResponseEntity.ok(ApiResponse.success("Streams dropdown retrieved successfully", data, 200));
+    }
+
     @GetMapping("/grades")
     @PreAuthorize("hasAuthority('DROPDOWN_GRADE_VIEW') or hasAuthority('GRADE_VIEW') or hasAuthority('LEAD_READ')")
     @Operation(summary = "Get Grades Dropdown", description = "Retrieves active grades")

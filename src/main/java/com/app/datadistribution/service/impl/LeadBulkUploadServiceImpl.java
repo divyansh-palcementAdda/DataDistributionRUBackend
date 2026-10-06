@@ -45,6 +45,7 @@ import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
 import com.app.datadistribution.entity.Program;
+import com.app.datadistribution.entity.Stream;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.enums.Status;
@@ -61,6 +62,7 @@ import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.LeadStatusHistoryRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
 import com.app.datadistribution.repository.ProgramRepository;
+import com.app.datadistribution.repository.StreamRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.service.interfaces.ILeadBulkUploadService;
 import com.app.datadistribution.service.util.LeadDepartmentResolver;
@@ -78,6 +80,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
     private final LeadSourceRepository leadSourceRepository;
     private final LeadStatusRepository leadStatusRepository;
     private final BoardRepository boardRepository;
+    private final StreamRepository streamRepository;
     private final GradeRepository gradeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
@@ -97,6 +100,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
             MultipartFile file,
             UUID programId,
             UUID courseTypeId,
+            UUID streamId,
             UUID gradeId,
             UUID boardId,
             UUID leadSourceId,
@@ -129,6 +133,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         // 3. Preload & Validate UI Selected Master Data Entities (Fast Fail)
         Program selectedProgram = validateAndFetchProgram(programId);
         CourseType selectedCourseType = validateAndFetchCourseType(courseTypeId);
+        Stream selectedStream = validateAndFetchStream(streamId);
         Grade selectedGrade = validateAndFetchGrade(gradeId);
         Board selectedBoard = validateAndFetchBoard(boardId);
         Set<LeadSource> selectedLeadSources = validateAndFetchLeadSources(leadSourceId, leadSourceIds);
@@ -194,6 +199,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 String country = getCellValue(row, headerMap, "country", formatter);
                 String sourceDetails = getCellValue(row, headerMap, "sourceDetails", formatter);
                 String programVal = getCellValue(row, headerMap, "program", formatter);
+                String streamVal = getCellValue(row, headerMap, "stream", formatter);
                 String remarks = getCellValue(row, headerMap, "remarks", formatter);
                 // courseInterested column is no longer stored as a string field;
                 // we read it only to resolve the Course entity into interestedCourses.
@@ -330,6 +336,24 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                     }
                 }
 
+                Stream rowStream = selectedStream;
+                if (streamVal != null && !streamVal.isBlank()) {
+                    String trimmedStream = streamVal.trim();
+                    rowStream = streamRepository.findByNameIgnoreCaseAndIsDeletedFalse(trimmedStream)
+                            .or(() -> streamRepository.findByCodeIgnoreCaseAndIsDeletedFalse(trimmedStream))
+                            .orElse(null);
+                    if (rowStream == null) {
+                        failedCount++;
+                        failedRows.add(BulkLeadUploadRowError.builder()
+                                .rowNumber(displayRowNumber)
+                                .field("stream")
+                                .value(streamVal)
+                                .reason("Stream '" + streamVal + "' was not found")
+                                .build());
+                        continue;
+                    }
+                }
+
                 // Add to processed phone numbers
                 fileProcessedPhoneSet.add(normalizedPhone);
                 dbPhoneSet.add(normalizedPhone);
@@ -358,6 +382,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         .leadSources(selectedLeadSources)
                         .currentStatus(selectedStatus)
                         .board(selectedBoard)
+                        .stream(rowStream)
                         .grade(selectedGrade)
                         .department(selectedDepartment)
                         .assignedTo(selectedAssignedTo)
@@ -638,6 +663,17 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         return board;
     }
 
+    private Stream validateAndFetchStream(UUID streamId) throws BadRequestException {
+        if (streamId == null) return null;
+        Stream stream = streamRepository.findById(streamId)
+                .filter(s -> !s.isDeleted())
+                .orElseThrow(() -> new ResourcesNotFoundException("Selected Stream not found with ID: " + streamId));
+        if (!stream.isActive()) {
+            throw new BadRequestException("Selected Stream '" + stream.getName() + "' is inactive");
+        }
+        return stream;
+    }
+
     private Set<LeadSource> validateAndFetchLeadSources(UUID singleSourceId, List<UUID> sourceIds) throws BadRequestException {
         Set<UUID> idsToFetch = new HashSet<>();
         if (sourceIds != null) {
@@ -757,6 +793,8 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.SOURCE_DETAILS.getFieldKey(), c);
                     } else if (headerText.contains("courseinterested") || headerText.contains("interestedcourse")) {
                         map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.COURSE_INTERESTED.getFieldKey(), c);
+                    } else if (headerText.equals("stream") || headerText.contains("stream")) {
+                        map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.STREAM.getFieldKey(), c);
                     } else if (headerText.contains("remark") || headerText.contains("note") || headerText.contains("comment")) {
                         map.put(com.app.datadistribution.dto.lead.LeadBulkUploadColumnDefinition.REMARKS.getFieldKey(), c);
                     }

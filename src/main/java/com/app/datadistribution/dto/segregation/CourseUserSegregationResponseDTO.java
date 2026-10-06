@@ -24,6 +24,8 @@ public class CourseUserSegregationResponseDTO {
     private String leadSourceName;
     private UUID boardId;
     private String boardName;
+    private UUID streamId;
+    private String streamName;
     private UUID gradeId;
     private String gradeName;
     private long totalLeads;

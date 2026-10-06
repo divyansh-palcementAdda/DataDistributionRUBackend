@@ -14,16 +14,15 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserSegregationAnalyticsDTO {
-    private UUID courseTypeId;
-    private UUID leadSourceId;
-    private UUID boardId;
+public class StreamNodeDTO {
     private UUID streamId;
-    private UUID gradeId;
+    private String streamName;
+    private String streamCode;
+    private long total;
+    private long allotted;
+    private long unallotted;
+    private long availed;
 
     @Builder.Default
-    private List<LeadStatusColumnDTO> statusColumns = new ArrayList<>();
-
-    @Builder.Default
-    private List<UserAnalyticsRowDTO> users = new ArrayList<>();
+    private List<GradeNodeDTO> grades = new ArrayList<>();
 }

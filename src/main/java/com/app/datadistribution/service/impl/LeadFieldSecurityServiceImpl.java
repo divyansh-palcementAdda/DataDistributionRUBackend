@@ -182,6 +182,12 @@ public class LeadFieldSecurityServiceImpl implements ILeadFieldSecurityService {
             checkWritePermission(authorities, PermissionType.LEAD_FIELD_BOARD_WRITE, "Board");
         }
 
+        // 14b. Stream
+        UUID existingStreamId = existingLead.getStream() != null ? existingLead.getStream().getId() : null;
+        if (isDifferent(existingStreamId, request.getStreamId())) {
+            checkWritePermission(authorities, PermissionType.LEAD_FIELD_STREAM_WRITE, "Stream");
+        }
+
         // 15. Grade
         UUID existingGradeId = existingLead.getGrade() != null ? existingLead.getGrade().getId() : null;
         if (request.getGradeId() != null && isDifferent(existingGradeId, request.getGradeId())) {
@@ -278,6 +284,9 @@ public class LeadFieldSecurityServiceImpl implements ILeadFieldSecurityService {
         }
         if (!authorities.contains(PermissionType.LEAD_FIELD_BOARD_READ.name())) {
             r.setBoard(null);
+        }
+        if (!authorities.contains(PermissionType.LEAD_FIELD_STREAM_READ.name())) {
+            r.setStream(null);
         }
         if (!authorities.contains(PermissionType.LEAD_FIELD_GRADE_READ.name())) {
             r.setGrade(null);

@@ -265,6 +265,18 @@ public class LeadFilterSpecification {
         return (root, query, cb) -> (boardIds != null && !boardIds.isEmpty()) ? root.get("board").get("id").in(boardIds) : cb.conjunction();
     }
 
+    public static Specification<Lead> filterByStream(UUID streamId) {
+        return (root, query, cb) -> streamId != null ? cb.equal(root.get("stream").get("id"), streamId) : cb.conjunction();
+    }
+
+    public static Specification<Lead> filterByStreamIds(List<UUID> streamIds) {
+        return (root, query, cb) -> (streamIds != null && !streamIds.isEmpty()) ? root.get("stream").get("id").in(streamIds) : cb.conjunction();
+    }
+
+    public static Specification<Lead> filterWithoutStream() {
+        return (root, query, cb) -> cb.isNull(root.get("stream"));
+    }
+
     public static Specification<Lead> filterByGrade(UUID gradeId) {
         return (root, query, cb) -> gradeId != null ? cb.equal(root.get("grade").get("id"), gradeId) : cb.conjunction();
     }

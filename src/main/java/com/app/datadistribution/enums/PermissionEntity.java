@@ -16,6 +16,7 @@ public enum PermissionEntity {
     FOLLOW_UP,
     FEEDBACK,
     BOARD,
+    STREAM,
     GRADE,
     DASHBOARD,
     DEPARTMENT,
