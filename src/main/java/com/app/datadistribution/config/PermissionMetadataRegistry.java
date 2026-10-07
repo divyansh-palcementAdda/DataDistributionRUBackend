@@ -215,6 +215,8 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.USER_CREATE, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.CREATE, "Create a new user account");
         reg(map, PermissionType.USER_UPDATE, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPDATE, "Update user profile and status");
         reg(map, PermissionType.USER_DELETE, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.DELETE, "Deactivate or delete user account");
+        reg(map, PermissionType.USER_BULK_UPLOAD, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.UPLOAD, "Bulk upload users from Excel");
+        reg(map, PermissionType.USER_BULK_UPLOAD_TEMPLATE_DOWNLOAD, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.EXPORT, "Download User bulk upload Excel template");
         reg(map, PermissionType.USER_ROLE_ASSIGN, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.ASSIGN, "Assign roles to user accounts");
         reg(map, PermissionType.USER_COURSE_MATRIX_VIEW, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View user-course assignment matrix");
         reg(map, PermissionType.USER_PROGRAM_MATRIX_VIEW, PermissionEntity.USER, PermissionGroup.GENERAL_SYSTEM, PermissionOperationType.VIEW, "View user-program assignment matrix");
@@ -245,6 +247,8 @@ public final class PermissionMetadataRegistry {
         reg(map, PermissionType.DEPARTMENT_CREATE, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.CREATE, "Create a new department");
         reg(map, PermissionType.DEPARTMENT_UPDATE, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPDATE, "Update department details");
         reg(map, PermissionType.DEPARTMENT_DELETE, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Delete department");
+        reg(map, PermissionType.DEPARTMENT_BULK_UPLOAD, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.UPLOAD, "Bulk upload departments from Excel");
+        reg(map, PermissionType.DEPARTMENT_BULK_UPLOAD_TEMPLATE_DOWNLOAD, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.EXPORT, "Download Department bulk upload Excel template");
         reg(map, PermissionType.DEPARTMENT_USER_VIEW, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.VIEW, "View users belonging to department");
         reg(map, PermissionType.DEPARTMENT_USER_ASSIGN, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.ASSIGN, "Assign users to department");
         reg(map, PermissionType.DEPARTMENT_USER_REMOVE, PermissionEntity.DEPARTMENT, PermissionGroup.SYSTEM_CONFIG, PermissionOperationType.DELETE, "Remove user from department");

@@ -86,6 +86,9 @@ public class LeadPreferredStudyAndVisitPlanningTest {
     @Mock
     private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
 
+    @Mock
+    private com.app.datadistribution.service.util.LeadAcademicResolver leadAcademicResolver;
+
     @InjectMocks
     private LeadServiceImpl leadService;
 
@@ -151,6 +154,8 @@ public class LeadPreferredStudyAndVisitPlanningTest {
         when(leadStatusRepository.findByCodeIgnoreCase("RAW")).thenReturn(Optional.of(rawStatus));
         when(leadStatusRepository.findByCodeIgnoreCase("Raw")).thenReturn(Optional.of(rawStatus));
         when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus));
+        lenient().when(leadAcademicResolver.resolveLeadAcademicMappings(any(), any(), any(), any()))
+                .thenReturn(com.app.datadistribution.service.dto.LeadAcademicResolutionResult.builder().build());
         when(leadRepository.save(any(Lead.class))).thenAnswer(invocation -> {
             Lead l = invocation.getArgument(0);
             if (l.getId() == null) {

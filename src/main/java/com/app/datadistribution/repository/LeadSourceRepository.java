@@ -10,9 +10,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface LeadSourceRepository extends JpaRepository<LeadSource, UUID>, JpaSpecificationExecutor<LeadSource>, LeadSourceRepositoryCustom {
     Optional<LeadSource> findByNameIgnoreCase(String name);
+    Optional<LeadSource> findByNameIgnoreCaseAndIsDeletedFalse(String name);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);
     Optional<LeadSource> findByCodeIgnoreCase(String code);
+    Optional<LeadSource> findByCodeIgnoreCaseAndIsDeletedFalse(String code);
     boolean existsByCodeIgnoreCase(String code);
     boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
 }

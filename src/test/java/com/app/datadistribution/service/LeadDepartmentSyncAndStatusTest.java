@@ -80,6 +80,8 @@ class LeadDepartmentSyncAndStatusTest {
     private com.app.datadistribution.repository.ProgramRepository programRepository;
     @Mock
     private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
+    @Mock
+    private com.app.datadistribution.service.util.LeadAcademicResolver leadAcademicResolver;
 
     @InjectMocks
     private LeadServiceImpl leadService;
@@ -133,6 +135,8 @@ class LeadDepartmentSyncAndStatusTest {
         when(leadStatusRepository.findById(statusContacted.getId())).thenReturn(Optional.of(statusContacted));
         when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
         when(leadMapper.toDto(any(Lead.class))).thenReturn(LeadResponse.builder().build());
+        lenient().when(leadAcademicResolver.resolveLeadAcademicMappings(any(), any(), any(), any()))
+                .thenReturn(com.app.datadistribution.service.dto.LeadAcademicResolutionResult.builder().build());
         lenient().when(studentVerificationService.verifyStudent(any())).thenReturn(
                 com.app.datadistribution.integration.cms.dto.StudentVerificationResponse.builder()
                         .verified(true)

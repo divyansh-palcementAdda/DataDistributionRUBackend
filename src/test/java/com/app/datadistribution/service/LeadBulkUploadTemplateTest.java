@@ -61,13 +61,13 @@ public class LeadBulkUploadTemplateTest {
     @Test
     public void testColumnDefinition_Integrity() {
         List<LeadBulkUploadColumnDefinition> columns = LeadBulkUploadColumnDefinition.getAllColumns();
-        assertEquals(12, columns.size());
+        assertEquals(17, columns.size());
 
-        assertTrue(LeadBulkUploadColumnDefinition.FULL_NAME.isRequired());
-        assertTrue(LeadBulkUploadColumnDefinition.PHONE_NUMBER.isRequired());
+        assertFalse(LeadBulkUploadColumnDefinition.FULL_NAME.isRequired());
+        assertFalse(LeadBulkUploadColumnDefinition.PHONE_NUMBER.isRequired());
         assertFalse(LeadBulkUploadColumnDefinition.EMAIL.isRequired());
 
-        assertEquals("Full Name *", LeadBulkUploadColumnDefinition.FULL_NAME.getHeaderName());
+        assertEquals("Full Name", LeadBulkUploadColumnDefinition.FULL_NAME.getHeaderName());
         assertEquals("fullName", LeadBulkUploadColumnDefinition.FULL_NAME.getFieldKey());
     }
 }

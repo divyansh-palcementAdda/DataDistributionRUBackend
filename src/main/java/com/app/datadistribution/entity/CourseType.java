@@ -32,4 +32,8 @@ public class CourseType extends BaseEntity {
     @Column(nullable = false, length = 50)
     @Builder.Default
     private Status status = Status.ACTIVE;
+
+    public boolean isActive() {
+        return Status.ACTIVE.equals(this.status);
+    }
 }

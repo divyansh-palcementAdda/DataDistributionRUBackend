@@ -37,6 +37,13 @@ import com.app.datadistribution.service.interfaces.IUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+import com.app.datadistribution.dto.user.UserBulkUploadPreviewResponseDTO;
+import com.app.datadistribution.dto.user.UserBulkUploadResponseDTO;
+import com.app.datadistribution.service.interfaces.IUserBulkUploadService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -47,6 +54,7 @@ public class UserController {
 
     private final IUserService userService;
     private final IUserPerformanceService userPerformanceService;
+    private final IUserBulkUploadService bulkUploadService;
 
     @GetMapping("/performance")
     @PreAuthorize("hasAnyAuthority('USER_READ', 'DEPARTMENT_COUNSELLOR_VIEW', 'USER_ACTIVITY_VIEW', 'DASHBOARD_VIEW')")
@@ -197,5 +205,47 @@ public class UserController {
             throw new BadRequestException("At least one role must be specified via roleName or roleNames");
         }
         return resolved.stream().distinct().collect(Collectors.toList());
+    }
+
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('USER_BULK_UPLOAD') or hasAuthority('USER_CREATE')")
+    @Operation(summary = "Bulk upload and create users mapped to departments from Excel")
+    public ResponseEntity<ApiResponse<UserBulkUploadResponseDTO>> bulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        UserBulkUploadResponseDTO response = bulkUploadService.bulkUpload(file);
+        return ResponseEntity.ok(ApiResponse.success("User bulk upload completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/bulk-upload/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('USER_BULK_UPLOAD') or hasAuthority('USER_CREATE')")
+    @Operation(summary = "Validate and preview User Excel import without committing changes")
+    public ResponseEntity<ApiResponse<UserBulkUploadPreviewResponseDTO>> validateBulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        UserBulkUploadPreviewResponseDTO response = bulkUploadService.validateExcel(file);
+        return ResponseEntity.ok(ApiResponse.success("User Excel validation preview generated", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/bulk-upload/template")
+    @PreAuthorize("hasAuthority('USER_BULK_UPLOAD_TEMPLATE_DOWNLOAD') or hasAuthority('USER_BULK_UPLOAD') or hasAuthority('USER_CREATE') or hasAuthority('USER_VIEW')")
+    @Operation(summary = "Download official User bulk upload Excel template")
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] excelBytes = bulkUploadService.generateTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("user_bulk_upload_template.xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/bulk-upload/{importId}/error-file")
+    @PreAuthorize("hasAuthority('USER_BULK_UPLOAD') or hasAuthority('USER_CREATE') or hasAuthority('USER_VIEW')")
+    @Operation(summary = "Download error sheet for an executed or validated user bulk upload")
+    public ResponseEntity<byte[]> downloadErrorFile(@PathVariable("importId") UUID importId) {
+        byte[] excelBytes = bulkUploadService.getErrorFile(importId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("user_bulk_upload_errors_" + importId + ".xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
     }
 }

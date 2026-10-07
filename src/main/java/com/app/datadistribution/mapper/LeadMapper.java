@@ -182,6 +182,22 @@ public interface LeadMapper {
             }
         }
 
+        com.app.datadistribution.dto.course.CourseTypeResponseDTO courseTypeDto = null;
+        com.app.datadistribution.entity.CourseType ctEntity = lead.getCourseType();
+        if (ctEntity == null && lead.getCourse() != null && lead.getCourse().getCourseType() != null) {
+            ctEntity = lead.getCourse().getCourseType();
+        }
+        if (ctEntity != null && !ctEntity.isDeleted()) {
+            courseTypeDto = com.app.datadistribution.dto.course.CourseTypeResponseDTO.builder()
+                    .id(ctEntity.getId())
+                    .name(ctEntity.getName())
+                    .description(ctEntity.getDescription())
+                    .status(ctEntity.getStatus())
+                    .createdAt(ctEntity.getCreatedAt())
+                    .updatedAt(ctEntity.getUpdatedAt())
+                    .build();
+        }
+
         return LeadResponse.builder()
                 .id(lead.getId())
                 .leadCode(lead.getLeadCode())
@@ -202,6 +218,7 @@ public interface LeadMapper {
                 .sourceDetails(lead.getSourceDetails())
                 .interestedCourses(interestedCoursesDtos)
                 .interestedCourseTypes(interestedCourseTypesDtos)
+                .courseType(courseTypeDto)
                 .course(registeredCourseDto)
                 .registeredCourse(registeredCourseDto)
                 .program(programDto)

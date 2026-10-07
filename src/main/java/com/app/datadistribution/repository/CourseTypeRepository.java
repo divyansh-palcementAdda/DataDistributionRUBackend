@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CourseTypeRepository extends JpaRepository<CourseType, UUID>, JpaSpecificationExecutor<CourseType>, CourseTypeRepositoryCustom {
     Optional<CourseType> findByNameIgnoreCase(String name);
+    Optional<CourseType> findByNameIgnoreCaseAndIsDeletedFalse(String name);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);
 }

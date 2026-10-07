@@ -517,10 +517,11 @@ public class LeadController {
             @RequestParam(value = "leadSourceIds", required = false) List<UUID> leadSourceIds,
             @RequestParam(value = "statusId", required = false) UUID statusId,
             @RequestParam(value = "departmentId", required = false) UUID departmentId,
-            @RequestParam(value = "assignedToUserId", required = false) UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
+            @RequestParam(value = "assignedToUserId", required = false) UUID assignedToUserId,
+            @RequestParam(value = "mapping", required = false) String mapping) throws BadRequestException, UnauthorizedException {
 
         BulkLeadUploadResponse response = leadBulkUploadService.bulkUploadLeads(
-                file, programId, courseTypeId, streamId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId
+                file, programId, courseTypeId, streamId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId, mapping
         );
 
         if (response.getSuccessCount() == 0) {

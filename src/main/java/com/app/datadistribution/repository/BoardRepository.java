@@ -10,7 +10,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface BoardRepository extends JpaRepository<Board, UUID>, JpaSpecificationExecutor<Board>, BoardRepositoryCustom {
     Optional<Board> findByNameIgnoreCase(String name);
+    Optional<Board> findByNameIgnoreCaseAndIsDeletedFalse(String name);
     Optional<Board> findByCodeIgnoreCase(String code);
+    Optional<Board> findByCodeIgnoreCaseAndIsDeletedFalse(String code);
     Optional<Board> findByCode(String code);
     boolean existsByNameIgnoreCase(String name);
     boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);

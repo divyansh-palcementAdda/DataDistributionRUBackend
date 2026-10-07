@@ -52,4 +52,10 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
 
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.isDeleted = false AND l.assignedTo.id = :userId AND l.currentStatus.id = :rawStatusId")
     long countCurrentRawLeadsByUserId(@org.springframework.data.repository.query.Param("userId") UUID userId, @org.springframework.data.repository.query.Param("rawStatusId") UUID rawStatusId);
+
+    @Query(value = "SELECT program_id FROM lead_programs WHERE lead_id = :leadId", nativeQuery = true)
+    List<UUID> findProgramIdsByLeadId(@org.springframework.data.repository.query.Param("leadId") UUID leadId);
+
+    @Query(value = "SELECT course_id FROM leads WHERE id = :leadId", nativeQuery = true)
+    UUID findCourseIdByLeadId(@org.springframework.data.repository.query.Param("leadId") UUID leadId);
 }

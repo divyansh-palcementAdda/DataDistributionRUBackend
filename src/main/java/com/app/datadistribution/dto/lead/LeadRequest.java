@@ -74,6 +74,8 @@ public class LeadRequest {
 
     private UUID registeredCourseId;
 
+    private UUID courseTypeId;
+
     private UUID programId;
     private List<UUID> programIds;
 

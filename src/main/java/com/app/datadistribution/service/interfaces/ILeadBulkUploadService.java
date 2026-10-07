@@ -20,7 +20,23 @@ public interface ILeadBulkUploadService {
             List<UUID> leadSourceIds,
             UUID statusId,
             UUID departmentId,
-            UUID assignedToUserId) throws BadRequestException, UnauthorizedException;
+            UUID assignedToUserId,
+            String mappingJson) throws BadRequestException, UnauthorizedException;
+
+    default BulkLeadUploadResponse bulkUploadLeads(
+            MultipartFile file,
+            UUID programId,
+            UUID courseTypeId,
+            UUID streamId,
+            UUID gradeId,
+            UUID boardId,
+            UUID leadSourceId,
+            List<UUID> leadSourceIds,
+            UUID statusId,
+            UUID departmentId,
+            UUID assignedToUserId) throws BadRequestException, UnauthorizedException {
+        return bulkUploadLeads(file, programId, courseTypeId, streamId, gradeId, boardId, leadSourceId, leadSourceIds, statusId, departmentId, assignedToUserId, null);
+    }
 
     default BulkLeadUploadResponse bulkUploadLeads(
             MultipartFile file,

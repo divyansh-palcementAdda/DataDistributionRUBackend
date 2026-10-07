@@ -40,6 +40,7 @@ public class LeadResponse {
     private String sourceDetails;
     private List<CourseSummaryDTO> interestedCourses;
     private List<com.app.datadistribution.dto.course.CourseTypeResponseDTO> interestedCourseTypes;
+    private com.app.datadistribution.dto.course.CourseTypeResponseDTO courseType;
     private CourseSummaryDTO course;
     private CourseSummaryDTO registeredCourse;
     private com.app.datadistribution.dto.program.ProgramSummaryDTO program;

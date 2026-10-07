@@ -40,315 +40,326 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @ExtendWith(MockitoExtension.class)
 class LeadVisibilityApiTest {
 
-    @Mock
-    private LeadRepository leadRepository;
-    @Mock
-    private LeadSourceRepository leadSourceRepository;
-    @Mock
-    private LeadStatusRepository leadStatusRepository;
-    @Mock
-    private BoardRepository boardRepository;
-    @Mock
-    private GradeRepository gradeRepository;
-    @Mock
-    private DepartmentRepository departmentRepository;
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private LeadStatusHistoryRepository leadStatusHistoryRepository;
-    @Mock
-    private LeadFeedbackRepository leadFeedbackRepository;
-    @Mock
-    private LeadAvailedRepository leadAvailedRepository;
-    @Mock
-    private LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
-    @Mock
-    private CourseRepository courseRepository;
-    @Mock
-    private IUserDataScopeService dataScopeService;
-    @Mock
-    private ILeadDataScopeService leadDataScopeService;
-    @Mock
-    private LeadMapper leadMapper;
-    @Mock
-    private com.app.datadistribution.repository.ProgramRepository programRepository;
-    @Mock
-    private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
-    @Mock
-    private jakarta.persistence.EntityManager entityManager;
+        @Mock
+        private LeadRepository leadRepository;
+        @Mock
+        private LeadSourceRepository leadSourceRepository;
+        @Mock
+        private LeadStatusRepository leadStatusRepository;
+        @Mock
+        private BoardRepository boardRepository;
+        @Mock
+        private GradeRepository gradeRepository;
+        @Mock
+        private DepartmentRepository departmentRepository;
+        @Mock
+        private UserRepository userRepository;
+        @Mock
+        private LeadStatusHistoryRepository leadStatusHistoryRepository;
+        @Mock
+        private LeadFeedbackRepository leadFeedbackRepository;
+        @Mock
+        private LeadAvailedRepository leadAvailedRepository;
+        @Mock
+        private LeadAssignmentHistoryRepository leadAssignmentHistoryRepository;
+        @Mock
+        private CourseRepository courseRepository;
+        @Mock
+        private IUserDataScopeService dataScopeService;
+        @Mock
+        private ILeadDataScopeService leadDataScopeService;
+        @Mock
+        private LeadMapper leadMapper;
+        @Mock
+        private com.app.datadistribution.repository.ProgramRepository programRepository;
+        @Mock
+        private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
+        @Mock
+        private com.app.datadistribution.service.util.LeadAcademicResolver leadAcademicResolver;
+        @Mock
+        private jakarta.persistence.EntityManager entityManager;
 
-    @InjectMocks
-    private LeadServiceImpl leadService;
+        @InjectMocks
+        private LeadServiceImpl leadService;
 
-    private User adminUser;
-    private User hodUser;
-    private User counselor1;
-    private User counselor2;
+        private User adminUser;
+        private User hodUser;
+        private User counselor1;
+        private User counselor2;
 
-    private Department dept1;
-    private Department dept2;
+        private Department dept1;
+        private Department dept2;
 
-    private Lead lead1;
-    private Lead lead2;
+        private Lead lead1;
+        private Lead lead2;
 
-    @BeforeEach
-    void setUp() {
-        dept1 = Department.builder().name("Dept 1").build();
-        dept1.setId(UUID.randomUUID());
+        @BeforeEach
+        void setUp() throws BadRequestException {
+                dept1 = Department.builder().name("Dept 1").build();
+                dept1.setId(UUID.randomUUID());
 
-        dept2 = Department.builder().name("Dept 2").build();
-        dept2.setId(UUID.randomUUID());
+                dept2 = Department.builder().name("Dept 2").build();
+                dept2.setId(UUID.randomUUID());
 
-        adminUser = User.builder().username("admin").build();
-        adminUser.setId(UUID.randomUUID());
+                adminUser = User.builder().username("admin").build();
+                adminUser.setId(UUID.randomUUID());
 
-        hodUser = User.builder().username("hod").build();
-        hodUser.setId(UUID.randomUUID());
+                hodUser = User.builder().username("hod").build();
+                hodUser.setId(UUID.randomUUID());
 
-        counselor1 = User.builder().username("counselor1").build();
-        counselor1.setId(UUID.randomUUID());
+                counselor1 = User.builder().username("counselor1").build();
+                counselor1.setId(UUID.randomUUID());
 
-        counselor2 = User.builder().username("counselor2").build();
-        counselor2.setId(UUID.randomUUID());
+                counselor2 = User.builder().username("counselor2").build();
+                counselor2.setId(UUID.randomUUID());
 
-        lead1 = Lead.builder()
-                .leadCode("LEAD-101")
-                .fullName("John Doe")
-                .department(dept1)
-                .assignedTo(counselor1)
-                .createdByUser(counselor1)
-                .build();
-        lead1.setId(UUID.randomUUID());
+                lead1 = Lead.builder()
+                                .leadCode("LEAD-101")
+                                .fullName("John Doe")
+                                .department(dept1)
+                                .assignedTo(counselor1)
+                                .createdByUser(counselor1)
+                                .build();
+                lead1.setId(UUID.randomUUID());
 
-        lead2 = Lead.builder()
-                .leadCode("LEAD-102")
-                .fullName("Jane Smith")
-                .department(dept2)
-                .assignedTo(counselor2)
-                .createdByUser(counselor2)
-                .build();
-        lead2.setId(UUID.randomUUID());
-    }
+                lead2 = Lead.builder()
+                                .leadCode("LEAD-102")
+                                .fullName("Jane Smith")
+                                .department(dept2)
+                                .assignedTo(counselor2)
+                                .createdByUser(counselor2)
+                                .build();
+                lead2.setId(UUID.randomUUID());
+                lenient().when(leadAcademicResolver.resolveLeadAcademicMappings(any(), any(), any(), any()))
+                                .thenReturn(com.app.datadistribution.service.dto.LeadAcademicResolutionResult.builder()
+                                                .build());
+        }
 
-    private void mockSecurityContext(User user) {
-        Authentication auth = mock(Authentication.class);
-        when(auth.isAuthenticated()).thenReturn(true);
-        when(auth.getName()).thenReturn(user.getUsername());
-        when(auth.getPrincipal()).thenReturn(user.getUsername());
+        private void mockSecurityContext(User user) {
+                Authentication auth = mock(Authentication.class);
+                when(auth.isAuthenticated()).thenReturn(true);
+                when(auth.getName()).thenReturn(user.getUsername());
+                when(auth.getPrincipal()).thenReturn(user.getUsername());
 
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(auth);
-        SecurityContextHolder.setContext(securityContext);
+                SecurityContext securityContext = mock(SecurityContext.class);
+                when(securityContext.getAuthentication()).thenReturn(auth);
+                SecurityContextHolder.setContext(securityContext);
 
-        when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
-    }
+                when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+        }
 
-    @Test
-    void testGetById_Authorized() throws Exception {
-        UUID leadId = lead1.getId();
-        when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead1));
+        @Test
+        void testGetById_Authorized() throws Exception {
+                UUID leadId = lead1.getId();
+                when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead1));
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        doNothing().when(leadDataScopeService).validateLeadReadAccess(lead1, scope);
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                doNothing().when(leadDataScopeService).validateLeadReadAccess(lead1, scope);
 
-        LeadResponse expectedDto = LeadResponse.builder().id(leadId).leadCode("LEAD-101").build();
-        when(leadMapper.toDto(lead1)).thenReturn(expectedDto);
+                LeadResponse expectedDto = LeadResponse.builder().id(leadId).leadCode("LEAD-101").build();
+                when(leadMapper.toDto(lead1)).thenReturn(expectedDto);
 
-        LeadResponse result = leadService.getById(leadId);
-        assertNotNull(result);
-        assertEquals("LEAD-101", result.getLeadCode());
-        verify(leadDataScopeService).validateLeadReadAccess(lead1, scope);
-    }
+                LeadResponse result = leadService.getById(leadId);
+                assertNotNull(result);
+                assertEquals("LEAD-101", result.getLeadCode());
+                verify(leadDataScopeService).validateLeadReadAccess(lead1, scope);
+        }
 
-    @Test
-    void testGetById_Unauthorized_ThrowsException() throws Exception {
-        UUID leadId = lead2.getId();
-        when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead2));
+        @Test
+        void testGetById_Unauthorized_ThrowsException() throws Exception {
+                UUID leadId = lead2.getId();
+                when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead2));
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        doThrow(new UnauthorizedException("You do not have access to this lead based on your assigned role and data scope."))
-                .when(leadDataScopeService).validateLeadReadAccess(lead2, scope);
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                doThrow(new UnauthorizedException(
+                                "You do not have access to this lead based on your assigned role and data scope."))
+                                .when(leadDataScopeService).validateLeadReadAccess(lead2, scope);
 
-        UnauthorizedException ex = assertThrows(UnauthorizedException.class, () -> leadService.getById(leadId));
-        assertTrue(ex.getMessage().contains("assigned role and data scope"));
-    }
+                UnauthorizedException ex = assertThrows(UnauthorizedException.class, () -> leadService.getById(leadId));
+                assertTrue(ex.getMessage().contains("assigned role and data scope"));
+        }
 
-    @Test
-    void testGetAllLeads_AppliesScopeSpecification() throws Exception {
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+        @Test
+        void testGetAllLeads_AppliesScopeSpecification() throws Exception {
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
-        Specification<Lead> mockSpec = mock(Specification.class);
-        when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(mockSpec);
+                Specification<Lead> mockSpec = mock(Specification.class);
+                when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(mockSpec);
 
-        Page<Lead> mockPage = new PageImpl<>(List.of(lead1));
-        when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
-        when(leadMapper.toDto(lead1)).thenReturn(LeadResponse.builder().id(lead1.getId()).leadCode("LEAD-101").build());
+                Page<Lead> mockPage = new PageImpl<>(List.of(lead1));
+                when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
+                when(leadMapper.toDto(lead1))
+                                .thenReturn(LeadResponse.builder().id(lead1.getId()).leadCode("LEAD-101").build());
 
-        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
-        LeadPageResponse response = leadService.getAllLeads(
-                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null
-        );
+                PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+                LeadPageResponse response = leadService.getAllLeads(
+                                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null);
 
-        assertNotNull(response);
-        assertEquals(1, response.getTotalElements());
-        assertEquals(1, response.getContent().size());
-        assertEquals("LEAD-101", response.getContent().get(0).getLeadCode());
-    }
+                assertNotNull(response);
+                assertEquals(1, response.getTotalElements());
+                assertEquals(1, response.getContent().size());
+                assertEquals("LEAD-101", response.getContent().get(0).getLeadCode());
+        }
 
-    @Test
-    void testCounselor_AutoAssignsToSelfWhenCreatingLead() throws Exception {
-        mockSecurityContext(counselor1);
+        @Test
+        void testCounselor_AutoAssignsToSelfWhenCreatingLead() throws Exception {
+                mockSecurityContext(counselor1);
 
-        LeadRequest request = LeadRequest.builder()
-                .fullName("New Student")
-                .phoneNumber("9876543210")
-                .assignedToUserId(counselor2.getId()) // Counselor 1 trying to assign to Counselor 2
-                .build();
+                LeadRequest request = LeadRequest.builder()
+                                .fullName("New Student")
+                                .phoneNumber("9876543210")
+                                .assignedToUserId(counselor2.getId()) // Counselor 1 trying to assign to Counselor 2
+                                .build();
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        when(leadMapper.toEntity(request)).thenReturn(new Lead());
-        when(leadStatusRepository.findByCodeIgnoreCase(anyString())).thenReturn(Optional.of(LeadStatus.builder().name("New").active(true).build()));
-        when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(leadMapper.toDto(any(Lead.class))).thenReturn(LeadResponse.builder().build());
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                when(leadMapper.toEntity(request)).thenReturn(new Lead());
+                when(leadStatusRepository.findByCodeIgnoreCase(anyString()))
+                                .thenReturn(Optional.of(LeadStatus.builder().name("New").active(true).build()));
+                when(leadRepository.save(any(Lead.class))).thenAnswer(inv -> inv.getArgument(0));
+                when(leadMapper.toDto(any(Lead.class))).thenReturn(LeadResponse.builder().build());
 
-        LeadResponse response = leadService.create(request);
-        assertNotNull(response);
+                LeadResponse response = leadService.create(request);
+                assertNotNull(response);
 
-        org.mockito.ArgumentCaptor<Lead> captor = org.mockito.ArgumentCaptor.forClass(Lead.class);
-        verify(leadRepository).save(captor.capture());
-        assertEquals(counselor1, captor.getValue().getAssignedTo());
-    }
+                org.mockito.ArgumentCaptor<Lead> captor = org.mockito.ArgumentCaptor.forClass(Lead.class);
+                verify(leadRepository).save(captor.capture());
+                assertEquals(counselor1, captor.getValue().getAssignedTo());
+        }
 
-    @Test
-    void testHod_CannotAssignToDepartmentOutsideScope() throws Exception {
-        mockSecurityContext(hodUser);
+        @Test
+        void testHod_CannotAssignToDepartmentOutsideScope() throws Exception {
+                mockSecurityContext(hodUser);
 
-        LeadRequest request = LeadRequest.builder()
-                .fullName("New Student")
-                .phoneNumber("9876543210")
-                .departmentId(dept2.getId()) // HOD mapped to dept1 only
-                .build();
+                LeadRequest request = LeadRequest.builder()
+                                .fullName("New Student")
+                                .phoneNumber("9876543210")
+                                .departmentId(dept2.getId()) // HOD mapped to dept1 only
+                                .build();
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(hodUser.getId())
-                .scopeType(ScopeType.DEPARTMENT)
-                .isHod(true)
-                .departmentIds(Set.of(dept1.getId()))
-                .departmentUserIds(Set.of(counselor1.getId(), hodUser.getId()))
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        when(departmentRepository.findById(dept2.getId())).thenReturn(Optional.of(dept2));
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(hodUser.getId())
+                                .scopeType(ScopeType.DEPARTMENT)
+                                .isHod(true)
+                                .departmentIds(Set.of(dept1.getId()))
+                                .departmentUserIds(Set.of(counselor1.getId(), hodUser.getId()))
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                when(departmentRepository.findById(dept2.getId())).thenReturn(Optional.of(dept2));
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
-        assertTrue(ex.getMessage().contains("HOD can only create leads within their assigned department"));
-    }
+                BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
+                assertTrue(ex.getMessage().contains("HOD can only create leads within their assigned department"));
+        }
 
-    @Test
-    void testUpdate_WriteAccessValidated() throws Exception {
-        UUID leadId = lead1.getId();
-        when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead1));
+        @Test
+        void testUpdate_WriteAccessValidated() throws Exception {
+                UUID leadId = lead1.getId();
+                when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead1));
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(hodUser.getId())
-                .scopeType(ScopeType.DEPARTMENT)
-                .isHod(true)
-                .departmentIds(Set.of(dept1.getId()))
-                .departmentUserIds(Set.of(counselor1.getId(), hodUser.getId()))
-                .hodAccessType(HodAccessType.VIEW_ONLY)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        doThrow(new UnauthorizedException("HOD with VIEW_ONLY access cannot modify department leads."))
-                .when(leadDataScopeService).validateLeadWriteAccess(lead1, scope);
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(hodUser.getId())
+                                .scopeType(ScopeType.DEPARTMENT)
+                                .isHod(true)
+                                .departmentIds(Set.of(dept1.getId()))
+                                .departmentUserIds(Set.of(counselor1.getId(), hodUser.getId()))
+                                .hodAccessType(HodAccessType.VIEW_ONLY)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                doThrow(new UnauthorizedException("HOD with VIEW_ONLY access cannot modify department leads."))
+                                .when(leadDataScopeService).validateLeadWriteAccess(lead1, scope);
 
-        LeadRequest request = LeadRequest.builder()
-                .fullName("Updated Name")
-                .phoneNumber("9876543210")
-                .build();
+                LeadRequest request = LeadRequest.builder()
+                                .fullName("Updated Name")
+                                .phoneNumber("9876543210")
+                                .build();
 
-        UnauthorizedException ex = assertThrows(UnauthorizedException.class, () -> leadService.update(leadId, request));
-        assertTrue(ex.getMessage().contains("VIEW_ONLY"));
-    }
+                UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                                () -> leadService.update(leadId, request));
+                assertTrue(ex.getMessage().contains("VIEW_ONLY"));
+        }
 
-    @Test
-    void testDeleteLead_WriteAccessValidated() throws Exception {
-        UUID leadId = lead2.getId();
-        when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead2));
+        @Test
+        void testDeleteLead_WriteAccessValidated() throws Exception {
+                UUID leadId = lead2.getId();
+                when(leadRepository.findById(leadId)).thenReturn(Optional.of(lead2));
 
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
-        doThrow(new UnauthorizedException("You do not have access to this lead based on your assigned role and data scope."))
-                .when(leadDataScopeService).validateLeadWriteAccess(lead2, scope);
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+                doThrow(new UnauthorizedException(
+                                "You do not have access to this lead based on your assigned role and data scope."))
+                                .when(leadDataScopeService).validateLeadWriteAccess(lead2, scope);
 
-        UnauthorizedException ex = assertThrows(UnauthorizedException.class, () -> leadService.deleteLead(leadId));
-        assertTrue(ex.getMessage().contains("assigned role and data scope"));
-    }
+                UnauthorizedException ex = assertThrows(UnauthorizedException.class,
+                                () -> leadService.deleteLead(leadId));
+                assertTrue(ex.getMessage().contains("assigned role and data scope"));
+        }
 
-    @Test
-    void testGetAllLeads_CounselorZeroAssignedLeads_ReturnsEmptyPage() throws Exception {
-        UserDataScope scope = UserDataScope.builder()
-                .userId(counselor1.getId())
-                .scopeType(ScopeType.SELF)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+        @Test
+        void testGetAllLeads_CounselorZeroAssignedLeads_ReturnsEmptyPage() throws Exception {
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(counselor1.getId())
+                                .scopeType(ScopeType.SELF)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
-        Specification<Lead> mockSpec = mock(Specification.class);
-        when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(mockSpec);
+                Specification<Lead> mockSpec = mock(Specification.class);
+                when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(mockSpec);
 
-        Page<Lead> emptyPage = new PageImpl<>(Collections.emptyList());
-        when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
+                Page<Lead> emptyPage = new PageImpl<>(Collections.emptyList());
+                when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(emptyPage);
 
-        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
-        LeadPageResponse response = leadService.getAllLeads(
-                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null
-        );
+                PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+                LeadPageResponse response = leadService.getAllLeads(
+                                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null);
 
-        assertNotNull(response);
-        assertEquals(0, response.getTotalElements());
-        assertTrue(response.getContent().isEmpty());
-    }
+                assertNotNull(response);
+                assertEquals(0, response.getTotalElements());
+                assertTrue(response.getContent().isEmpty());
+        }
 
-    @Test
-    void testGetAllLeads_FilterAllottedAndAvailed_Success() throws Exception {
-        UserDataScope scope = UserDataScope.builder()
-                .userId(adminUser.getId())
-                .scopeType(ScopeType.SYSTEM)
-                .build();
-        when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
+        @Test
+        void testGetAllLeads_FilterAllottedAndAvailed_Success() throws Exception {
+                UserDataScope scope = UserDataScope.builder()
+                                .userId(adminUser.getId())
+                                .scopeType(ScopeType.SYSTEM)
+                                .build();
+                when(leadDataScopeService.getCurrentUserScope()).thenReturn(scope);
 
-        Specification<Lead> realSpec = (root, query, cb) -> cb.conjunction();
-        when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(realSpec);
+                Specification<Lead> realSpec = (root, query, cb) -> cb.conjunction();
+                when(leadDataScopeService.getLeadScopeSpecification(scope)).thenReturn(realSpec);
 
-        Page<Lead> page = new PageImpl<>(List.of(lead1));
-        when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
-        when(leadAvailedRepository.findByLeadIdInAndIsDeletedFalse(anyCollection())).thenReturn(Collections.emptyList());
-        when(leadMapper.toDto(lead1)).thenReturn(LeadResponse.builder().id(lead1.getId()).leadCode(lead1.getLeadCode()).build());
+                Page<Lead> page = new PageImpl<>(List.of(lead1));
+                when(leadRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+                when(leadAvailedRepository.findByLeadIdInAndIsDeletedFalse(anyCollection()))
+                                .thenReturn(Collections.emptyList());
+                when(leadMapper.toDto(lead1)).thenReturn(
+                                LeadResponse.builder().id(lead1.getId()).leadCode(lead1.getLeadCode()).build());
 
-        PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
-        LeadPageResponse response = leadService.getAllLeads(
-                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, true, false, null, null, null, null, null, null, null, null
-        );
+                PageRequestDTO pageRequest = PageRequestDTO.builder().page(0).size(10).build();
+                LeadPageResponse response = leadService.getAllLeads(
+                                pageRequest, null, null, null, null, null, null, null, null, null, null, null, null,
+                                null, null, null, true, false, null, null, null, null, null, null, null, null);
 
-        assertNotNull(response);
-        assertEquals(1, response.getContent().size());
-        assertEquals("LEAD-101", response.getContent().get(0).getLeadCode());
-    }
+                assertNotNull(response);
+                assertEquals(1, response.getContent().size());
+                assertEquals("LEAD-101", response.getContent().get(0).getLeadCode());
+        }
 }

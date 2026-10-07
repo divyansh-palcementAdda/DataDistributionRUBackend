@@ -25,6 +25,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+import com.app.datadistribution.dto.department.DepartmentBulkUploadPreviewResponseDTO;
+import com.app.datadistribution.dto.department.DepartmentBulkUploadResponseDTO;
+import com.app.datadistribution.service.interfaces.IDepartmentBulkUploadService;
+
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -32,6 +40,7 @@ import org.springframework.web.bind.annotation.*;
 public class DepartmentController {
 
     private final IDepartmentService departmentService;
+    private final IDepartmentBulkUploadService bulkUploadService;
 
     @PostMapping("/departments")
     @PreAuthorize("hasAuthority('DEPARTMENT_CREATE')")
@@ -232,5 +241,47 @@ public class DepartmentController {
             throws BadRequestException, ResourcesNotFoundException, UnauthorizedException {
         departmentService.removeDepartmentFromUser(userId, departmentId);
         return ResponseEntity.ok(ApiResponse.success("Department removed from user successfully", null, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/departments/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('DEPARTMENT_BULK_UPLOAD') or hasAuthority('DEPARTMENT_CREATE')")
+    @Operation(summary = "Bulk upload and upsert departments from Excel")
+    public ResponseEntity<ApiResponse<DepartmentBulkUploadResponseDTO>> bulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        DepartmentBulkUploadResponseDTO response = bulkUploadService.bulkUpload(file);
+        return ResponseEntity.ok(ApiResponse.success("Department bulk upload completed successfully", response, HttpStatus.OK.value()));
+    }
+
+    @PostMapping(value = "/departments/bulk-upload/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('DEPARTMENT_BULK_UPLOAD') or hasAuthority('DEPARTMENT_CREATE')")
+    @Operation(summary = "Validate and preview Department Excel import without committing changes")
+    public ResponseEntity<ApiResponse<DepartmentBulkUploadPreviewResponseDTO>> validateBulkUpload(
+            @RequestParam("file") MultipartFile file) throws BadRequestException {
+        DepartmentBulkUploadPreviewResponseDTO response = bulkUploadService.validateExcel(file);
+        return ResponseEntity.ok(ApiResponse.success("Department Excel validation preview generated", response, HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/departments/bulk-upload/template")
+    @PreAuthorize("hasAuthority('DEPARTMENT_BULK_UPLOAD_TEMPLATE_DOWNLOAD') or hasAuthority('DEPARTMENT_BULK_UPLOAD') or hasAuthority('DEPARTMENT_CREATE') or hasAuthority('DEPARTMENT_VIEW')")
+    @Operation(summary = "Download official Department bulk upload Excel template")
+    public ResponseEntity<byte[]> downloadTemplate() {
+        byte[] excelBytes = bulkUploadService.generateTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("department_bulk_upload_template.xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
+    }
+
+    @GetMapping("/departments/bulk-upload/{importId}/error-file")
+    @PreAuthorize("hasAuthority('DEPARTMENT_BULK_UPLOAD') or hasAuthority('DEPARTMENT_CREATE') or hasAuthority('DEPARTMENT_VIEW')")
+    @Operation(summary = "Download error sheet for an executed or validated department bulk upload")
+    public ResponseEntity<byte[]> downloadErrorFile(@PathVariable("importId") UUID importId) {
+        byte[] excelBytes = bulkUploadService.getErrorFile(importId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDisposition(ContentDisposition.attachment().filename("department_bulk_upload_errors_" + importId + ".xlsx").build());
+        headers.setContentLength(excelBytes.length);
+        return new ResponseEntity<>(excelBytes, headers, HttpStatus.OK);
     }
 }

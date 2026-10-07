@@ -30,6 +30,7 @@ import lombok.Setter;
     @Index(name = "idx_lead_assigned_to", columnList = "assigned_to_id"),
     @Index(name = "idx_lead_department", columnList = "department_id"),
     @Index(name = "idx_lead_program", columnList = "program_id"),
+    @Index(name = "idx_lead_course_type", columnList = "course_type_id"),
     @Index(name = "idx_lead_status", columnList = "lead_status_id"),
     @Index(name = "idx_lead_stream", columnList = "stream_id"),
     @Index(name = "idx_lead_is_deleted", columnList = "is_deleted"),
@@ -45,10 +46,10 @@ public class Lead extends BaseEntity {
     @Column(name = "lead_code", nullable = false, unique = true, length = 50)
     private String leadCode;
 
-    @Column(name = "full_name", nullable = false, length = 150)
+    @Column(name = "full_name", length = 150)
     private String fullName;
 
-    @Column(name = "phone_number", nullable = false, length = 20)
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
     @Column(name = "alternate_phone_number", length = 20)
@@ -118,6 +119,10 @@ public class Lead extends BaseEntity {
     public void setRegisteredCourse(Course registeredCourse) {
         this.course = registeredCourse;
     }
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_type_id")
+    private CourseType courseType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "board_id")

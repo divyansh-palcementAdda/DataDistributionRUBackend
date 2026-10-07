@@ -108,6 +108,8 @@ class LeadStatusHistoryTest {
     @Mock
     private com.app.datadistribution.service.util.ProgramCourseResolver programCourseResolver;
     @Mock
+    private com.app.datadistribution.service.util.LeadAcademicResolver leadAcademicResolver;
+    @Mock
     private LeadMapper leadMapper;
 
     @InjectMocks
@@ -165,6 +167,9 @@ class LeadStatusHistoryTest {
                 .assignedTo(currentUser)
                 .build();
         lead.setId(leadId);
+
+        lenient().when(leadAcademicResolver.resolveLeadAcademicMappings(any(), any(), any(), any()))
+                .thenReturn(com.app.datadistribution.service.dto.LeadAcademicResolutionResult.builder().build());
 
         lenient().when(leadStatusTransitionService.executeStatusTransition(any(Lead.class), any(LeadStatus.class), any(User.class), any()))
                 .thenAnswer(inv -> {
