@@ -851,8 +851,18 @@ public class LeadServiceImpl implements ILeadService {
     private boolean isRegisteredStatus(LeadStatus status) {
         if (status == null)
             return false;
-        return "REGISTERED".equalsIgnoreCase(status.getCode())
-                || "Registered".equalsIgnoreCase(status.getName());
+        String code = status.getCode() != null ? status.getCode().trim().toUpperCase() : "";
+        String name = status.getName() != null ? status.getName().trim().toUpperCase() : "";
+        if ("REGISTERED".equals(code) || "REGISTERED".equals(name)) {
+            return true;
+        }
+        if (leadStatusTransitionService != null) {
+            try {
+                return leadStatusTransitionService.isRegisteredStatus(status);
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
     }
 
     @Override
@@ -893,6 +903,16 @@ public class LeadServiceImpl implements ILeadService {
                     oldStatus != null ? oldStatus.getName() + " (" + oldStatus.getId() + ")" : "null",
                     newStatus != null ? newStatus.getName() + " (" + newStatus.getId() + ")" : "null",
                     statusChanged);
+
+            // Defensive: If lead is already REGISTERED, reject any calling or other non-registered status changes
+            if (isRegisteredStatus(oldStatus)) {
+                if (isRegisteredStatus(newStatus)) {
+                    log.info("[changeStatus] Lead {} is already REGISTERED and new status is also REGISTERED. Idempotent return.",
+                            lead.getLeadCode());
+                    return enrichWithActionEnforcement(leadMapper.toDto(lead), lead, currentUser);
+                }
+                throw new BadRequestException("Lead is already registered. Calling workflow is terminated and status cannot be changed to " + newStatus.getName() + ".");
+            }
 
             String effectiveFeedback = (request.getFeedback() != null && !request.getFeedback().isBlank())
                     ? request.getFeedback().trim()
@@ -1007,7 +1027,7 @@ public class LeadServiceImpl implements ILeadService {
                 updated = changeLeadStatusInternal(lead, newStatus, currentUser, effectiveFeedback);
                 log.info(
                         "[changeStatus] changeLeadStatusInternal completed successfully. New lead currentStatus is: {}",
-                        updated.getCurrentStatus() != null ? updated.getCurrentStatus().getName() : "null");
+                        (updated != null && updated.getCurrentStatus() != null) ? updated.getCurrentStatus().getName() : "null");
             } else {
                 log.info("[changeStatus] Status is unchanged. Skipping status transition for lead {}",
                         lead.getLeadCode());

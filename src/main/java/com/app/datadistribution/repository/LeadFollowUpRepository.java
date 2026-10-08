@@ -93,6 +93,14 @@ public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID
          + "WHERE f.isDeleted = false AND f.completed = false AND f.status = com.app.datadistribution.enums.FollowUpStatus.PENDING "
          + "AND f.followUpDate < :startOfDay")
     int transitionPendingToMissedForDate(@Param("startOfDay") LocalDateTime startOfDay);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE LeadFollowUp f SET f.status = com.app.datadistribution.enums.FollowUpStatus.COMPLETED, f.completed = true, f.completedAt = CURRENT_TIMESTAMP "
+         + "WHERE f.isDeleted = false AND f.completed = false "
+         + "AND f.status IN (com.app.datadistribution.enums.FollowUpStatus.PENDING, com.app.datadistribution.enums.FollowUpStatus.UPCOMING) "
+         + "AND (UPPER(f.lead.currentStatus.code) = 'REGISTERED' OR UPPER(f.lead.currentStatus.name) = 'REGISTERED' "
+         + "OR f.lead.registrationStatus IN (com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED, com.app.datadistribution.enums.RegistrationStatus.MANUALLY_APPROVED))")
+    int completeActiveFollowUpsForRegisteredLeads();
 }
 
 

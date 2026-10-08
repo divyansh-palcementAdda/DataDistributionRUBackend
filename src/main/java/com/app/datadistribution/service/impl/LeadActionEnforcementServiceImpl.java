@@ -131,8 +131,10 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
         // 3. Check Qualifying Lead Statuses
         LeadStatus currentStatus = lead.getCurrentStatus();
 
-        // Action A: REGISTERED
-        if (isRegisteredStatus(currentStatus)) {
+        // Action A: REGISTERED (or verified registration status)
+        if (isRegisteredStatus(currentStatus)
+                || lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED
+                || lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.MANUALLY_APPROVED) {
             return unconstrained(lead.getId());
         }
 
@@ -237,7 +239,8 @@ public class LeadActionEnforcementServiceImpl implements ILeadActionEnforcementS
         String code = status.getCode() != null ? status.getCode().trim().toUpperCase(Locale.ROOT) : "";
         String name = status.getName() != null ? status.getName().trim().toUpperCase(Locale.ROOT) : "";
         return "REGISTERED".equals(code) || "REGISTER".equals(code)
-                || "REGISTERED".equals(name) || "REGISTER".equals(name);
+                || "REGISTERED".equals(name) || "REGISTER".equals(name)
+                || code.contains("REGISTERED") || name.contains("REGISTERED");
     }
 
     @Override

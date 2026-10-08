@@ -107,6 +107,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 		seedPrograms();
 		backfillLeadPrograms();
 		backfillLeadCourseTypes();
+		cleanupActiveFollowUpsForRegisteredLeads();
 		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
@@ -1023,6 +1024,34 @@ public class DatabaseSeeder implements CommandLineRunner {
 			log.info("Backfilled lead course_type_id successfully.");
 		} catch (Exception e) {
 			log.warn("Non-destructive lead course_type_id backfill skipped or completed: {}", e.getMessage());
+		}
+	}
+
+	private void cleanupActiveFollowUpsForRegisteredLeads() {
+		try {
+			entityManager.createNativeQuery(
+				"UPDATE lead_follow_ups f " +
+				"JOIN leads l ON f.lead_id = l.id " +
+				"JOIN lead_statuses ls ON l.lead_status_id = ls.id " +
+				"SET f.status = 'COMPLETED', f.completed = true, f.completed_at = NOW(), " +
+				"    f.remarks = CONCAT(COALESCE(f.remarks, ''), ' | Auto-completed: Lead transitioned to REGISTERED') " +
+				"WHERE f.is_deleted = false AND f.completed = false " +
+				"  AND f.status IN ('PENDING', 'UPCOMING') " +
+				"  AND (UPPER(ls.code) = 'REGISTERED' OR UPPER(ls.name) = 'REGISTERED' " +
+				"       OR l.registration_status IN ('COMPLETED_MATCHED', 'MANUALLY_APPROVED'))"
+			).executeUpdate();
+
+			entityManager.createNativeQuery(
+				"UPDATE leads l " +
+				"JOIN lead_statuses ls ON l.lead_status_id = ls.id " +
+				"SET l.next_follow_up_date = NULL " +
+				"WHERE l.is_deleted = false AND l.next_follow_up_date IS NOT NULL " +
+				"  AND (UPPER(ls.code) = 'REGISTERED' OR UPPER(ls.name) = 'REGISTERED' " +
+				"       OR l.registration_status IN ('COMPLETED_MATCHED', 'MANUALLY_APPROVED'))"
+			).executeUpdate();
+			log.info("Cleaned up orphaned active follow-ups for registered leads successfully.");
+		} catch (Exception e) {
+			log.warn("Non-destructive active follow-up cleanup for registered leads skipped or completed: {}", e.getMessage());
 		}
 	}
 }

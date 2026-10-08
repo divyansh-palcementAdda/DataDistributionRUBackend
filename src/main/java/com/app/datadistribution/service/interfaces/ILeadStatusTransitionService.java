@@ -27,4 +27,9 @@ public interface ILeadStatusTransitionService {
      * Validates sequential progression and daily attempt rate limits.
      */
     void validateTransitionAndLimits(Lead lead, LeadStatus currentStatus, LeadStatus targetStatus, User currentUser) throws BadRequestException;
+
+    /**
+     * Checks if a LeadStatus represents the canonical terminal REGISTERED status.
+     */
+    boolean isRegisteredStatus(LeadStatus status);
 }

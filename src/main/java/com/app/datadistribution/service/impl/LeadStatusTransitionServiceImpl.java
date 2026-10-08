@@ -5,6 +5,9 @@ import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.LeadStatusHistory;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.exception.BadRequestException;
+import com.app.datadistribution.entity.LeadFollowUp;
+import com.app.datadistribution.enums.FollowUpStatus;
+import com.app.datadistribution.repository.LeadFollowUpRepository;
 import com.app.datadistribution.repository.LeadRepository;
 import com.app.datadistribution.repository.LeadStatusHistoryRepository;
 import com.app.datadistribution.repository.LeadStatusRepository;
@@ -16,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -32,8 +36,19 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
     private final LeadRepository leadRepository;
     private final LeadStatusRepository leadStatusRepository;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
+    private final LeadFollowUpRepository leadFollowUpRepository;
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Kolkata");
+
+    @Override
+    public boolean isRegisteredStatus(LeadStatus status) {
+        if (status == null) return false;
+        String code = status.getCode() != null ? status.getCode().trim().toUpperCase(Locale.ROOT) : "";
+        String name = status.getName() != null ? status.getName().trim().toUpperCase(Locale.ROOT) : "";
+        return "REGISTERED".equals(code) || "REGISTER".equals(code)
+                || "REGISTERED".equals(name) || "REGISTER".equals(name)
+                || code.contains("REGISTERED") || name.contains("REGISTERED");
+    }
 
     @Override
     @Transactional
@@ -56,7 +71,16 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
         if (!statusChanged) {
             log.info("No status transition for lead {}. Current status is already {}.",
                     lead.getLeadCode(), currentStatus != null ? currentStatus.getName() : "null");
+            // Defensive: ensure active follow-ups are closed if already registered
+            if (isRegisteredStatus(currentStatus)) {
+                completeActiveFollowUpsForRegisteredLead(lead);
+            }
             return lead;
+        }
+
+        // Defensive check: If the lead's current status is already REGISTERED, it is terminal for calling/status workflows.
+        if (isRegisteredStatus(currentStatus) && !isRegisteredStatus(targetStatus)) {
+            throw new BadRequestException("Lead is already registered. Calling workflow is terminated and status cannot be changed to " + targetStatus.getName() + ".");
         }
 
         boolean isAssignedUser = (lead.getAssignedTo() != null
@@ -141,6 +165,11 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
         lead.setCurrentStatus(targetStatus);
         lead.setLastContactedAt(now);
         Lead savedLead = leadRepository.save(lead);
+
+        // Canonical registration side-effects: complete all PENDING and UPCOMING follow-ups atomically
+        if (isRegisteredStatus(targetStatus)) {
+            completeActiveFollowUpsForRegisteredLead(savedLead);
+        }
 
         return savedLead;
     }
@@ -233,5 +262,35 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
     private String getExpectedNextSequentialStatusName(LeadStatus currentStatus) {
         if (currentStatus == null) return "initial stage";
         return "next stage in " + currentStatus.getName();
+    }
+
+    private void completeActiveFollowUpsForRegisteredLead(Lead lead) {
+        if (lead == null || lead.getId() == null || leadFollowUpRepository == null) {
+            return;
+        }
+        List<LeadFollowUp> activeFollowUps = leadFollowUpRepository.findActiveFollowUpsByLeadId(lead.getId());
+        if (activeFollowUps != null && !activeFollowUps.isEmpty()) {
+            LocalDateTime completionTime = LocalDateTime.now();
+            List<LeadFollowUp> toSave = new ArrayList<>();
+            for (LeadFollowUp f : activeFollowUps) {
+                if (!f.isCompleted() && (f.getStatus() == FollowUpStatus.PENDING || f.getStatus() == FollowUpStatus.UPCOMING)) {
+                    f.setCompleted(true);
+                    f.setCompletedAt(completionTime);
+                    f.setStatus(FollowUpStatus.COMPLETED);
+                    String currentRemarks = f.getRemarks();
+                    String autoNote = "Auto-completed: Lead transitioned to REGISTERED";
+                    f.setRemarks((currentRemarks != null && !currentRemarks.isBlank())
+                            ? currentRemarks + " | " + autoNote
+                            : autoNote);
+                    toSave.add(f);
+                }
+            }
+            if (!toSave.isEmpty()) {
+                leadFollowUpRepository.saveAll(toSave);
+                log.info("Auto-completed {} active follow-up(s) for registered lead {}", toSave.size(), lead.getLeadCode());
+            }
+        }
+        lead.setNextFollowUpDate(null);
+        leadRepository.save(lead);
     }
 }

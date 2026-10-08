@@ -7,6 +7,7 @@ import com.app.datadistribution.dto.lead.LeadFollowUpResponse;
 import com.app.datadistribution.dto.lead.RescheduleFollowUpRequest;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadFollowUp;
+import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.FollowUpStatus;
 import com.app.datadistribution.event.FollowUpCancelledEvent;
@@ -55,6 +56,23 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
 
+    private boolean isRegisteredStatus(LeadStatus status) {
+        if (status == null)
+            return false;
+        String code = status.getCode() != null ? status.getCode().trim().toUpperCase() : "";
+        String name = status.getName() != null ? status.getName().trim().toUpperCase() : "";
+        return "REGISTERED".equals(code) || "REGISTERED".equals(name);
+    }
+
+    private boolean isLeadRegistered(Lead lead) {
+        if (lead == null)
+            return false;
+        if (isRegisteredStatus(lead.getCurrentStatus()))
+            return true;
+        return lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.COMPLETED_MATCHED
+                || lead.getRegistrationStatus() == com.app.datadistribution.enums.RegistrationStatus.MANUALLY_APPROVED;
+    }
+
     @Override
     @Transactional
     public LeadFollowUpResponse createFollowUp(LeadFollowUpRequest request) throws UnauthorizedException, BadRequestException {
@@ -93,6 +111,11 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         // 2. Lead data scoping & write access
         UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        // Reject follow-up creation if lead is already registered
+        if (isLeadRegistered(lead)) {
+            throw new BadRequestException("Cannot schedule follow-up: Lead is already registered.");
+        }
 
         // 3. Strict Assigned User Validation (Only assigned user can schedule)
         User currentUser = getCurrentUserEntity();
@@ -218,6 +241,10 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         if (lead != null) {
             UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
             leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+            if (isLeadRegistered(lead)) {
+                throw new BadRequestException("Cannot reschedule follow-up: Lead is already registered.");
+            }
         }
 
         if (followUp.isCompleted() || followUp.getStatus() == FollowUpStatus.COMPLETED || followUp.getStatus() == FollowUpStatus.CANCELLED) {
@@ -467,6 +494,10 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         // Validate user data scope and lead write permissions
         UserDataScope dataScope = leadDataScopeService.getCurrentUserScope();
         leadDataScopeService.validateLeadWriteAccess(lead, dataScope);
+
+        if (isLeadRegistered(lead)) {
+            throw new BadRequestException("Cannot mark follow-up not connected: Associated lead is already registered.");
+        }
 
         // State Machine validation: Only PENDING or UPCOMING can be marked NOT_CONNECTED
         if (followUp.getStatus() != FollowUpStatus.PENDING && followUp.getStatus() != FollowUpStatus.UPCOMING) {
