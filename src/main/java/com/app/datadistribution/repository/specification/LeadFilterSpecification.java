@@ -139,6 +139,7 @@ public class LeadFilterSpecification {
             }
             Subquery<Integer> subquery = query.subquery(Integer.class);
             Root<Lead> subLead = subquery.from(Lead.class);
+            Join<Lead, com.app.datadistribution.entity.CourseType> directCt = subLead.join("courseType", JoinType.LEFT);
             Join<Lead, Course> regCourse = subLead.join("course", JoinType.LEFT);
             Join<Course, com.app.datadistribution.entity.CourseType> regCt = regCourse.join("courseType", JoinType.LEFT);
             SetJoin<Lead, Course> intCourse = subLead.joinSet("interestedCourses", JoinType.LEFT);
@@ -147,6 +148,7 @@ public class LeadFilterSpecification {
             subquery.where(
                     cb.equal(subLead.get("id"), root.get("id")),
                     cb.or(
+                            cb.and(cb.isNotNull(directCt.get("id")), cb.equal(directCt.get("id"), courseTypeId), cb.isFalse(directCt.get("isDeleted"))),
                             cb.and(cb.isNotNull(regCourse.get("id")), cb.equal(regCt.get("id"), courseTypeId), cb.isFalse(regCourse.get("isDeleted"))),
                             cb.and(cb.isNotNull(intCourse.get("id")), cb.equal(intCt.get("id"), courseTypeId), cb.isFalse(intCourse.get("isDeleted")))
                     )
@@ -162,6 +164,7 @@ public class LeadFilterSpecification {
             }
             Subquery<Integer> subquery = query.subquery(Integer.class);
             Root<Lead> subLead = subquery.from(Lead.class);
+            Join<Lead, com.app.datadistribution.entity.CourseType> directCt = subLead.join("courseType", JoinType.LEFT);
             Join<Lead, Course> regCourse = subLead.join("course", JoinType.LEFT);
             Join<Course, com.app.datadistribution.entity.CourseType> regCt = regCourse.join("courseType", JoinType.LEFT);
             SetJoin<Lead, Course> intCourse = subLead.joinSet("interestedCourses", JoinType.LEFT);
@@ -170,6 +173,7 @@ public class LeadFilterSpecification {
             subquery.where(
                     cb.equal(subLead.get("id"), root.get("id")),
                     cb.or(
+                            cb.and(cb.isNotNull(directCt.get("id")), directCt.get("id").in(courseTypeIds), cb.isFalse(directCt.get("isDeleted"))),
                             cb.and(cb.isNotNull(regCourse.get("id")), regCt.get("id").in(courseTypeIds), cb.isFalse(regCourse.get("isDeleted"))),
                             cb.and(cb.isNotNull(intCourse.get("id")), intCt.get("id").in(courseTypeIds), cb.isFalse(intCourse.get("isDeleted")))
                     )
@@ -200,6 +204,7 @@ public class LeadFilterSpecification {
         return (root, query, cb) -> {
             Subquery<Integer> ctSub = query.subquery(Integer.class);
             Root<Lead> ctSubRoot = ctSub.from(Lead.class);
+            Join<Lead, CourseType> directCtJoin = ctSubRoot.join("courseType", JoinType.LEFT);
             Join<Lead, Course> regJoin = ctSubRoot.join("course", JoinType.LEFT);
             Join<Course, CourseType> regCtJoin = regJoin.join("courseType", JoinType.LEFT);
             SetJoin<Lead, Course> intJoin = ctSubRoot.joinSet("interestedCourses", JoinType.LEFT);
@@ -208,6 +213,7 @@ public class LeadFilterSpecification {
             ctSub.where(
                     cb.equal(ctSubRoot.get("id"), root.get("id")),
                     cb.or(
+                            cb.and(cb.isNotNull(directCtJoin.get("id")), cb.isFalse(directCtJoin.get("isDeleted"))),
                             cb.and(cb.isNotNull(regJoin.get("id")), cb.isNotNull(regCtJoin.get("id"))),
                             cb.and(cb.isNotNull(intJoin.get("id")), cb.isNotNull(intCtJoin.get("id")))
                     )

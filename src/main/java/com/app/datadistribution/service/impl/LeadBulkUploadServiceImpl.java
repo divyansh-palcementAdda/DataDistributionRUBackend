@@ -163,6 +163,19 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
 
         String importId = "IMP-LEAD-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + "-"
                 + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        // Structured Log: IMPORT_START (per spec §9)
+        log.info("IMPORT_START\nimportId={}\nfileName={}\nselectedProgramId={}\nselectedCourseTypeId={}\nselectedStreamId={}\nselectedGradeId={}\nselectedBoardId={}\nselectedLeadSourceId={}\nselectedStatusId={}\nselectedDepartmentId={}\nselectedAssignedToUserId={}",
+                importId,
+                file.getOriginalFilename() != null ? file.getOriginalFilename() : "unknown",
+                programId != null ? programId.toString() : "null",
+                courseTypeId != null ? courseTypeId.toString() : "null",
+                streamId != null ? streamId.toString() : "null",
+                gradeId != null ? gradeId.toString() : "null",
+                boardId != null ? boardId.toString() : "null",
+                leadSourceId != null ? leadSourceId.toString() : "null",
+                statusId != null ? statusId.toString() : "null",
+                departmentId != null ? departmentId.toString() : "null",
+                assignedToUserId != null ? assignedToUserId.toString() : "null");
         log.info("LEAD_BULK_IMPORT_STARTED\nimportId={}", importId);
 
         // 1. Validate Uploaded File
@@ -187,6 +200,12 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         // 3. Preload & Validate UI Selected Master Data Entities (Fast Fail)
         Program selectedProgram = validateAndFetchProgram(programId);
         CourseType selectedCourseType = validateAndFetchCourseType(courseTypeId);
+
+        // Structured Log: IMPORT_START post-validation (resolved names)
+        log.info("IMPORT_START_RESOLVED\nimportId={}\nselectedCourseTypeId={}\nselectedCourseTypeName={}",
+                importId,
+                selectedCourseType != null ? selectedCourseType.getId().toString() : "null",
+                selectedCourseType != null ? selectedCourseType.getName() : "null");
         Stream selectedStream = validateAndFetchStream(streamId);
         Grade selectedGrade = validateAndFetchGrade(gradeId);
         Board selectedBoard = validateAndFetchBoard(boardId);
@@ -342,12 +361,18 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                             importId, displayRowNumber, rawHeader, targetKey, colIdx, rawVal != null ? rawVal : "");
                 }
 
-                // Structured Log: BULK_ROW_DTO
+                // Structured Log: BULK_ROW_DTO + ROW_MAPPING courseType info (per spec §9)
                 log.info("BULK_ROW_DTO\nrow={}\ncourseRaw={}\nprogramRaw={}\ncourseTypeRaw={}",
                         displayRowNumber,
                         rowDto.getCourseRaw() != null ? rowDto.getCourseRaw() : "",
                         rowDto.getProgramRaw() != null ? rowDto.getProgramRaw() : "",
                         rowDto.getCourseTypeRaw() != null ? rowDto.getCourseTypeRaw() : (selectedCourseType != null ? selectedCourseType.getName() : ""));
+                log.info("ROW_MAPPING_COURSE_TYPE\nimportId={}\nrowNumber={}\nrawCourseTypeValue={}\nselectedCourseTypeId={}\nselectedCourseTypeName={}",
+                        importId,
+                        displayRowNumber,
+                        rowDto.getCourseTypeRaw() != null ? rowDto.getCourseTypeRaw() : "",
+                        selectedCourseType != null ? selectedCourseType.getId().toString() : "null",
+                        selectedCourseType != null ? selectedCourseType.getName() : "null");
 
                 // Row-Level Validation (All Lead Fields are strictly optional!)
                 if (rowDto.getFullNameRaw() != null && rowDto.getFullNameRaw().length() > 150) {
@@ -623,12 +648,13 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 log.info(emLog.toString().trim());
 
                 // Structured Log: LEAD_ENTITY_BEFORE_SAVE
-                log.info("LEAD_ENTITY_BEFORE_SAVE\nrow={}\nleadId={}\ncourseId={}\nprogramIds=[{}]\ncourseTypeId={}",
+                log.info("LEAD_ENTITY_BEFORE_SAVE\nrow={}\nleadId={}\ncourseId={}\nprogramIds=[{}]\ncourseTypeId={}\ncourseTypeName={}",
                         displayRowNumber,
                         "null",
                         academicResult.getCourse() != null ? academicResult.getCourse().getId().toString() : "",
                         academicResult.getPrograms().stream().map(p -> p.getId().toString()).collect(Collectors.joining(", ")),
-                        academicResult.getCourseType() != null ? academicResult.getCourseType().getId().toString() : "");
+                        academicResult.getCourseType() != null ? academicResult.getCourseType().getId().toString() : "",
+                        academicResult.getCourseType() != null ? academicResult.getCourseType().getName() : "");
 
                 // Database Persistence & Flush
                 Lead saved = leadRepository.save(lead);
@@ -637,6 +663,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 // Reload from DB & Database-Level Relationship Verification
                 Lead reloaded = leadRepository.findById(saved.getId()).orElse(saved);
 
+                // --- Course Verification ---
                 UUID expectedCourseId = academicResult.getCourse() != null ? academicResult.getCourse().getId() : null;
                 UUID actualCourseId = null;
                 try {
@@ -647,6 +674,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 }
                 boolean courseMatch = Objects.equals(expectedCourseId, actualCourseId);
 
+                // --- Program Verification ---
                 Set<UUID> expectedProgramIds = academicResult.getPrograms().stream().map(Program::getId).collect(Collectors.toSet());
                 Set<UUID> actualProgramIds = new HashSet<>();
                 try {
@@ -658,7 +686,18 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                 }
                 boolean programMatch = expectedProgramIds.equals(actualProgramIds);
 
-                log.info("LEAD_IMPORT_PERSISTENCE_VERIFICATION\nrow={}\nleadId={}\nexpectedCourseId={}\nactualCourseId={}\ncourseMatch={}\nexpectedProgramIds=[{}]\nactualProgramIds=[{}]\nprogramMatch={}",
+                // --- CourseType Verification (DB-level via native query) ---
+                UUID expectedCourseTypeId = academicResult.getCourseType() != null ? academicResult.getCourseType().getId() : null;
+                UUID actualCourseTypeId = null;
+                try {
+                    actualCourseTypeId = leadRepository.findCourseTypeIdByLeadId(saved.getId());
+                } catch (Exception ignored) {}
+                if (actualCourseTypeId == null && reloaded.getCourseType() != null) {
+                    actualCourseTypeId = reloaded.getCourseType().getId();
+                }
+                boolean courseTypeMatch = Objects.equals(expectedCourseTypeId, actualCourseTypeId);
+
+                log.info("LEAD_IMPORT_PERSISTENCE_VERIFICATION\nrow={}\nleadId={}\nexpectedCourseId={}\nactualCourseId={}\ncourseMatch={}\nexpectedProgramIds=[{}]\nactualProgramIds=[{}]\nprogramMatch={}\nexpectedCourseTypeId={}\nactualCourseTypeId={}\ncourseTypeMatch={}",
                         displayRowNumber,
                         saved.getId(),
                         expectedCourseId != null ? expectedCourseId.toString() : "",
@@ -666,31 +705,36 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         courseMatch,
                         expectedProgramIds.stream().map(UUID::toString).collect(Collectors.joining(", ")),
                         actualProgramIds.stream().map(UUID::toString).collect(Collectors.joining(", ")),
-                        programMatch);
+                        programMatch,
+                        expectedCourseTypeId != null ? expectedCourseTypeId.toString() : "",
+                        actualCourseTypeId != null ? actualCourseTypeId.toString() : "",
+                        courseTypeMatch);
 
-                if (!courseMatch || !programMatch) {
-                    log.error("LEAD_IMPORT_ROW_FAILED\nimportId={}\nrow={}\nerrorCode=PERSISTENCE_VERIFICATION_FAILED\nmessage=Entity relationships failed database verification",
-                            importId, displayRowNumber);
+                if (!courseMatch || !programMatch || !courseTypeMatch) {
+                    String failedFields = (!courseMatch ? "Course " : "") + (!programMatch ? "Program " : "") + (!courseTypeMatch ? "CourseType" : "");
+                    log.error("LEAD_IMPORT_ROW_FAILED\nimportId={}\nrow={}\nerrorCode=PERSISTENCE_VERIFICATION_FAILED\nfailedFields={}\nmessage=Entity relationships failed database verification",
+                            importId, displayRowNumber, failedFields.trim());
                     failedCount++;
                     failedRows.add(BulkLeadUploadRowError.builder()
                             .rowNumber(displayRowNumber)
                             .field("persistence")
-                            .value("Course/Program")
-                            .reason("PERSISTENCE_VERIFICATION_FAILED: Relationships were not persisted in database")
+                            .value(failedFields.trim())
+                            .reason("PERSISTENCE_VERIFICATION_FAILED: [" + failedFields.trim() + "] relationship(s) were not persisted in database")
                             .build());
                     continue;
                 }
 
-                // Structured Log: LEAD_IMPORT_SAVE_SUCCESS
-                log.info("LEAD_IMPORT_SAVE_SUCCESS\nimportId={}\nrow={}\nleadId={}\ncourseId={}\nprogramIds=[{}]\ncourseTypeId={}",
+                // Structured Log: LEAD_IMPORT_SAVE_SUCCESS (post-verification)
+                log.info("LEAD_IMPORT_SAVE_SUCCESS\nimportId={}\nrow={}\nleadId={}\ncourseId={}\nprogramIds=[{}]\ncourseTypeId={}\ncourseTypeName={}",
                         importId,
                         displayRowNumber,
                         saved.getId(),
                         actualCourseId != null ? actualCourseId.toString() : "",
                         actualProgramIds.stream().map(UUID::toString).collect(Collectors.joining(", ")),
-                        reloaded.getCourseType() != null ? reloaded.getCourseType().getId().toString() : "");
+                        actualCourseTypeId != null ? actualCourseTypeId.toString() : "",
+                        reloaded.getCourseType() != null ? reloaded.getCourseType().getName() : "");
 
-                // Increment verified success counters
+                // Increment verified success counters (only after DB-level verification passes)
                 successCount++;
                 if (academicResult.getCourse() != null) courseResolvedCount++;
                 if (!academicResult.getPrograms().isEmpty()) programResolvedCount++;

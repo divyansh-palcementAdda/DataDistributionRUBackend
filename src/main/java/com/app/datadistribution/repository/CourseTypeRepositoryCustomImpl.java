@@ -80,6 +80,19 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                 "  FROM (" +
                 "    SELECT DISTINCT " +
                 "      l.id AS lead_id, " +
+                "      l.course_type_id AS course_type_id, " +
+                "      l.assigned_to_id AS assigned_to_id, " +
+                "      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (" +
+                "        SELECT 1 FROM lead_availed la " +
+                "        WHERE la.lead_id = l.id " +
+                "          AND la.availed_by_user_id = l.assigned_to_id " +
+                "          AND la.is_deleted = false" +
+                "      ) THEN 1 ELSE 0 END AS is_availed " +
+                "    FROM leads l " +
+                "    WHERE l.is_deleted = false AND l.course_type_id IS NOT NULL AND " + scopeClause + " " +
+                "    UNION " +
+                "    SELECT DISTINCT " +
+                "      l.id AS lead_id, " +
                 "      c.course_type_id AS course_type_id, " +
                 "      l.assigned_to_id AS assigned_to_id, " +
                 "      CASE WHEN l.assigned_to_id IS NOT NULL AND EXISTS (" +
@@ -90,7 +103,7 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                 "      ) THEN 1 ELSE 0 END AS is_availed " +
                 "    FROM leads l " +
                 "    JOIN courses c ON l.course_id = c.id AND c.is_deleted = false " +
-                "    WHERE l.is_deleted = false AND " + scopeClause + " " +
+                "    WHERE l.is_deleted = false AND c.course_type_id IS NOT NULL AND " + scopeClause + " " +
                 "    UNION " +
                 "    SELECT DISTINCT " +
                 "      l.id AS lead_id, " +
@@ -105,7 +118,7 @@ public class CourseTypeRepositoryCustomImpl implements CourseTypeRepositoryCusto
                 "    FROM leads l " +
                 "    JOIN lead_interested_courses lic ON lic.lead_id = l.id " +
                 "    JOIN courses c ON lic.course_id = c.id AND c.is_deleted = false " +
-                "    WHERE l.is_deleted = false AND " + scopeClause + " " +
+                "    WHERE l.is_deleted = false AND c.course_type_id IS NOT NULL AND " + scopeClause + " " +
                 "  ) lct " +
                 "  GROUP BY lct.course_type_id ";
 

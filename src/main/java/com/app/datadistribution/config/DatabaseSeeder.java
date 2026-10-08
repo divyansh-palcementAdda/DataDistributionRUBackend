@@ -106,6 +106,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 //		seedGrades();
 		seedPrograms();
 		backfillLeadPrograms();
+		backfillLeadCourseTypes();
 		seedDashboardCards();
 		log.info("Database seeding completed successfully!");
 	}
@@ -1003,6 +1004,25 @@ public class DatabaseSeeder implements CommandLineRunner {
 			log.info("Backfilled lead_programs table successfully.");
 		} catch (Exception e) {
 			log.warn("Non-destructive lead_programs backfill skipped or completed: {}", e.getMessage());
+		}
+	}
+
+	private void backfillLeadCourseTypes() {
+		try {
+			entityManager.createNativeQuery(
+				"UPDATE leads l JOIN courses c ON l.course_id = c.id " +
+				"SET l.course_type_id = c.course_type_id " +
+				"WHERE l.course_type_id IS NULL AND c.course_type_id IS NOT NULL AND l.is_deleted = false AND c.is_deleted = false"
+			).executeUpdate();
+
+			entityManager.createNativeQuery(
+				"UPDATE leads l JOIN lead_interested_courses lic ON l.id = lic.lead_id JOIN courses c ON lic.course_id = c.id " +
+				"SET l.course_type_id = c.course_type_id " +
+				"WHERE l.course_type_id IS NULL AND c.course_type_id IS NOT NULL AND l.is_deleted = false AND c.is_deleted = false"
+			).executeUpdate();
+			log.info("Backfilled lead course_type_id successfully.");
+		} catch (Exception e) {
+			log.warn("Non-destructive lead course_type_id backfill skipped or completed: {}", e.getMessage());
 		}
 	}
 }

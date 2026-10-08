@@ -92,10 +92,11 @@ public class DataSegregationRepository {
 
             List<Predicate> predicates = buildBaseScopePredicates(cb, root, dataScope);
 
-            // Course Type filter: registered course OR interested courses
+            // Course Type filter: direct lead courseType OR registered course OR interested courses
             SetJoin<Lead, Course> interestedJoin = root.joinSet("interestedCourses", JoinType.LEFT);
             Join<Lead, Course> registeredJoin = root.join("course", JoinType.LEFT);
             predicates.add(cb.or(
+                    cb.equal(root.get("courseType").get("id"), ct.getId()),
                     cb.equal(interestedJoin.join("courseType", JoinType.LEFT).get("id"), ct.getId()),
                     cb.equal(registeredJoin.join("courseType", JoinType.LEFT).get("id"), ct.getId())
             ));
@@ -630,11 +631,12 @@ public class DataSegregationRepository {
                                                          UUID courseTypeId, UUID leadSourceId, UUID boardId, UUID streamId, UUID gradeId) {
         List<Predicate> predicates = buildBaseScopePredicates(cb, root, dataScope);
 
-        // Course Type filter
+        // Course Type filter: direct lead courseType OR registered course OR interested courses
         if (courseTypeId != null) {
             SetJoin<Lead, Course> interestedJoin = root.joinSet("interestedCourses", JoinType.LEFT);
             Join<Lead, Course> registeredJoin = root.join("course", JoinType.LEFT);
             predicates.add(cb.or(
+                    cb.equal(root.get("courseType").get("id"), courseTypeId),
                     cb.equal(interestedJoin.join("courseType", JoinType.LEFT).get("id"), courseTypeId),
                     cb.equal(registeredJoin.join("courseType", JoinType.LEFT).get("id"), courseTypeId)
             ));
@@ -800,7 +802,7 @@ public class DataSegregationRepository {
                 "    ) THEN 1 ELSE 0 END AS is_availed " +
                 "  FROM leads l " +
                 "  JOIN courses c ON c.id = l.course_id AND c.is_deleted = false " +
-                "  WHERE l.is_deleted = false AND c.course_type_id = :courseTypeId AND " + scopeClause + filterClause + " " +
+                "  WHERE l.is_deleted = false AND (l.course_type_id = :courseTypeId OR c.course_type_id = :courseTypeId) AND " + scopeClause + filterClause + " " +
                 "  UNION " +
                 "  SELECT DISTINCT " +
                 "    l.id AS lead_id, " +
@@ -815,7 +817,7 @@ public class DataSegregationRepository {
                 "  FROM leads l " +
                 "  JOIN lead_interested_courses lic ON lic.lead_id = l.id " +
                 "  JOIN courses c ON c.id = lic.course_id AND c.is_deleted = false " +
-                "  WHERE l.is_deleted = false AND c.course_type_id = :courseTypeId AND " + scopeClause + filterClause + " " +
+                "  WHERE l.is_deleted = false AND (l.course_type_id = :courseTypeId OR c.course_type_id = :courseTypeId) AND " + scopeClause + filterClause + " " +
                 ") comb " +
                 "GROUP BY comb.course_id";
 
@@ -849,7 +851,7 @@ public class DataSegregationRepository {
                 "    l.lead_status_id AS lead_status_id " +
                 "  FROM leads l " +
                 "  JOIN courses c ON c.id = l.course_id AND c.is_deleted = false " +
-                "  WHERE l.is_deleted = false AND c.course_type_id = :courseTypeId AND " + scopeClause + filterClause + " " +
+                "  WHERE l.is_deleted = false AND (l.course_type_id = :courseTypeId OR c.course_type_id = :courseTypeId) AND " + scopeClause + filterClause + " " +
                 "  UNION " +
                 "  SELECT DISTINCT " +
                 "    l.id AS lead_id, " +
@@ -858,7 +860,7 @@ public class DataSegregationRepository {
                 "  FROM leads l " +
                 "  JOIN lead_interested_courses lic ON lic.lead_id = l.id " +
                 "  JOIN courses c ON c.id = lic.course_id AND c.is_deleted = false " +
-                "  WHERE l.is_deleted = false AND c.course_type_id = :courseTypeId AND " + scopeClause + filterClause + " " +
+                "  WHERE l.is_deleted = false AND (l.course_type_id = :courseTypeId OR c.course_type_id = :courseTypeId) AND " + scopeClause + filterClause + " " +
                 ") comb " +
                 "JOIN lead_statuses ls ON ls.id = comb.lead_status_id AND ls.is_deleted = false " +
                 "GROUP BY comb.course_id, comb.lead_status_id, ls.code";
@@ -1632,9 +1634,9 @@ public class DataSegregationRepository {
             params.put("courseIds", filter.getCourseIds());
         }
 
-        // Course Type (Category) filter: EXCLUSIVELY lead_interested_courses mapped to CourseType (DO NOT use registered course l.course_id)
+        // Course Type (Category) filter: direct lead course_type_id OR lead_interested_courses mapped to CourseType
         if (filter.getCourseTypeIds() != null && !filter.getCourseTypeIds().isEmpty()) {
-            filterClause.append(" AND EXISTS (SELECT 1 FROM lead_interested_courses lic JOIN courses c ON c.id = lic.course_id AND c.is_deleted = false WHERE lic.lead_id = l.id AND c.course_type_id IN (:courseTypeIds)) ");
+            filterClause.append(" AND (l.course_type_id IN (:courseTypeIds) OR EXISTS (SELECT 1 FROM lead_interested_courses lic JOIN courses c ON c.id = lic.course_id AND c.is_deleted = false WHERE lic.lead_id = l.id AND c.course_type_id IN (:courseTypeIds))) ");
             params.put("courseTypeIds", filter.getCourseTypeIds());
         }
 

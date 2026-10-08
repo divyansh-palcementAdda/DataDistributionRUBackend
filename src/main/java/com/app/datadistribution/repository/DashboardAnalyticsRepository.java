@@ -125,12 +125,10 @@ public class DashboardAnalyticsRepository {
                 break;
             }
             case COURSE_TYPE: {
-                SetJoin<Lead, Course> courseJoin = root.joinSet("interestedCourses", JoinType.INNER);
-                Join<Course, CourseType> courseTypeJoin = courseJoin.join("courseType", JoinType.INNER);
-                predicates.add(cb.equal(courseJoin.get("isDeleted"), false));
-                predicates.add(cb.equal(courseTypeJoin.get("isDeleted"), false));
-                idPath = courseTypeJoin.get("id");
-                namePath = courseTypeJoin.get("name");
+                Join<Lead, CourseType> join = root.join("courseType", JoinType.INNER);
+                predicates.add(cb.equal(join.get("isDeleted"), false));
+                idPath = join.get("id");
+                namePath = join.get("name");
                 break;
             }
             case BOARD: {
@@ -439,7 +437,7 @@ public class DashboardAnalyticsRepository {
         }
 
         // Multi-value Course Type filter — use a single correlated EXISTS subquery covering
-        // both registered course and interested courses to prevent row duplication from joins.
+        // direct lead courseType, registered course, and interested courses
         if (filter.getCourseTypeIds() != null && !filter.getCourseTypeIds().isEmpty()) {
             jakarta.persistence.criteria.Subquery<Integer> ctSubquery =
                     entityManager.getCriteriaBuilder().createQuery().subquery(Integer.class);
@@ -456,6 +454,11 @@ public class DashboardAnalyticsRepository {
             ctSubquery.where(
                     cb.equal(ctSubRoot.get("id"), root.get("id")),
                     cb.or(
+                            cb.and(
+                                    cb.isNotNull(ctSubRoot.get("courseType")),
+                                    ctSubRoot.get("courseType").get("id").in(filter.getCourseTypeIds()),
+                                    cb.isFalse(ctSubRoot.get("courseType").get("isDeleted"))
+                            ),
                             cb.and(
                                     cb.isNotNull(regJoin.get("id")),
                                     cb.isFalse(regJoin.get("isDeleted")),
@@ -581,6 +584,7 @@ public class DashboardAnalyticsRepository {
             ctSub.where(
                     cb.equal(ctSubRoot.get("id"), root.get("id")),
                     cb.or(
+                            cb.and(cb.isNotNull(ctSubRoot.get("courseType")), cb.isFalse(ctSubRoot.get("courseType").get("isDeleted"))),
                             cb.and(cb.isNotNull(regJoin.get("id")), cb.isNotNull(regCtJoin.get("id"))),
                             cb.and(cb.isNotNull(intJoin.get("id")), cb.isNotNull(intCtJoin.get("id")))
                     )

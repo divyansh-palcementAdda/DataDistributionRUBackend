@@ -69,8 +69,8 @@ public class LeadStatusAnalyticsRepository {
         String extraCourseTypeC1 = "";
         String extraCourseTypeC2 = "";
         if (filter.getCourseTypeId() != null) {
-            extraCourseTypeC1 = " AND c1.course_type_id = :filterCourseTypeId ";
-            extraCourseTypeC2 = " AND c2.course_type_id = :filterCourseTypeId ";
+            extraCourseTypeC1 = " AND (l.course_type_id = :filterCourseTypeId OR c1.course_type_id = :filterCourseTypeId) ";
+            extraCourseTypeC2 = " AND (l.course_type_id = :filterCourseTypeId OR c2.course_type_id = :filterCourseTypeId) ";
             params.put("filterCourseTypeId", filter.getCourseTypeId());
         }
 
@@ -253,6 +253,8 @@ public class LeadStatusAnalyticsRepository {
         if (filter.getCourseTypeId() != null) {
             categoryExitsClause =
                     " AND ( " +
+                    "   l.course_type_id = :userFilterCourseTypeId " +
+                    "   OR " +
                     "   EXISTS (SELECT 1 FROM courses cc1 WHERE cc1.id = l.course_id AND cc1.course_type_id = :userFilterCourseTypeId AND cc1.is_deleted = false) " +
                     "   OR " +
                     "   EXISTS (SELECT 1 FROM lead_interested_courses lic JOIN courses cc2 ON cc2.id = lic.course_id WHERE lic.lead_id = l.id AND cc2.course_type_id = :userFilterCourseTypeId AND cc2.is_deleted = false) " +

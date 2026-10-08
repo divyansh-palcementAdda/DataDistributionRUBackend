@@ -58,4 +58,7 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
 
     @Query(value = "SELECT course_id FROM leads WHERE id = :leadId", nativeQuery = true)
     UUID findCourseIdByLeadId(@org.springframework.data.repository.query.Param("leadId") UUID leadId);
+
+    @Query(value = "SELECT course_type_id FROM leads WHERE id = :leadId", nativeQuery = true)
+    UUID findCourseTypeIdByLeadId(@org.springframework.data.repository.query.Param("leadId") UUID leadId);
 }
