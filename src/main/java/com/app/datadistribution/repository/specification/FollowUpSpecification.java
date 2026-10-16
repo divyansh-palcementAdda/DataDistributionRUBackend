@@ -112,4 +112,24 @@ public class FollowUpSpecification {
             );
         };
     }
+
+    public static Specification<LeadFollowUp> hasContinuousOutcome() {
+        return (root, query, cb) -> {
+            jakarta.persistence.criteria.Path<String> codePath = root.get("lead").get("currentStatus").get("code");
+            jakarta.persistence.criteria.Path<String> namePath = root.get("lead").get("currentStatus").get("name");
+            return cb.and(
+                cb.equal(root.get("lead").get("currentStatus").get("isDeleted"), false),
+                cb.or(
+                    cb.equal(cb.upper(codePath), "CONTINUOUS_FOLLOW_UP"),
+                    cb.equal(cb.upper(codePath), "CONTINUOUS_FORM_FOLLOW_UP"),
+                    cb.like(cb.upper(codePath), "%CONTINUOUS%"),
+                    cb.like(cb.upper(namePath), "%CONTINUOUS%")
+                )
+            );
+        };
+    }
+
+    public static Specification<LeadFollowUp> hasDepartmentId(UUID departmentId) {
+        return (root, query, cb) -> cb.equal(root.get("lead").get("department").get("id"), departmentId);
+    }
 }

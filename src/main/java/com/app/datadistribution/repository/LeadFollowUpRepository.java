@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
 public interface LeadFollowUpRepository extends JpaRepository<LeadFollowUp, UUID>, JpaSpecificationExecutor<LeadFollowUp> {
 
     @Override
-    @EntityGraph(attributePaths = {"lead", "lead.currentStatus", "createdByUser"})
+    @EntityGraph(attributePaths = {"lead", "lead.currentStatus", "createdByUser", "assignedTo", "lead.assignedTo", "lead.department"})
     Page<LeadFollowUp> findAll(@Nullable Specification<LeadFollowUp> spec, Pageable pageable);
 
     List<LeadFollowUp> findByLeadIdOrderByFollowUpDateDesc(UUID leadId);

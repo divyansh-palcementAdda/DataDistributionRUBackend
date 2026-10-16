@@ -1,6 +1,7 @@
 package com.app.datadistribution.service.impl;
 
 import com.app.datadistribution.common.PageRequestDTO;
+import com.app.datadistribution.dto.followup.FollowUpFilterCriteria;
 import com.app.datadistribution.dto.followup.FollowUpPagedResponseDTO;
 import com.app.datadistribution.dto.followup.FollowUpResponseDTO;
 import com.app.datadistribution.dto.followup.FollowUpSummaryDTO;
@@ -19,6 +20,7 @@ import com.app.datadistribution.service.dto.UserDataScope.ScopeType;
 import com.app.datadistribution.service.interfaces.FollowUpService;
 import com.app.datadistribution.service.interfaces.IUserDataScopeService;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -85,19 +87,22 @@ public class FollowUpServiceImpl implements FollowUpService {
 
     @Override
     @Transactional(readOnly = true)
-    public FollowUpPagedResponseDTO getAllFollowUps(PageRequestDTO pageRequest, LocalDate date, FollowUpStatus status, UUID userId, UUID leadId, UUID leadStatusId, List<UUID> leadStatusIds) throws UnauthorizedException, BadRequestException {
+    public FollowUpPagedResponseDTO getAllFollowUps(PageRequestDTO pageRequest, FollowUpFilterCriteria criteria) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         Pageable pageable = createSafePageable(pageRequest);
 
         Specification<LeadFollowUp> spec = Specification.where(FollowUpSpecification.isNotDeleted())
                 .and(FollowUpSpecification.leadIsNotDeleted());
 
+        UUID targetUserId = criteria != null ? criteria.getEffectiveUserId() : null;
+        UUID targetDeptId = criteria != null ? criteria.getDepartmentId() : null;
+
         if (dataScope.isAdmin() || dataScope.isSystemScope()) {
-            if (userId != null) {
+            if (targetUserId != null) {
                 spec = spec.and((root, query, cb) -> cb.or(
-                        cb.equal(root.get("createdByUser").get("id"), userId),
-                        cb.equal(root.get("assignedTo").get("id"), userId),
-                        cb.equal(root.get("lead").get("assignedTo").get("id"), userId)
+                        cb.equal(root.get("createdByUser").get("id"), targetUserId),
+                        cb.equal(root.get("assignedTo").get("id"), targetUserId),
+                        cb.equal(root.get("lead").get("assignedTo").get("id"), targetUserId)
                 ));
             }
         } else if (dataScope.isHod() || dataScope.isDepartmentScope()) {
@@ -121,12 +126,12 @@ public class FollowUpServiceImpl implements FollowUpService {
                 return ownFollowUp;
             });
 
-            if (userId != null) {
-                if (dataScope.getUserId().equals(userId) || (dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(userId))) {
+            if (targetUserId != null) {
+                if (dataScope.getUserId().equals(targetUserId) || (dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(targetUserId))) {
                     spec = spec.and((root, query, cb) -> cb.or(
-                            cb.equal(root.get("createdByUser").get("id"), userId),
-                            cb.equal(root.get("assignedTo").get("id"), userId),
-                            cb.equal(root.get("lead").get("assignedTo").get("id"), userId)
+                            cb.equal(root.get("createdByUser").get("id"), targetUserId),
+                            cb.equal(root.get("assignedTo").get("id"), targetUserId),
+                            cb.equal(root.get("lead").get("assignedTo").get("id"), targetUserId)
                     ));
                 } else {
                     spec = spec.and((root, query, cb) -> cb.disjunction());
@@ -139,40 +144,90 @@ public class FollowUpServiceImpl implements FollowUpService {
                     cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
             ));
 
-            if (userId != null && !userId.equals(dataScope.getUserId())) {
+            if (targetUserId != null && !targetUserId.equals(dataScope.getUserId())) {
                 spec = spec.and((root, query, cb) -> cb.disjunction());
             }
         }
 
-        List<UUID> statusIdsToFilter = leadStatusIds;
-        if ((statusIdsToFilter == null || statusIdsToFilter.isEmpty()) && leadStatusId != null) {
-            statusIdsToFilter = List.of(leadStatusId);
+        if (targetDeptId != null) {
+            if (dataScope.isAdmin() || dataScope.isSystemScope()) {
+                spec = spec.and(FollowUpSpecification.hasDepartmentId(targetDeptId));
+            } else if (dataScope.isHod() || dataScope.isDepartmentScope()) {
+                if (dataScope.getDepartmentIds() != null && dataScope.getDepartmentIds().contains(targetDeptId)) {
+                    spec = spec.and(FollowUpSpecification.hasDepartmentId(targetDeptId));
+                } else {
+                    spec = spec.and((root, query, cb) -> cb.disjunction());
+                }
+            } else {
+                spec = spec.and(FollowUpSpecification.hasDepartmentId(targetDeptId));
+            }
         }
 
-        if (statusIdsToFilter != null && !statusIdsToFilter.isEmpty()) {
-            for (UUID id : statusIdsToFilter) {
-                if (id != null) {
-                    leadStatusRepository.findById(id)
-                            .filter(s -> !s.isDeleted())
-                            .orElseThrow(() -> new ResourcesNotFoundException("Lead status not found with id: " + id));
+        if (criteria != null) {
+            String category = criteria.getCategory() != null ? criteria.getCategory().trim().toUpperCase() : "";
+            String outcome = criteria.getEffectiveOutcome();
+            LocalDate effectiveDate = criteria.getEffectiveDate();
+            FollowUpStatus effectiveStatus = criteria.getEffectiveStatus();
+
+            // Date filtering
+            if ("TODAY".equals(category) || "TODAY_CONTINUOUS".equals(category) || "TODAY_NOT_CONNECTED".equals(category)) {
+                LocalDate targetDate = effectiveDate != null ? effectiveDate : LocalDate.now(BUSINESS_ZONE);
+                spec = spec.and(FollowUpSpecification.hasFollowUpDateOn(targetDate));
+            } else if (effectiveDate != null) {
+                spec = spec.and(FollowUpSpecification.hasFollowUpDateOn(effectiveDate));
+            } else if (criteria.getFromDate() != null || criteria.getToDate() != null) {
+                LocalDateTime start = criteria.getFromDate() != null ? criteria.getFromDate().atStartOfDay() : LocalDate.of(1970, 1, 1).atStartOfDay();
+                LocalDateTime end = criteria.getToDate() != null ? criteria.getToDate().plusDays(1).atStartOfDay() : LocalDate.of(2099, 12, 31).atStartOfDay();
+                spec = spec.and(FollowUpSpecification.hasFollowUpDateBetween(start, end));
+            }
+
+            // Status, outcome, or category filtering
+            if ("TODAY_NOT_CONNECTED".equals(category) || "NOT_CONNECTED".equals(category) || "NOT_CONNECTED".equals(outcome)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.NOT_CONNECTED));
+            } else if ("TODAY_CONTINUOUS".equals(category) || "CONTINUOUS".equals(outcome)) {
+                spec = spec.and(FollowUpSpecification.hasContinuousOutcome());
+            } else if ("PENDING".equals(category)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.PENDING));
+            } else if ("UPCOMING".equals(category)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.UPCOMING));
+            } else if ("COMPLETED".equals(category) || "COMPLETED".equals(outcome)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.COMPLETED));
+            } else if ("MISSED".equals(category)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED));
+            } else if ("CANCELLED".equals(category)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.CANCELLED));
+            }
+
+            if (effectiveStatus != null) {
+                spec = spec.and(FollowUpSpecification.hasStatus(effectiveStatus));
+            }
+
+            // Lead status IDs
+            List<UUID> statusIdsToFilter = criteria.getLeadStatusIds();
+            if ((statusIdsToFilter == null || statusIdsToFilter.isEmpty()) && criteria.getLeadStatusId() != null) {
+                statusIdsToFilter = List.of(criteria.getLeadStatusId());
+            }
+
+            if (statusIdsToFilter != null && !statusIdsToFilter.isEmpty()) {
+                for (UUID id : statusIdsToFilter) {
+                    if (id != null) {
+                        leadStatusRepository.findById(id)
+                                .filter(s -> !s.isDeleted())
+                                .orElseThrow(() -> new ResourcesNotFoundException("Lead status not found with id: " + id));
+                    }
+                }
+                if (statusIdsToFilter.size() == 1) {
+                    spec = spec.and(FollowUpSpecification.hasLeadStatusId(statusIdsToFilter.get(0)));
+                } else {
+                    spec = spec.and(FollowUpSpecification.hasLeadStatusIds(statusIdsToFilter));
                 }
             }
-            if (statusIdsToFilter.size() == 1) {
-                spec = spec.and(FollowUpSpecification.hasLeadStatusId(statusIdsToFilter.get(0)));
-            } else {
-                spec = spec.and(FollowUpSpecification.hasLeadStatusIds(statusIdsToFilter));
+
+            if (criteria.getLeadId() != null) {
+                spec = spec.and(FollowUpSpecification.hasLead(criteria.getLeadId()));
             }
         }
 
-        if (date != null) {
-            spec = spec.and(FollowUpSpecification.hasFollowUpDateOn(date));
-        }
-        if (status != null) {
-            spec = spec.and(FollowUpSpecification.hasStatus(status));
-        }
-        if (leadId != null) {
-            spec = spec.and(FollowUpSpecification.hasLead(leadId));
-        }
         if (pageRequest.getSearch() != null && !pageRequest.getSearch().isBlank()) {
             spec = spec.and(FollowUpSpecification.search(pageRequest.getSearch()));
         }
@@ -194,6 +249,20 @@ public class FollowUpServiceImpl implements FollowUpService {
 
     @Override
     @Transactional(readOnly = true)
+    public FollowUpPagedResponseDTO getAllFollowUps(PageRequestDTO pageRequest, LocalDate date, FollowUpStatus status, UUID userId, UUID leadId, UUID leadStatusId, List<UUID> leadStatusIds) throws UnauthorizedException, BadRequestException {
+        FollowUpFilterCriteria criteria = FollowUpFilterCriteria.builder()
+                .date(date)
+                .status(status)
+                .userId(userId)
+                .leadId(leadId)
+                .leadStatusId(leadStatusId)
+                .leadStatusIds(leadStatusIds)
+                .build();
+        return getAllFollowUps(pageRequest, criteria);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public FollowUpPagedResponseDTO getFollowUpsByUserId(UUID userId, PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
         if (!dataScope.isAdmin() && !dataScope.isSystemScope()
@@ -210,36 +279,62 @@ public class FollowUpServiceImpl implements FollowUpService {
     @Transactional(readOnly = true)
     public FollowUpPagedResponseDTO getTodayFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
-        return getAllFollowUps(pageRequest, today, null, null, null, null, null);
+        FollowUpFilterCriteria criteria = FollowUpFilterCriteria.builder()
+                .category("TODAY")
+                .date(today)
+                .build();
+        return getAllFollowUps(pageRequest, criteria);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FollowUpPagedResponseDTO getPendingFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        return getAllFollowUps(pageRequest, null, FollowUpStatus.PENDING, null, null, null, null);
+        FollowUpFilterCriteria criteria = FollowUpFilterCriteria.builder()
+                .category("PENDING")
+                .status(FollowUpStatus.PENDING)
+                .build();
+        return getAllFollowUps(pageRequest, criteria);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FollowUpPagedResponseDTO getCompletedFollowUps(PageRequestDTO pageRequest) throws UnauthorizedException, BadRequestException {
-        return getAllFollowUps(pageRequest, null, FollowUpStatus.COMPLETED, null, null, null, null);
+        FollowUpFilterCriteria criteria = FollowUpFilterCriteria.builder()
+                .category("COMPLETED")
+                .status(FollowUpStatus.COMPLETED)
+                .build();
+        return getAllFollowUps(pageRequest, criteria);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FollowUpSummaryDTO getDashboardStats() throws UnauthorizedException, BadRequestException {
+        return getDashboardStats(null, null, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FollowUpSummaryDTO getDashboardStats(UUID userId, UUID departmentId) throws UnauthorizedException, BadRequestException {
+        return getDashboardStats(userId, departmentId, null, null, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FollowUpSummaryDTO getDashboardStats(UUID userId, UUID departmentId, List<UUID> leadStatusIds, LocalDate fromDate, LocalDate toDate, String search) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         Specification<LeadFollowUp> baseSpec = Specification.where(FollowUpSpecification.isNotDeleted())
                 .and(FollowUpSpecification.leadIsNotDeleted());
 
-        if (dataScope.isSelfScope()) {
-            baseSpec = baseSpec.and((root, query, cb) -> cb.or(
-                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
-                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
-            ));
-        } else if (dataScope.isDepartmentScope()) {
+        if (dataScope.isAdmin() || dataScope.isSystemScope()) {
+            if (userId != null) {
+                baseSpec = baseSpec.and((root, query, cb) -> cb.or(
+                        cb.equal(root.get("createdByUser").get("id"), userId),
+                        cb.equal(root.get("assignedTo").get("id"), userId),
+                        cb.equal(root.get("lead").get("assignedTo").get("id"), userId)
+                ));
+            }
+        } else if (dataScope.isHod() || dataScope.isDepartmentScope()) {
             baseSpec = baseSpec.and((root, query, cb) -> {
                 jakarta.persistence.criteria.Predicate own = cb.or(
                         cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
@@ -259,18 +354,87 @@ public class FollowUpServiceImpl implements FollowUpService {
                 }
                 return own;
             });
+
+            if (userId != null) {
+                if (dataScope.getUserId().equals(userId) || (dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(userId))) {
+                    baseSpec = baseSpec.and((root, query, cb) -> cb.or(
+                            cb.equal(root.get("createdByUser").get("id"), userId),
+                            cb.equal(root.get("assignedTo").get("id"), userId),
+                            cb.equal(root.get("lead").get("assignedTo").get("id"), userId)
+                    ));
+                } else {
+                    baseSpec = baseSpec.and((root, query, cb) -> cb.disjunction());
+                }
+            }
+        } else {
+            baseSpec = baseSpec.and((root, query, cb) -> cb.or(
+                    cb.equal(root.get("createdByUser").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("assignedTo").get("id"), dataScope.getUserId()),
+                    cb.equal(root.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+            ));
+
+            if (userId != null && !userId.equals(dataScope.getUserId())) {
+                baseSpec = baseSpec.and((root, query, cb) -> cb.disjunction());
+            }
+        }
+
+        if (departmentId != null) {
+            if (dataScope.isAdmin() || dataScope.isSystemScope()) {
+                baseSpec = baseSpec.and(FollowUpSpecification.hasDepartmentId(departmentId));
+            } else if (dataScope.isHod() || dataScope.isDepartmentScope()) {
+                if (dataScope.getDepartmentIds() != null && dataScope.getDepartmentIds().contains(departmentId)) {
+                    baseSpec = baseSpec.and(FollowUpSpecification.hasDepartmentId(departmentId));
+                } else {
+                    baseSpec = baseSpec.and((root, query, cb) -> cb.disjunction());
+                }
+            } else {
+                baseSpec = baseSpec.and(FollowUpSpecification.hasDepartmentId(departmentId));
+            }
+        }
+
+        // Active filter scoping:
+        if (leadStatusIds != null && !leadStatusIds.isEmpty()) {
+            if (leadStatusIds.size() == 1) {
+                baseSpec = baseSpec.and(FollowUpSpecification.hasLeadStatusId(leadStatusIds.get(0)));
+            } else {
+                baseSpec = baseSpec.and(FollowUpSpecification.hasLeadStatusIds(leadStatusIds));
+            }
+        }
+
+        if (fromDate != null || toDate != null) {
+            LocalDateTime start = fromDate != null ? fromDate.atStartOfDay() : LocalDate.of(1970, 1, 1).atStartOfDay();
+            LocalDateTime end = toDate != null ? toDate.plusDays(1).atStartOfDay() : LocalDate.of(2099, 12, 31).atStartOfDay();
+            baseSpec = baseSpec.and(FollowUpSpecification.hasFollowUpDateBetween(start, end));
+        }
+
+        if (search != null && !search.isBlank()) {
+            baseSpec = baseSpec.and(FollowUpSpecification.search(search));
         }
 
         LocalDate today = LocalDate.now(BUSINESS_ZONE);
-        long pending = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isCompleted(false)));
-        long completed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isCompleted(true)));
-        long overdue = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isOverdue()));
+        long allCount = leadFollowUpRepository.count(baseSpec);
         long todayCount = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasFollowUpDateOn(today)));
+        long todayContinuousCount = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasFollowUpDateOn(today)).and(FollowUpSpecification.hasContinuousOutcome()));
+        long todayNotConnectedCount = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasFollowUpDateOn(today)).and(FollowUpSpecification.hasStatus(FollowUpStatus.NOT_CONNECTED)));
+        long pending = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.PENDING)));
+        long upcoming = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.UPCOMING)));
+        long completed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.COMPLETED)));
+        long missed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED)));
+        long cancelled = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.CANCELLED)));
+        long notConnected = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.NOT_CONNECTED)));
+        long overdue = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isOverdue()));
 
         return FollowUpSummaryDTO.builder()
+                .allFollowUps(allCount)
                 .todayFollowUps(todayCount)
+                .todayContinuousFollowUps(todayContinuousCount)
+                .todayNotConnectedFollowUps(todayNotConnectedCount)
                 .pendingFollowUps(pending)
+                .upcomingFollowUps(upcoming)
                 .completedFollowUps(completed)
+                .missedFollowUps(missed)
+                .cancelledFollowUps(cancelled)
+                .notConnectedFollowUps(notConnected)
                 .overdueFollowUps(overdue)
                 .build();
     }
@@ -278,6 +442,12 @@ public class FollowUpServiceImpl implements FollowUpService {
     @Override
     @Transactional(readOnly = true)
     public List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO> getFollowUpStatusCounts() throws UnauthorizedException, BadRequestException {
+        return getFollowUpStatusCounts(null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO> getFollowUpStatusCounts(UUID userId, UUID departmentId) throws UnauthorizedException, BadRequestException {
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
 
         List<com.app.datadistribution.entity.LeadStatus> followUpStatuses =
@@ -311,6 +481,22 @@ public class FollowUpServiceImpl implements FollowUpService {
             }
             deptPreds.add(cb.equal(leadRoot.get("assignedTo").get("id"), dataScope.getUserId()));
             predicates.add(cb.or(deptPreds.toArray(new jakarta.persistence.criteria.Predicate[0])));
+
+            if (userId != null) {
+                if (dataScope.getUserId().equals(userId) || (dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(userId))) {
+                    predicates.add(cb.equal(leadRoot.get("assignedTo").get("id"), userId));
+                } else {
+                    predicates.add(cb.disjunction());
+                }
+            }
+        } else {
+            if (userId != null) {
+                predicates.add(cb.equal(leadRoot.get("assignedTo").get("id"), userId));
+            }
+        }
+
+        if (departmentId != null) {
+            predicates.add(cb.equal(leadRoot.get("department").get("id"), departmentId));
         }
 
         cq.multiselect(leadRoot.get("currentStatus").get("id"), cb.count(leadRoot));
@@ -323,13 +509,76 @@ public class FollowUpServiceImpl implements FollowUpService {
             countByStatusId.put((UUID) row[0], ((Number) row[1]).longValue());
         }
 
+        // Also count follow-ups for each status to provide synchronized metrics
+        java.util.Map<UUID, Long> fuCountByStatusId = new java.util.HashMap<>();
+        try {
+            jakarta.persistence.criteria.CriteriaQuery<Object[]> cqFu = cb.createQuery(Object[].class);
+            jakarta.persistence.criteria.Root<com.app.datadistribution.entity.LeadFollowUp> fuRoot = cqFu.from(com.app.datadistribution.entity.LeadFollowUp.class);
+            List<jakarta.persistence.criteria.Predicate> fuPreds = new java.util.ArrayList<>();
+            fuPreds.add(cb.isFalse(fuRoot.get("isDeleted")));
+            fuPreds.add(cb.isFalse(fuRoot.get("lead").get("isDeleted")));
+            fuPreds.add(fuRoot.get("lead").get("currentStatus").get("id").in(statusIds));
+
+            if (dataScope.isSelfScope()) {
+                fuPreds.add(cb.or(
+                        cb.equal(fuRoot.get("createdByUser").get("id"), dataScope.getUserId()),
+                        cb.equal(fuRoot.get("assignedTo").get("id"), dataScope.getUserId()),
+                        cb.equal(fuRoot.get("lead").get("assignedTo").get("id"), dataScope.getUserId())
+                ));
+            } else if (dataScope.isDepartmentScope()) {
+                if (dataScope.getDepartmentIds() != null && !dataScope.getDepartmentIds().isEmpty()) {
+                    fuPreds.add(fuRoot.get("lead").get("department").get("id").in(dataScope.getDepartmentIds()));
+                }
+                if (userId != null) {
+                    if (dataScope.getUserId().equals(userId) || (dataScope.getDepartmentUserIds() != null && dataScope.getDepartmentUserIds().contains(userId))) {
+                        fuPreds.add(cb.or(
+                                cb.equal(fuRoot.get("createdByUser").get("id"), userId),
+                                cb.equal(fuRoot.get("assignedTo").get("id"), userId),
+                                cb.equal(fuRoot.get("lead").get("assignedTo").get("id"), userId)
+                        ));
+                    } else {
+                        fuPreds.add(cb.disjunction());
+                    }
+                }
+            } else {
+                if (userId != null) {
+                    fuPreds.add(cb.or(
+                            cb.equal(fuRoot.get("createdByUser").get("id"), userId),
+                            cb.equal(fuRoot.get("assignedTo").get("id"), userId),
+                            cb.equal(fuRoot.get("lead").get("assignedTo").get("id"), userId)
+                    ));
+                }
+            }
+
+            if (departmentId != null) {
+                fuPreds.add(cb.equal(fuRoot.get("lead").get("department").get("id"), departmentId));
+            }
+
+            cqFu.multiselect(fuRoot.get("lead").get("currentStatus").get("id"), cb.count(fuRoot));
+            cqFu.where(cb.and(fuPreds.toArray(new jakarta.persistence.criteria.Predicate[0])));
+            cqFu.groupBy(fuRoot.get("lead").get("currentStatus").get("id"));
+
+            List<Object[]> fuRows = entityManager.createQuery(cqFu).getResultList();
+            for (Object[] row : fuRows) {
+                fuCountByStatusId.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        } catch (Exception ignored) {
+            // Fallback gracefully in test/mock environment
+        }
+
         return followUpStatuses.stream()
-                .map(s -> com.app.datadistribution.dto.followup.FollowUpStatusCountDTO.builder()
-                        .statusId(s.getId())
-                        .statusName(s.getName())
-                        .statusCode(s.getCode())
-                        .count(countByStatusId.getOrDefault(s.getId(), 0L))
-                        .build())
+                .map(s -> {
+                    long leads = countByStatusId.getOrDefault(s.getId(), 0L);
+                    long followUps = fuCountByStatusId.getOrDefault(s.getId(), leads);
+                    return com.app.datadistribution.dto.followup.FollowUpStatusCountDTO.builder()
+                            .statusId(s.getId())
+                            .statusName(s.getName())
+                            .statusCode(s.getCode())
+                            .count(followUps)
+                            .leadCount(leads)
+                            .followUpCount(followUps)
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 }

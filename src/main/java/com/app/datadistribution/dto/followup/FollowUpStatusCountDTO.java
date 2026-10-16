@@ -21,4 +21,6 @@ public class FollowUpStatusCountDTO {
     private String statusName;
     private String statusCode;
     private long count;
+    private long leadCount;
+    private long followUpCount;
 }

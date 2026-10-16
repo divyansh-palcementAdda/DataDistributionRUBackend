@@ -27,9 +27,11 @@ public class DashboardController {
 
     @GetMapping("/followups/status-counts")
     @PreAuthorize("hasAuthority('DASHBOARD_VIEW') or hasAuthority('FOLLOWUP_VIEW') or hasAuthority('LEAD_READ')")
-    @Operation(summary = "Get current lead counts for follow-up statuses scoped by user permissions")
-    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO>>> getFollowUpStatusCounts() throws UnauthorizedException, BadRequestException {
-        java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO> response = followUpService.getFollowUpStatusCounts();
+    @Operation(summary = "Get current counts for follow-up statuses scoped by user permissions")
+    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO>>> getFollowUpStatusCounts(
+            @RequestParam(value = "userId", required = false) UUID userId,
+            @RequestParam(value = "departmentId", required = false) UUID departmentId) throws UnauthorizedException, BadRequestException {
+        java.util.List<com.app.datadistribution.dto.followup.FollowUpStatusCountDTO> response = followUpService.getFollowUpStatusCounts(userId, departmentId);
         return ResponseEntity.ok(ApiResponse.success("Follow-up status counts retrieved successfully", response, HttpStatus.OK.value()));
     }
 

@@ -12,8 +12,15 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FollowUpSummaryDTO {
+    private long allFollowUps;
     private long todayFollowUps;
+    private long todayContinuousFollowUps;
+    private long todayNotConnectedFollowUps;
     private long pendingFollowUps;
+    private long upcomingFollowUps;
     private long completedFollowUps;
+    private long missedFollowUps;
+    private long cancelledFollowUps;
+    private long notConnectedFollowUps;
     private long overdueFollowUps;
 }
