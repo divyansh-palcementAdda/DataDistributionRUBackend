@@ -17,6 +17,7 @@ import com.app.datadistribution.exception.UnauthorizedException;
 public interface ILeadService {
     LeadResponse create(LeadRequest request) throws BadRequestException, UnauthorizedException;
     LeadResponse createLeadFromExternal(LeadRequest request, com.app.datadistribution.entity.User systemUser) throws BadRequestException;
+    LeadResponse createLeadFromExternal(LeadRequest request, com.app.datadistribution.entity.User systemUser, String importSourceDescription) throws BadRequestException;
     LeadResponse update(UUID id, LeadRequest request) throws BadRequestException, UnauthorizedException;
     LeadResponse getById(UUID id) throws UnauthorizedException, BadRequestException;
     LeadPageResponse getAllLeads(

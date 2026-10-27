@@ -272,10 +272,16 @@ public class LeadServiceImpl implements ILeadService {
     @Override
     @Transactional
     public LeadResponse createLeadFromExternal(LeadRequest request, User systemUser) throws BadRequestException {
+        return createLeadFromExternal(request, systemUser, "Lead imported from Meta Lead Ads.");
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse createLeadFromExternal(LeadRequest request, User systemUser, String importSourceDescription) throws BadRequestException {
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
         Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
 
-        // External inbound leads (e.g. Meta Ads) enter unassigned pool
+        // External inbound leads (e.g. Meta Ads, Website forms) enter unassigned pool
         User assignedTo = null;
         Department department = null;
 
@@ -357,12 +363,16 @@ public class LeadServiceImpl implements ILeadService {
         Lead saved = leadRepository.save(lead);
         log.info("Created external lead: {} ({})", saved.getFullName(), saved.getLeadCode());
 
+        String feedback = (importSourceDescription != null && !importSourceDescription.isBlank())
+                ? importSourceDescription
+                : "Lead imported from external source.";
+
         LeadStatusHistory initialHistory = LeadStatusHistory.builder()
                 .lead(saved)
                 .previousStatus(null)
                 .newStatus(initialStatus)
                 .changedByUser(systemUser)
-                .feedback("Lead imported from Meta Lead Ads.")
+                .feedback(feedback)
                 .build();
         LeadStatusHistory savedHistory = leadStatusHistoryRepository.save(initialHistory);
         if (saved.getStatusHistories() != null) {

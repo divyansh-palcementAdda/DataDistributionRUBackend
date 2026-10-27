@@ -74,7 +74,9 @@ public class SecurityConfig {
                     "/api/auth/refresh-token",
                     "/api/auth/logout",
                     "/api/webhooks/meta",
-                    "/api/webhooks/meta/**"
+                    "/api/webhooks/meta/**",
+                    "/api/integrations/website",
+                    "/api/integrations/website/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             );

@@ -811,11 +811,23 @@ public class DatabaseSeeder implements CommandLineRunner {
 		createSourceIfNotExist("Referral", "REFERRAL", "Word of mouth or existing client referral");
 		createSourceIfNotExist("Cold Call", "COLD_CALL", "Outbound phone sales outreach");
 
+		// Canonical University Website Inbound Lead Sources
+		createSourceIfNotExist("Website - Campus Tour", "WEBSITE_CAMPUS_TOUR", "Leads from University Website Campus Tour Form");
+		createSourceIfNotExist("Website - Contact Query", "WEBSITE_CONTACT_QUERY", "Leads from University Website Contact Query Form");
+		createSourceIfNotExist("Website - Placement", "WEBSITE_PLACEMENT", "Leads from University Website Placement Inquiry Form");
+		createSourceIfNotExist("Website - Course Enquiry", "WEBSITE_COURSE_ENQUIRY", "Leads from University Website Course Enquiry Form");
+		createSourceIfNotExist("Website - Fees Inquiry", "WEBSITE_FEES_INQUIRY", "Leads from University Website Fees Inquiry Form");
+		createSourceIfNotExist("Website - University Comparison", "WEBSITE_UNIVERSITY_COMPARISON", "Leads from University Website University Comparison Form");
+		createSourceIfNotExist("Website - Virtual Tour", "WEBSITE_VIRTUAL_TOUR", "Leads from University Website Virtual Tour Form");
+		createSourceIfNotExist("Website - Google Ads", "WEBSITE_GOOGLE_ADS", "Leads from Website Google Ads Campaign Form");
+		createSourceIfNotExist("Website - Newspaper", "WEBSITE_NEWSPAPER", "Leads from Website Newspaper Campaign Form");
+
 		migrateExistingLeadSourceData();
 	}
 
 	private void createSourceIfNotExist(String name, String code, String description) {
-		if (!leadSourceRepository.findByCodeIgnoreCase(code).isPresent()) {
+		if (leadSourceRepository.findByCodeIgnoreCase(code).isEmpty()
+				&& leadSourceRepository.findByNameIgnoreCase(name).isEmpty()) {
 			com.app.datadistribution.entity.LeadSource source = com.app.datadistribution.entity.LeadSource.builder()
 					.name(name)
 					.code(code)
