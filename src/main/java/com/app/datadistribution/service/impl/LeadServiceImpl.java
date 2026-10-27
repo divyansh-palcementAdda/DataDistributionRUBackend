@@ -271,6 +271,109 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
+    public LeadResponse createLeadFromExternal(LeadRequest request, User systemUser) throws BadRequestException {
+        Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
+        Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
+
+        // External inbound leads (e.g. Meta Ads) enter unassigned pool
+        User assignedTo = null;
+        Department department = null;
+
+        String leadCode = request.getLeadCode();
+        if (leadCode == null || leadCode.isBlank()) {
+            leadCode = "LEAD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        } else if (leadRepository.existsByLeadCode(leadCode)) {
+            throw new BadRequestException("Lead code already exists: " + leadCode);
+        }
+
+        UUID regCourseId = request.getRegisteredCourseId() != null ? request.getRegisteredCourseId()
+                : request.getCourseId();
+
+        // Canonical Lead Academic Resolution (Course <-> Program <-> Course Type)
+        com.app.datadistribution.service.dto.LeadAcademicResolutionResult academicResult = leadAcademicResolver
+                .resolveLeadAcademicMappings(
+                        request.getProgramIds(), regCourseId, request.getInterestedCourseIds(),
+                        request.getCourseTypeId());
+        Set<Program> programs = academicResult.getPrograms();
+        Program program = academicResult.getProgram();
+        Course course = academicResult.getCourse();
+        CourseType courseType = academicResult.getCourseType();
+        Set<Course> finalInterestedCourses = academicResult.getInterestedCourses();
+        if (interestedCourses != null) {
+            finalInterestedCourses.addAll(interestedCourses);
+        }
+
+        Board board = null;
+        if (request.getBoardId() != null) {
+            board = boardRepository.findById(request.getBoardId())
+                    .filter(b -> !b.isDeleted())
+                    .orElse(null);
+        }
+
+        Stream stream = null;
+        if (request.getStreamId() != null) {
+            stream = streamRepository.findById(request.getStreamId())
+                    .filter(s -> !s.isDeleted())
+                    .orElse(null);
+        }
+
+        Grade grade = null;
+        if (request.getGradeId() != null) {
+            grade = gradeRepository.findById(request.getGradeId())
+                    .filter(g -> !g.isDeleted())
+                    .orElse(null);
+        }
+
+        validatePreferredStudyPlace(request.getPreferredStudyState(), request.getPreferredStudyCity());
+
+        LeadStatus initialStatus = resolveInitialStatus(request.getStatusId());
+
+        Lead lead = leadMapper.toEntity(request);
+        lead.setLeadCode(leadCode);
+        lead.setLeadSources(sources);
+        lead.setInterestedCourses(finalInterestedCourses);
+        lead.setAssignedTo(assignedTo);
+        lead.setCreatedByUser(systemUser);
+        lead.setPrograms(programs);
+        lead.setProgram(program);
+        lead.setCourse(course);
+        lead.setCourseType(courseType);
+        lead.setBoard(board);
+        lead.setStream(stream);
+        lead.setGrade(grade);
+        lead.setDepartment(department);
+        lead.setCurrentStatus(initialStatus);
+        lead.setPreferredStudyState(
+                request.getPreferredStudyState() != null && !request.getPreferredStudyState().isBlank()
+                        ? request.getPreferredStudyState().trim()
+                        : null);
+        lead.setPreferredStudyCity(request.getPreferredStudyCity() != null && !request.getPreferredStudyCity().isBlank()
+                ? request.getPreferredStudyCity().trim()
+                : null);
+        validateAndApplyVisitPlanning(lead, request.getPlanningToVisitUniversity(), request.getVisitDate(),
+                request.getVisitTime(), request.getVisitRemarks());
+        lead.setActive(true);
+
+        Lead saved = leadRepository.save(lead);
+        log.info("Created external lead: {} ({})", saved.getFullName(), saved.getLeadCode());
+
+        LeadStatusHistory initialHistory = LeadStatusHistory.builder()
+                .lead(saved)
+                .previousStatus(null)
+                .newStatus(initialStatus)
+                .changedByUser(systemUser)
+                .feedback("Lead imported from Meta Lead Ads.")
+                .build();
+        LeadStatusHistory savedHistory = leadStatusHistoryRepository.save(initialHistory);
+        if (saved.getStatusHistories() != null) {
+            saved.getStatusHistories().add(savedHistory);
+        }
+
+        return leadMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
     public LeadResponse update(UUID id, LeadRequest request) throws BadRequestException, UnauthorizedException {
         Lead lead = leadRepository.findById(id)
                 .filter(l -> !l.isDeleted())
