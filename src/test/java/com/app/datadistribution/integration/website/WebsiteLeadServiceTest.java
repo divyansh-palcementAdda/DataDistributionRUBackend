@@ -33,6 +33,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -254,5 +255,43 @@ class WebsiteLeadServiceTest {
                 ArgumentCaptor<LeadRequest> captor = ArgumentCaptor.forClass(LeadRequest.class);
                 verify(leadService).createLeadFromExternal(captor.capture(), eq(testSuperAdmin), anyString());
                 assertTrue(captor.getValue().getPlanningToVisitUniversity());
+        }
+
+        @Test
+        @DisplayName("Virtual Tour should automatically set planningToVisitUniversity to true without visit date")
+        void shouldSetVisitPlanningForVirtualTourWithoutVisitDate() throws BadRequestException {
+                LeadSource virtualTourSource = LeadSource.builder()
+                                .name("Website - Virtual Tour")
+                                .code("WEBSITE_VIRTUAL_TOUR")
+                                .active(true)
+                                .build();
+                virtualTourSource.setId(UUID.randomUUID());
+
+                when(leadSourceRepository.findByCodeIgnoreCaseAndIsDeletedFalse("WEBSITE_VIRTUAL_TOUR"))
+                                .thenReturn(Optional.of(virtualTourSource));
+                when(properties.getSystemUsername()).thenReturn("superadmin");
+                when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(testSuperAdmin));
+
+                LeadResponse mockResponse = LeadResponse.builder()
+                                .id(UUID.randomUUID())
+                                .leadCode("LEAD-VIRTUAL01")
+                                .build();
+                when(leadService.createLeadFromExternal(any(), any(), any())).thenReturn(mockResponse);
+
+                WebsiteLeadRequestDTO request = WebsiteLeadRequestDTO.builder()
+                                .sourceCode("WEBSITE_VIRTUAL_TOUR")
+                                .externalLeadId("d2606065-70a9-4018-aa0f-c3fed2c56ead")
+                                .name("Virtual Visitor")
+                                .mobile("9876543219")
+                                .build();
+
+                websiteLeadService.ingestLead(request, "13.204.158.52");
+
+                ArgumentCaptor<LeadRequest> captor = ArgumentCaptor.forClass(LeadRequest.class);
+                verify(leadService).createLeadFromExternal(captor.capture(), eq(testSuperAdmin), anyString());
+                assertTrue(captor.getValue().getPlanningToVisitUniversity());
+                assertNull(captor.getValue().getVisitDate());
+                assertNull(captor.getValue().getVisitTime());
+                assertNull(captor.getValue().getVisitRemarks());
         }
 }

@@ -1764,21 +1764,12 @@ public class LeadServiceImpl implements ILeadService {
     }
 
     private void validateAndApplyVisitPlanning(Lead lead, Boolean planningToVisit, LocalDate visitDate,
-            LocalTime visitTime, String visitRemarks) throws BadRequestException {
+            LocalTime visitTime, String visitRemarks) {
         if (Boolean.TRUE.equals(planningToVisit)) {
-            if (visitDate == null) {
-                throw new BadRequestException("Visit date is required when planning a university visit");
-            }
-            if (visitTime == null) {
-                throw new BadRequestException("Visit time is required when planning a university visit");
-            }
-            if (visitRemarks == null || visitRemarks.trim().isBlank()) {
-                throw new BadRequestException("Visit remarks are required when planning a university visit");
-            }
             lead.setPlanningToVisitUniversity(true);
             lead.setVisitDate(visitDate);
             lead.setVisitTime(visitTime);
-            lead.setVisitRemarks(visitRemarks.trim());
+            lead.setVisitRemarks(visitRemarks != null && !visitRemarks.trim().isBlank() ? visitRemarks.trim() : null);
         } else if (planningToVisit != null && !planningToVisit) {
             lead.setPlanningToVisitUniversity(false);
             lead.setVisitDate(null);

@@ -247,49 +247,39 @@ public class LeadPreferredStudyAndVisitPlanningTest {
     }
 
     @Test
-    @DisplayName("Create Lead with Planning enabled but missing date throws BadRequestException")
-    void testCreateLeadWithVisitPlanningMissingDateThrowsException() {
+    @DisplayName("Create Lead with Planning enabled without visit date, time, or remarks succeeds")
+    void testCreateLeadWithVisitPlanningWithoutDetailsSucceeds() throws Exception {
         LeadRequest request = LeadRequest.builder()
                 .fullName("Neha Gupta")
                 .phoneNumber("9876543211")
                 .planningToVisitUniversity(true)
-                .visitTime(LocalTime.of(11, 30))
-                .visitRemarks("Visiting campus")
                 .build();
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
-        assertTrue(ex.getMessage().contains("Visit date is required"));
+        LeadResponse response = leadService.create(request);
+        assertNotNull(response);
+        assertTrue(Boolean.TRUE.equals(response.getPlanningToVisitUniversity()));
+        assertNull(response.getVisitDate());
+        assertNull(response.getVisitTime());
+        assertNull(response.getVisitRemarks());
     }
 
     @Test
-    @DisplayName("Create Lead with Planning enabled but missing time throws BadRequestException")
-    void testCreateLeadWithVisitPlanningMissingTimeThrowsException() {
+    @DisplayName("Create Lead with Planning enabled and only visit date succeeds")
+    void testCreateLeadWithVisitPlanningOnlyDateSucceeds() throws Exception {
+        LocalDate visitDate = LocalDate.now().plusDays(2);
         LeadRequest request = LeadRequest.builder()
                 .fullName("Neha Gupta")
-                .phoneNumber("9876543211")
+                .phoneNumber("9876543212")
                 .planningToVisitUniversity(true)
-                .visitDate(LocalDate.now().plusDays(2))
-                .visitRemarks("Visiting campus")
+                .visitDate(visitDate)
                 .build();
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
-        assertTrue(ex.getMessage().contains("Visit time is required"));
-    }
-
-    @Test
-    @DisplayName("Create Lead with Planning enabled but missing remarks throws BadRequestException")
-    void testCreateLeadWithVisitPlanningMissingRemarksThrowsException() {
-        LeadRequest request = LeadRequest.builder()
-                .fullName("Neha Gupta")
-                .phoneNumber("9876543211")
-                .planningToVisitUniversity(true)
-                .visitDate(LocalDate.now().plusDays(2))
-                .visitTime(LocalTime.of(10, 0))
-                .visitRemarks("   ")
-                .build();
-
-        BadRequestException ex = assertThrows(BadRequestException.class, () -> leadService.create(request));
-        assertTrue(ex.getMessage().contains("Visit remarks are required"));
+        LeadResponse response = leadService.create(request);
+        assertNotNull(response);
+        assertTrue(Boolean.TRUE.equals(response.getPlanningToVisitUniversity()));
+        assertEquals(visitDate, response.getVisitDate());
+        assertNull(response.getVisitTime());
+        assertNull(response.getVisitRemarks());
     }
 
     @Test
