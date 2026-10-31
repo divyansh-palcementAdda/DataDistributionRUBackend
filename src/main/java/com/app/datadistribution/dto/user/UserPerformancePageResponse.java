@@ -1,5 +1,6 @@
 package com.app.datadistribution.dto.user;
 
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,4 +21,7 @@ public class UserPerformancePageResponse {
     private long totalElements;
     private int totalPages;
     private boolean last;
+    private String period;
+    private LocalDate startDate;
+    private LocalDate endDate;
 }

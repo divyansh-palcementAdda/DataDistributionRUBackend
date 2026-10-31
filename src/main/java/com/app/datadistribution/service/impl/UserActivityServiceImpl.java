@@ -84,7 +84,8 @@ public class UserActivityServiceImpl implements IUserActivityService {
                 user.getId(), List.of(SessionStatus.ACTIVE, SessionStatus.INACTIVE));
 
         for (UserLoginSession stale : staleSessions) {
-            closeSession(stale, now, LogoutReason.SYSTEM_LOGOUT);
+            LocalDateTime effectiveEnd = stale.getLastActivityAt() != null ? stale.getLastActivityAt() : stale.getLoginAt();
+            closeSession(stale, effectiveEnd, LogoutReason.SYSTEM_LOGOUT);
         }
 
         // 2. Create new login session
@@ -126,6 +127,10 @@ public class UserActivityServiceImpl implements IUserActivityService {
         Optional<UserLoginSession> activeSessionOpt = sessionRepository.findFirstActiveSessionByUserId(userId);
 
         if (activeSessionOpt.isEmpty()) {
+            User user = userRepository.findById(userId).orElse(null);
+            if (user != null && user.isActive() && !user.isDeleted()) {
+                recordLogin(user, null, "Heartbeat Resumed", user.getTokenVersion());
+            }
             return;
         }
 
@@ -135,9 +140,13 @@ public class UserActivityServiceImpl implements IUserActivityService {
         if (lastAct != null) {
             long minutesGap = Duration.between(lastAct, now).toMinutes();
 
-            // If gap >= 15 min, session has timed out on backend
+            // If gap >= 15 min, close stale session at lastAct and start fresh session from now
             if (minutesGap >= AUTO_LOGOUT_THRESHOLD_MINUTES) {
-                closeSession(session, now, LogoutReason.AUTO_LOGOUT_INACTIVITY);
+                closeSession(session, lastAct, LogoutReason.AUTO_LOGOUT_INACTIVITY);
+                User user = session.getUser();
+                if (user != null && user.isActive() && !user.isDeleted()) {
+                    recordLogin(user, session.getIpAddress(), session.getDeviceInfo(), session.getTokenVersion());
+                }
                 return;
             }
 

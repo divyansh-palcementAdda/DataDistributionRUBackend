@@ -1,10 +1,12 @@
 package com.app.datadistribution.service.impl;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -19,6 +21,7 @@ import com.app.datadistribution.entity.LeadStatus;
 import com.app.datadistribution.entity.Role;
 import com.app.datadistribution.entity.User;
 import com.app.datadistribution.enums.ActivityPeriodType;
+import com.app.datadistribution.enums.LogoutReason;
 import com.app.datadistribution.enums.RoleType;
 import com.app.datadistribution.enums.SessionStatus;
 import com.app.datadistribution.exception.BadRequestException;
@@ -52,10 +55,137 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
 
     private static final int AUTO_LOGOUT_THRESHOLD_MINUTES = 15;
 
+
+
+    public static class TimeInterval {
+        private final LocalDateTime start;
+        private LocalDateTime end;
+
+        public TimeInterval(LocalDateTime start, LocalDateTime end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        public LocalDateTime getStart() { return start; }
+        public LocalDateTime getEnd() { return end; }
+    }
+
+    public static List<TimeInterval> mergeIntervals(List<TimeInterval> intervals) {
+        if (intervals == null || intervals.isEmpty()) return Collections.emptyList();
+        intervals.sort(Comparator.comparing(TimeInterval::getStart));
+        List<TimeInterval> merged = new ArrayList<>();
+        TimeInterval current = new TimeInterval(intervals.get(0).getStart(), intervals.get(0).getEnd());
+        for (int i = 1; i < intervals.size(); i++) {
+            TimeInterval next = intervals.get(i);
+            if (!next.getStart().isAfter(current.getEnd())) {
+                if (next.getEnd().isAfter(current.getEnd())) {
+                    current.end = next.getEnd();
+                }
+            } else {
+                merged.add(current);
+                current = new TimeInterval(next.getStart(), next.getEnd());
+            }
+        }
+        merged.add(current);
+        return merged;
+    }
+
+    public static class ResolvedDateRange {
+        private final String period;
+        private final LocalDate startDate;
+        private final LocalDate endDate;
+        private final LocalDateTime startOfPeriod;
+        private final LocalDateTime endOfPeriod;
+
+        public ResolvedDateRange(String period, LocalDate startDate, LocalDate endDate, LocalDateTime startOfPeriod, LocalDateTime endOfPeriod) {
+            this.period = period;
+            this.startDate = startDate;
+            this.endDate = endDate;
+            this.startOfPeriod = startOfPeriod;
+            this.endOfPeriod = endOfPeriod;
+        }
+
+        public String getPeriod() { return period; }
+        public LocalDate getStartDate() { return startDate; }
+        public LocalDate getEndDate() { return endDate; }
+        public LocalDateTime getStartOfPeriod() { return startOfPeriod; }
+        public LocalDateTime getEndOfPeriod() { return endOfPeriod; }
+    }
+
+    private ResolvedDateRange resolveDateRange(UserPerformanceFilterRequest filterRequest) throws BadRequestException {
+        ZoneId zone = ZoneId.of("Asia/Kolkata");
+        LocalDate today = LocalDate.now(zone);
+
+        String period = filterRequest != null && filterRequest.getPeriod() != null && !filterRequest.getPeriod().isBlank()
+                ? filterRequest.getPeriod().trim().toUpperCase() : null;
+        LocalDate reqStart = filterRequest != null ? filterRequest.getStartDate() : null;
+        LocalDate reqEnd = filterRequest != null ? filterRequest.getEndDate() : null;
+
+        if (period == null) {
+            if (reqStart != null || reqEnd != null) {
+                period = "CUSTOM";
+            } else {
+                period = "TODAY";
+            }
+        }
+
+        LocalDate start;
+        LocalDate end;
+
+        switch (period) {
+            case "TODAY":
+                start = today;
+                end = today;
+                break;
+            case "YESTERDAY":
+                start = today.minusDays(1);
+                end = today.minusDays(1);
+                break;
+            case "THIS_WEEK":
+                start = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                end = today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+                break;
+            case "THIS_MONTH":
+                start = today.withDayOfMonth(1);
+                end = today.with(TemporalAdjusters.lastDayOfMonth());
+                break;
+            case "THIS_YEAR":
+                start = today.withDayOfYear(1);
+                end = today.with(TemporalAdjusters.lastDayOfYear());
+                break;
+            case "CUSTOM":
+                if (reqStart == null && reqEnd == null) {
+                    log.info("CUSTOM period requested without dates; defaulting to TODAY");
+                    start = today;
+                    end = today;
+                    period = "TODAY";
+                } else if (reqStart == null || reqEnd == null) {
+                    throw new BadRequestException("Both startDate and endDate are required for CUSTOM date range");
+                } else {
+                    if (reqStart.isAfter(reqEnd)) {
+                        throw new BadRequestException("startDate cannot be after endDate");
+                    }
+                    start = reqStart;
+                    end = reqEnd;
+                }
+                break;
+            default:
+                throw new BadRequestException("Invalid period filter: " + period + ". Allowed values: TODAY, YESTERDAY, THIS_WEEK, THIS_MONTH, THIS_YEAR, CUSTOM");
+        }
+
+        LocalDateTime startOfPeriod = start.atStartOfDay();
+        LocalDateTime endOfPeriod = end.plusDays(1).atStartOfDay();
+
+        return new ResolvedDateRange(period, start, end, startOfPeriod, endOfPeriod);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public UserPerformancePageResponse getUserPerformance(UserPerformanceFilterRequest filterRequest)
             throws UnauthorizedException, BadRequestException {
+
+        // 0. Resolve and Validate Date Range
+        ResolvedDateRange dateRange = resolveDateRange(filterRequest);
 
         // 1. Resolve User Data Scope
         UserDataScope dataScope = dataScopeService.getScopeForCurrentUser();
@@ -144,6 +274,9 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
                     .totalElements(0L)
                     .totalPages(0)
                     .last(true)
+                    .period(dateRange.getPeriod())
+                    .startDate(dateRange.getStartDate())
+                    .endDate(dateRange.getEndDate())
                     .build();
         }
 
@@ -153,15 +286,14 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         Set<UUID> connectedStatusIds = getDescendantStatusIds("CONNECTED");
 
         Set<UUID> candidateUserIds = candidateUsers.stream().map(User::getId).collect(Collectors.toSet());
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime tomorrowStart = today.plusDays(1).atStartOfDay();
+        LocalDateTime startOfPeriod = dateRange.getStartOfPeriod();
+        LocalDateTime endOfPeriod = dateRange.getEndOfPeriod();
         LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Kolkata"));
 
         // 5. Independent Grouped Aggregations by User ID
-        Map<UUID, LeadStatsDTO> leadStatsMap = fetchLeadStatsForUsers(candidateUserIds, rawStatusIds, registeredStatusIds, connectedStatusIds);
-        Map<UUID, FollowupStatsDTO> followupStatsMap = fetchFollowupStatsForUsers(candidateUserIds, startOfDay, tomorrowStart, now);
-        Map<UUID, ActivityStatsDTO> activityStatsMap = fetchActivityStatsForUsers(candidateUserIds, startOfDay, tomorrowStart, now);
+        Map<UUID, LeadStatsDTO> leadStatsMap = fetchLeadStatsForUsers(candidateUserIds, rawStatusIds, registeredStatusIds, connectedStatusIds, startOfPeriod, endOfPeriod);
+        Map<UUID, FollowupStatsDTO> followupStatsMap = fetchFollowupStatsForUsers(candidateUserIds, startOfPeriod, endOfPeriod, now);
+        Map<UUID, ActivityStatsDTO> activityStatsMap = fetchActivityStatsForUsers(candidateUserIds, startOfPeriod, endOfPeriod, now);
 
         // 6. Assemble Row Responses
         List<UserPerformanceResponse> rows = new ArrayList<>(candidateUsers.size());
@@ -244,6 +376,9 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
                 .totalElements(totalElements)
                 .totalPages(totalPages)
                 .last((page + 1) >= totalPages)
+                .period(dateRange.getPeriod())
+                .startDate(dateRange.getStartDate())
+                .endDate(dateRange.getEndDate())
                 .build();
     }
 
@@ -310,7 +445,7 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
      * Grouped lead stats query by assigned user ID
      */
     @SuppressWarnings("unchecked")
-    private Map<UUID, LeadStatsDTO> fetchLeadStatsForUsers(Set<UUID> userIds, Set<UUID> rawStatusIds, Set<UUID> registeredStatusIds, Set<UUID> connectedStatusIds) {
+    private Map<UUID, LeadStatsDTO> fetchLeadStatsForUsers(Set<UUID> userIds, Set<UUID> rawStatusIds, Set<UUID> registeredStatusIds, Set<UUID> connectedStatusIds, LocalDateTime startOfPeriod, LocalDateTime endOfPeriod) {
         if (userIds == null || userIds.isEmpty()) return Collections.emptyMap();
 
         StringBuilder sql = new StringBuilder();
@@ -332,7 +467,10 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         }
 
         if (!connectedStatusIds.isEmpty()) {
-            sql.append(", COUNT(DISTINCT CASE WHEN l.lead_status_id IN (:connectedStatusIds) THEN l.id END) AS total_connected ");
+            sql.append(", COUNT(DISTINCT CASE WHEN l.lead_status_id IN (:connectedStatusIds) AND (");
+            sql.append("  EXISTS (SELECT 1 FROM lead_status_histories lsh WHERE lsh.lead_id = l.id AND lsh.new_status_id IN (:connectedStatusIds) AND (lsh.changed_by_user_id = l.assigned_to_id OR lsh.changed_by_user_id IS NULL) AND lsh.created_at >= :startOfPeriod AND lsh.created_at < :endOfPeriod) ");
+            sql.append("  OR (l.updated_at >= :startOfPeriod AND l.updated_at < :endOfPeriod)");
+            sql.append(") THEN l.id END) AS total_connected ");
         } else {
             sql.append(", 0 AS total_connected ");
         }
@@ -351,6 +489,8 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         }
         if (!connectedStatusIds.isEmpty()) {
             query.setParameter("connectedStatusIds", connectedStatusIds);
+            query.setParameter("startOfPeriod", startOfPeriod);
+            query.setParameter("endOfPeriod", endOfPeriod);
         }
 
         List<?> results = query.getResultList();
@@ -376,7 +516,7 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
      * Grouped followup stats query by user ID for Today
      */
     @SuppressWarnings("unchecked")
-    private Map<UUID, FollowupStatsDTO> fetchFollowupStatsForUsers(Set<UUID> userIds, LocalDateTime startOfDay, LocalDateTime endOfDay, LocalDateTime now) {
+    private Map<UUID, FollowupStatsDTO> fetchFollowupStatsForUsers(Set<UUID> userIds, LocalDateTime startOfPeriod, LocalDateTime endOfPeriod, LocalDateTime now) {
         if (userIds == null || userIds.isEmpty()) return Collections.emptyMap();
 
         String sql = "SELECT " +
@@ -388,13 +528,13 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
                 "  COUNT(DISTINCT CASE WHEN lfu.completed = false THEN lfu.id END) AS total_pending " +
                 "FROM lead_follow_ups lfu " +
                 "WHERE lfu.is_deleted = false AND lfu.assigned_to_user_id IN (:userIds) " +
-                "  AND lfu.follow_up_date >= :startOfDay AND lfu.follow_up_date < :endOfDay " +
+                "  AND lfu.follow_up_date >= :startOfPeriod AND lfu.follow_up_date < :endOfPeriod " +
                 "GROUP BY lfu.assigned_to_user_id";
 
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("userIds", userIds);
-        query.setParameter("startOfDay", startOfDay);
-        query.setParameter("endOfDay", endOfDay);
+        query.setParameter("startOfPeriod", startOfPeriod);
+        query.setParameter("endOfPeriod", endOfPeriod);
         query.setParameter("now", now);
 
         List<?> results = query.getResultList();
@@ -420,52 +560,43 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
      * Grouped activity and session stats query by user ID
      */
     @SuppressWarnings("unchecked")
-    private Map<UUID, ActivityStatsDTO> fetchActivityStatsForUsers(Set<UUID> userIds, LocalDateTime startOfDay, LocalDateTime endOfDay, LocalDateTime now) {
+    private Map<UUID, ActivityStatsDTO> fetchActivityStatsForUsers(Set<UUID> userIds, LocalDateTime startOfPeriod, LocalDateTime endOfPeriod, LocalDateTime now) {
         if (userIds == null || userIds.isEmpty()) return Collections.emptyMap();
 
-        // 1. Fetch sessions for today
-        String sessionSql = "SELECT uls.id, uls.user_id, uls.login_at, uls.logout_at, uls.last_activity_at, uls.session_status, uls.total_inactive_duration_seconds " +
+        // 1. Fetch sessions overlapping the period or currently active
+        String sessionSql = "SELECT uls.id, uls.user_id, uls.login_at, uls.logout_at, uls.last_activity_at, uls.session_status, uls.total_inactive_duration_seconds, uls.logout_reason " +
                 "FROM user_login_sessions uls " +
                 "WHERE uls.user_id IN (:userIds) AND uls.is_deleted = false " +
-                "  AND (uls.login_at BETWEEN :startOfDay AND :endOfDay OR (uls.logout_at IS NULL AND uls.session_status = 'ACTIVE')) " +
+                "  AND (" +
+                "    (uls.login_at < :endOfPeriod AND (uls.logout_at IS NULL OR uls.logout_at >= :startOfPeriod)) " +
+                "    OR (uls.logout_at IS NULL AND uls.session_status = 'ACTIVE')" +
+                "  ) " +
                 "ORDER BY uls.login_at ASC";
 
         Query sessionQuery = entityManager.createNativeQuery(sessionSql);
         sessionQuery.setParameter("userIds", userIds);
-        sessionQuery.setParameter("startOfDay", startOfDay);
-        sessionQuery.setParameter("endOfDay", endOfDay);
+        sessionQuery.setParameter("startOfPeriod", startOfPeriod);
+        sessionQuery.setParameter("endOfPeriod", endOfPeriod);
 
         List<?> sessionRows = sessionQuery.getResultList();
 
-        // 2. Fetch inactive periods for today
+        // 2. Fetch inactive periods overlapping the period
         String periodSql = "SELECT uap.user_id, uap.started_at, uap.ended_at, uap.duration_seconds " +
                 "FROM user_activity_periods uap " +
                 "WHERE uap.user_id IN (:userIds) AND uap.is_deleted = false AND uap.period_type = 'INACTIVE' " +
-                "  AND uap.started_at BETWEEN :startOfDay AND :endOfDay";
+                "  AND uap.started_at < :endOfPeriod AND (uap.ended_at IS NULL OR uap.ended_at >= :startOfPeriod)";
 
         Query periodQuery = entityManager.createNativeQuery(periodSql);
         periodQuery.setParameter("userIds", userIds);
-        periodQuery.setParameter("startOfDay", startOfDay);
-        periodQuery.setParameter("endOfDay", endOfDay);
+        periodQuery.setParameter("startOfPeriod", startOfPeriod);
+        periodQuery.setParameter("endOfPeriod", endOfPeriod);
 
         List<?> periodRows = periodQuery.getResultList();
 
-        Map<UUID, Long> inactiveSecondsMap = new HashMap<>();
-        for (Object p : periodRows) {
-            Object[] row = p instanceof Object[] ? (Object[]) p : new Object[]{p};
-            UUID uid = parseUUID(row[0]);
-            if (uid != null) {
-                LocalDateTime start = parseLocalDateTime(row[1]);
-                LocalDateTime end = parseLocalDateTime(row[2]);
-                long dur = parseLong(row[3]);
-                if (dur <= 0 && start != null) {
-                    dur = Duration.between(start, end != null ? end : now).toSeconds();
-                }
-                inactiveSecondsMap.put(uid, inactiveSecondsMap.getOrDefault(uid, 0L) + Math.max(0, dur));
-            }
-        }
-
         Map<UUID, ActivityStatsDTO> map = new HashMap<>();
+        Map<UUID, List<TimeInterval>> userSessionIntervals = new HashMap<>();
+        Map<UUID, List<TimeInterval>> userInactiveIntervals = new HashMap<>();
+        Map<UUID, LocalDateTime> userLastLoginTime = new HashMap<>();
         LocalDateTime fifteenMinAgo = now.minusMinutes(AUTO_LOGOUT_THRESHOLD_MINUTES);
 
         for (Object s : sessionRows) {
@@ -478,33 +609,103 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
             LocalDateTime logoutAt = parseLocalDateTime(row[3]);
             LocalDateTime lastAct = parseLocalDateTime(row[4]);
             String sessionStatus = row[5] != null ? row[5].toString() : "ACTIVE";
+            String logoutReason = row.length > 7 && row[7] != null ? row[7].toString() : null;
 
-            if (loginAt != null && !loginAt.isBefore(startOfDay) && !loginAt.isAfter(endOfDay)) {
-                dto.loginCount++;
-            }
-            if (logoutAt != null && !logoutAt.isBefore(startOfDay) && !logoutAt.isAfter(endOfDay)) {
-                dto.logoutCount++;
-            }
+            if (loginAt == null) continue;
 
-            // Session working duration calculation
-            LocalDateTime effectiveEnd = logoutAt != null ? logoutAt : now;
-            if (loginAt != null && effectiveEnd.isAfter(loginAt)) {
-                long sessSecs = Duration.between(loginAt, effectiveEnd).toSeconds();
-                dto.totalSessionSeconds += sessSecs;
-            }
+            // Real-time presence check: active session with recent activity within 15 min
+            boolean isLiveActive = (logoutAt == null)
+                    && "ACTIVE".equalsIgnoreCase(sessionStatus)
+                    && (lastAct != null && !lastAct.isBefore(fifteenMinAgo));
 
-            // Currently working check
-            if (logoutAt == null && "ACTIVE".equalsIgnoreCase(sessionStatus) && lastAct != null && !lastAct.isBefore(fifteenMinAgo)) {
+            if (isLiveActive) {
                 dto.currentlyWorking = true;
+            }
+
+            // Determine bounded session end time
+            LocalDateTime sessionEnd;
+            if (isLiveActive) {
+                sessionEnd = now;
+            } else if (logoutAt != null) {
+                sessionEnd = logoutAt;
+            } else {
+                // Stale or unclosed session: activity ceased at lastActivityAt
+                sessionEnd = (lastAct != null && lastAct.isAfter(loginAt)) ? lastAct : loginAt;
+            }
+
+            if (sessionEnd.isBefore(loginAt)) {
+                sessionEnd = loginAt;
+            }
+
+            // Clip session duration to requested period [startOfPeriod, endOfPeriod)
+            LocalDateTime clipStart = loginAt.isBefore(startOfPeriod) ? startOfPeriod : loginAt;
+            LocalDateTime clipEnd = sessionEnd.isAfter(endOfPeriod) ? endOfPeriod : sessionEnd;
+
+            if (clipEnd.isAfter(clipStart)) {
+                userSessionIntervals.computeIfAbsent(uid, k -> new ArrayList<>()).add(new TimeInterval(clipStart, clipEnd));
+            }
+
+            // Login count within [startOfPeriod, endOfPeriod)
+            // Deduplicate rapid retries / multi-tab logins within 10 seconds
+            if (!loginAt.isBefore(startOfPeriod) && loginAt.isBefore(endOfPeriod)) {
+                LocalDateTime prevLogin = userLastLoginTime.get(uid);
+                if (prevLogin == null || Duration.between(prevLogin, loginAt).abs().toSeconds() >= 10) {
+                    dto.loginCount++;
+                    userLastLoginTime.put(uid, loginAt);
+                }
+            }
+
+            // Logout count within [startOfPeriod, endOfPeriod)
+            // Count actual user logout events; exclude internal SYSTEM_LOGOUT cleanups
+            if (logoutAt != null && !logoutAt.isBefore(startOfPeriod) && logoutAt.isBefore(endOfPeriod)) {
+                if (logoutReason == null || !LogoutReason.SYSTEM_LOGOUT.name().equalsIgnoreCase(logoutReason)) {
+                    dto.logoutCount++;
+                }
             }
         }
 
-        for (Map.Entry<UUID, ActivityStatsDTO> entry : map.entrySet()) {
-            UUID uid = entry.getKey();
-            ActivityStatsDTO dto = entry.getValue();
-            long inactiveSecs = inactiveSecondsMap.getOrDefault(uid, 0L);
-            long workingSecs = Math.max(0, dto.totalSessionSeconds - inactiveSecs);
-            dto.workingHours = Math.round((workingSecs / 3600.0) * 100.0) / 100.0;
+        // Process inactive periods clipped to [startOfPeriod, endOfPeriod)
+        for (Object p : periodRows) {
+            Object[] row = p instanceof Object[] ? (Object[]) p : new Object[]{p};
+            UUID uid = parseUUID(row[0]);
+            if (uid == null) continue;
+
+            LocalDateTime pStart = parseLocalDateTime(row[1]);
+            LocalDateTime pEnd = parseLocalDateTime(row[2]);
+            if (pStart == null) continue;
+
+            LocalDateTime effectiveEnd = pEnd != null ? pEnd : now;
+            if (effectiveEnd.isBefore(pStart)) effectiveEnd = pStart;
+
+            LocalDateTime clipPStart = pStart.isBefore(startOfPeriod) ? startOfPeriod : pStart;
+            LocalDateTime clipPEnd = effectiveEnd.isAfter(endOfPeriod) ? endOfPeriod : effectiveEnd;
+
+            if (clipPEnd.isAfter(clipPStart)) {
+                userInactiveIntervals.computeIfAbsent(uid, k -> new ArrayList<>()).add(new TimeInterval(clipPStart, clipPEnd));
+            }
+        }
+
+        // Calculate non-overlapping net working hours for each user
+        for (UUID uid : userIds) {
+            ActivityStatsDTO dto = map.computeIfAbsent(uid, k -> new ActivityStatsDTO());
+            List<TimeInterval> sessionList = userSessionIntervals.getOrDefault(uid, Collections.emptyList());
+            List<TimeInterval> mergedSessions = mergeIntervals(sessionList);
+
+            long totalActiveSecs = 0;
+            for (TimeInterval ti : mergedSessions) {
+                totalActiveSecs += Math.max(0, Duration.between(ti.getStart(), ti.getEnd()).toSeconds());
+            }
+
+            List<TimeInterval> inactiveList = userInactiveIntervals.getOrDefault(uid, Collections.emptyList());
+            List<TimeInterval> mergedInactives = mergeIntervals(inactiveList);
+
+            long totalInactiveSecs = 0;
+            for (TimeInterval ti : mergedInactives) {
+                totalInactiveSecs += Math.max(0, Duration.between(ti.getStart(), ti.getEnd()).toSeconds());
+            }
+
+            long netWorkingSecs = Math.max(0, totalActiveSecs - totalInactiveSecs);
+            dto.workingHours = Math.round((netWorkingSecs / 3600.0) * 100.0) / 100.0;
         }
 
         return map;

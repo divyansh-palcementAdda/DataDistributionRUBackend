@@ -1,5 +1,6 @@
 package com.app.datadistribution.dto.user;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -25,4 +26,7 @@ public class UserPerformanceFilterRequest {
     private Integer size;
     private String sortBy;
     private String sortDirection;
+    private String period;
+    private LocalDate startDate;
+    private LocalDate endDate;
 }

@@ -1,5 +1,8 @@
 package com.app.datadistribution.controller;
 
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -69,7 +72,10 @@ public class UserController {
             @RequestParam(value = "roles", required = false) List<String> roles,
             @RequestParam(value = "departmentId", required = false) UUID departmentId,
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "currentlyWorking", required = false) Boolean currentlyWorking) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "currentlyWorking", required = false) Boolean currentlyWorking,
+            @RequestParam(value = "period", defaultValue = "TODAY") String period,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException, BadRequestException {
 
         UserPerformanceFilterRequest filterRequest = UserPerformanceFilterRequest.builder()
                 .page(page)
@@ -82,6 +88,9 @@ public class UserController {
                 .departmentId(departmentId)
                 .status(status)
                 .currentlyWorking(currentlyWorking)
+                .period(period)
+                .startDate(startDate)
+                .endDate(endDate)
                 .build();
 
         UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filterRequest);

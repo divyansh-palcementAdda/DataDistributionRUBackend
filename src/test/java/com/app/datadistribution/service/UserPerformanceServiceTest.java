@@ -5,7 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import com.app.datadistribution.exception.BadRequestException;
 import java.util.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -326,5 +328,242 @@ class UserPerformanceServiceTest {
         assertEquals(5L, hodDto.getTotalAvailedData());
         assertEquals(4L, hodDto.getTodayFollowupsCount());
         assertFalse(hodDto.getCurrentlyWorking());
+    }
+
+    @Test
+    @DisplayName("TEST 8 (Date Presets): Verifies TODAY, YESTERDAY, THIS_WEEK, THIS_MONTH, THIS_YEAR resolve correctly")
+    void testDateFilter_Presets_ResolveCorrectly() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+        mockEmptyNativeQueries();
+
+        String[] presets = {"TODAY", "YESTERDAY", "THIS_WEEK", "THIS_MONTH", "THIS_YEAR"};
+        for (String preset : presets) {
+            UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                    .period(preset)
+                    .page(0)
+                    .size(10)
+                    .build();
+            UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+            assertNotNull(response);
+            assertEquals(preset, response.getPeriod());
+            assertNotNull(response.getStartDate());
+            assertNotNull(response.getEndDate());
+            assertFalse(response.getStartDate().isAfter(response.getEndDate()));
+        }
+    }
+
+    @Test
+    @DisplayName("TEST 9 (Custom Date Range): Valid range resolves start and end date accurately")
+    void testDateFilter_CustomRange_Valid() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+        mockEmptyNativeQueries();
+
+        LocalDate start = LocalDate.of(2026, 1, 1);
+        LocalDate end = LocalDate.of(2026, 1, 31);
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("CUSTOM")
+                .startDate(start)
+                .endDate(end)
+                .page(0)
+                .size(10)
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+        assertNotNull(response);
+        assertEquals("CUSTOM", response.getPeriod());
+        assertEquals(start, response.getStartDate());
+        assertEquals(end, response.getEndDate());
+    }
+
+    @Test
+    @DisplayName("TEST 10 (Custom Date Range Validation): startDate after endDate throws BadRequestException")
+    void testDateFilter_CustomRange_StartDateAfterEndDate_ThrowsBadRequest() throws Exception {
+        lenient().when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("CUSTOM")
+                .startDate(LocalDate.of(2026, 2, 1))
+                .endDate(LocalDate.of(2026, 1, 1))
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                userPerformanceService.getUserPerformance(filter));
+        assertTrue(ex.getMessage().contains("startDate cannot be after endDate"));
+    }
+
+    @Test
+    @DisplayName("TEST 11 (Custom Date Range Validation): Missing dates throw BadRequestException")
+    void testDateFilter_CustomRange_MissingDates_ThrowsBadRequest() throws Exception {
+        lenient().when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        UserPerformanceFilterRequest filter1 = UserPerformanceFilterRequest.builder()
+                .period("CUSTOM")
+                .startDate(LocalDate.of(2026, 1, 1))
+                .build();
+
+        assertThrows(BadRequestException.class, () ->
+                userPerformanceService.getUserPerformance(filter1));
+
+        UserPerformanceFilterRequest filter2 = UserPerformanceFilterRequest.builder()
+                .period("CUSTOM")
+                .endDate(LocalDate.of(2026, 1, 1))
+                .build();
+
+        assertThrows(BadRequestException.class, () ->
+                userPerformanceService.getUserPerformance(filter2));
+    }
+
+    @Test
+    @DisplayName("TEST 12 (Real-time Presence Isolation): Active session sets currentlyWorking=true even when viewing historical filter")
+    void testDateFilter_RealTimePresence_PreservedAcrossHistoricalFilter() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+
+        Query leadQuery = mock(Query.class);
+        when(leadQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        Query fuQuery = mock(Query.class);
+        when(fuQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        // Counselor logged in 10 minutes ago, currently ACTIVE (real-time presence)
+        LocalDateTime now = LocalDateTime.now();
+        Object[] activeSess = new Object[] { UUID.randomUUID(), counselorA1.getId(), now.minusMinutes(10), null, now.minusMinutes(2), "ACTIVE", 0L };
+        Query sessQuery = mock(Query.class);
+        when(sessQuery.getResultList()).thenReturn(Collections.singletonList(activeSess));
+
+        Query periodQuery = mock(Query.class);
+        when(periodQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        when(entityManager.createNativeQuery(anyString()))
+                .thenReturn(leadQuery)
+                .thenReturn(fuQuery)
+                .thenReturn(sessQuery)
+                .thenReturn(periodQuery);
+
+        // Filter is set to YESTERDAY
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("YESTERDAY")
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+        assertNotNull(response);
+        assertEquals("YESTERDAY", response.getPeriod());
+        assertEquals(1, response.getContent().size());
+        UserPerformanceResponse row = response.getContent().get(0);
+        assertTrue(row.getCurrentlyWorking(), "Real-time presence must be evaluated for right now, independent of YESTERDAY date range");
+        assertEquals(0L, row.getTodayLoginCount(), "Login was today, so yesterday's login count must be 0");
+    }
+
+    @Test
+    @DisplayName("TEST 13 (Stale Session Bug Fix): Past unclosed session does NOT accumulate 14+ hours today")
+    void testWorkingHours_StaleSessionInPast_DoesNotAccumulateHoursToday() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+
+        Query leadQuery = mock(Query.class);
+        when(leadQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        Query fuQuery = mock(Query.class);
+        when(fuQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        // Stale session from 3 days ago: logged in 3 days ago, last activity 3 days ago, logout_at is NULL
+        LocalDateTime threeDaysAgo = LocalDateTime.now().minusDays(3);
+        Object[] staleSess = new Object[] {
+                UUID.randomUUID(), counselorA1.getId(),
+                threeDaysAgo, null, threeDaysAgo.plusMinutes(45), "ACTIVE", 0L, null
+        };
+        Query sessQuery = mock(Query.class);
+        when(sessQuery.getResultList()).thenReturn(Collections.singletonList(staleSess));
+
+        Query periodQuery = mock(Query.class);
+        when(periodQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        when(entityManager.createNativeQuery(anyString()))
+                .thenReturn(leadQuery)
+                .thenReturn(fuQuery)
+                .thenReturn(sessQuery)
+                .thenReturn(periodQuery);
+
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("TODAY")
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+        assertNotNull(response);
+        assertEquals(1, response.getContent().size());
+        UserPerformanceResponse row = response.getContent().get(0);
+
+        assertEquals(0.0, row.getTodayWorkingHours(), "Stale session from 3 days ago must NOT contribute hours to Today");
+        assertFalse(row.getCurrentlyWorking(), "Stale session must NOT be currently working");
+        assertEquals(0L, row.getTodayLoginCount(), "Stale session from 3 days ago must NOT count as Today login");
+        assertEquals(0L, row.getTodayLogoutCount());
+    }
+
+    @Test
+    @DisplayName("TEST 14 (Concurrent Sessions): Overlapping sessions are merged without double-counting hours")
+    void testWorkingHours_ConcurrentSessions_MergedWithoutDoubleCounting() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+
+        Query leadQuery = mock(Query.class);
+        when(leadQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        Query fuQuery = mock(Query.class);
+        when(fuQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        // Two concurrent sessions today: 10:00 to 12:00 (2h) and 11:00 to 13:00 (2h)
+        // Merged time is 10:00 to 13:00 (3h total, NOT 4h)
+        LocalDateTime today10am = LocalDate.now().atTime(10, 0);
+        LocalDateTime today11am = LocalDate.now().atTime(11, 0);
+        LocalDateTime today12pm = LocalDate.now().atTime(12, 0);
+        LocalDateTime today1pm = LocalDate.now().atTime(13, 0);
+
+        Object[] sess1 = new Object[] { UUID.randomUUID(), counselorA1.getId(), today10am, today12pm, today12pm, "COMPLETED", 0L, "MANUAL_LOGOUT" };
+        Object[] sess2 = new Object[] { UUID.randomUUID(), counselorA1.getId(), today11am, today1pm, today1pm, "COMPLETED", 0L, "MANUAL_LOGOUT" };
+
+        Query sessQuery = mock(Query.class);
+        when(sessQuery.getResultList()).thenReturn(List.of(sess1, sess2));
+
+        Query periodQuery = mock(Query.class);
+        when(periodQuery.getResultList()).thenReturn(Collections.emptyList());
+
+        when(entityManager.createNativeQuery(anyString()))
+                .thenReturn(leadQuery)
+                .thenReturn(fuQuery)
+                .thenReturn(sessQuery)
+                .thenReturn(periodQuery);
+
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("TODAY")
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+        assertNotNull(response);
+        assertEquals(1, response.getContent().size());
+        UserPerformanceResponse row = response.getContent().get(0);
+
+        assertEquals(3.0, row.getTodayWorkingHours(), "Overlapping intervals [10:00-12:00] and [11:00-13:00] must merge to exactly 3.0h");
+    }
+
+    @Test
+    @DisplayName("TEST 15 (Zero Activity User): Authorized operational users remain visible with 0 metrics")
+    void testZeroActivityUser_RemainsVisibleWithZeroMetrics() throws Exception {
+        when(dataScopeService.getScopeForCurrentUser()).thenReturn(counselorA1Scope);
+        when(leadStatusRepository.findAll()).thenReturn(List.of(rawStatus, registeredStatus, connectedStatus));
+        mockEmptyNativeQueries();
+
+        UserPerformanceFilterRequest filter = UserPerformanceFilterRequest.builder()
+                .period("TODAY")
+                .build();
+
+        UserPerformancePageResponse response = userPerformanceService.getUserPerformance(filter);
+        assertNotNull(response);
+        assertEquals(1, response.getTotalElements(), "Authorized user must remain in table even with 0 activity");
+        UserPerformanceResponse row = response.getContent().get(0);
+        assertEquals(counselorA1.getId(), row.getUserId());
+        assertEquals(0.0, row.getTodayWorkingHours());
+        assertEquals(0L, row.getTodayLoginCount());
+        assertEquals(0L, row.getTodayLogoutCount());
+        assertFalse(row.getCurrentlyWorking());
     }
 }
