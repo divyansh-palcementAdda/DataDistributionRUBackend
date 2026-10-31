@@ -34,7 +34,10 @@ import lombok.Setter;
     @Index(name = "idx_lead_status", columnList = "lead_status_id"),
     @Index(name = "idx_lead_stream", columnList = "stream_id"),
     @Index(name = "idx_lead_is_deleted", columnList = "is_deleted"),
-    @Index(name = "idx_lead_created_by", columnList = "created_by_user_id")
+    @Index(name = "idx_lead_created_by", columnList = "created_by_user_id"),
+    @Index(name = "idx_lead_phone_number", columnList = "phone_number"),
+    @Index(name = "idx_lead_email", columnList = "email"),
+    @Index(name = "idx_lead_full_name", columnList = "full_name")
 })
 @Getter
 @Setter

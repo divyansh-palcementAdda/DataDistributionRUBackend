@@ -3,6 +3,7 @@ package com.app.datadistribution.integration.website;
 import com.app.datadistribution.dto.lead.LeadRequest;
 import com.app.datadistribution.dto.lead.LeadResponse;
 import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
@@ -67,6 +68,9 @@ class WebsiteLeadServiceTest {
         @Mock
         private WebsiteIntegrationProperties properties;
 
+        @Mock
+        private com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
+
         @InjectMocks
         private WebsiteLeadServiceImpl websiteLeadService;
 
@@ -87,6 +91,15 @@ class WebsiteLeadServiceTest {
                                 .email("superadmin@example.com")
                                 .build();
                 testSuperAdmin.setId(UUID.randomUUID());
+
+                org.mockito.Mockito.lenient().when(properties.getSystemUsername()).thenReturn("superadmin");
+                org.mockito.Mockito.lenient().when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(testSuperAdmin));
+                org.mockito.Mockito.lenient().when(deduplicationService.executeWithPhoneLock(any(), any()))
+                        .thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(1)).get());
+                org.mockito.Mockito.lenient().when(deduplicationService.normalizePhone(any()))
+                        .thenAnswer(invocation -> invocation.getArgument(0) != null ? invocation.getArgument(0).toString() : "");
+                org.mockito.Mockito.lenient().when(deduplicationService.matchLead(any(), any(), any(), any(), any(), any()))
+                        .thenReturn(com.app.datadistribution.dto.lead.LeadMatchResult.noMatch("No match"));
         }
 
         @Test
@@ -96,8 +109,6 @@ class WebsiteLeadServiceTest {
                                 .thenReturn(Optional.of(feesInquirySource));
                 when(submissionRepository.findByExternalLeadIdAndSourceCode("fees-123", "WEBSITE_FEES_INQUIRY"))
                                 .thenReturn(Optional.empty());
-                when(properties.getSystemUsername()).thenReturn("superadmin");
-                when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(testSuperAdmin));
 
                 UUID createdLeadId = UUID.randomUUID();
                 LeadResponse mockResponse = LeadResponse.builder()
@@ -293,5 +304,52 @@ class WebsiteLeadServiceTest {
                 assertNull(captor.getValue().getVisitDate());
                 assertNull(captor.getValue().getVisitTime());
                 assertNull(captor.getValue().getVisitRemarks());
+        }
+
+        @Test
+        @DisplayName("Should reuse existing lead when matching website submission arrives (Akshat Gupta scenario)")
+        void shouldReuseExistingLeadWhenDuplicateWebsiteSubmissionArrives() throws BadRequestException {
+                when(leadSourceRepository.findByCodeIgnoreCaseAndIsDeletedFalse("WEBSITE_FEES_INQUIRY"))
+                                .thenReturn(Optional.of(feesInquirySource));
+                when(submissionRepository.findByExternalLeadIdAndSourceCode("fees-new-submit-2", "WEBSITE_FEES_INQUIRY"))
+                                .thenReturn(Optional.empty());
+
+                UUID existingLeadId = UUID.randomUUID();
+                Lead existingLead = Lead.builder()
+                                .leadCode("LEAD-AKSHAT01")
+                                .fullName("Akshat Gupta")
+                                .phoneNumber("9876543210")
+                                .email("akshat@example.com")
+                                .build();
+                existingLead.setId(existingLeadId);
+
+                com.app.datadistribution.dto.lead.LeadMatchResult matchResult = com.app.datadistribution.dto.lead.LeadMatchResult.builder()
+                                .status(com.app.datadistribution.dto.lead.LeadMatchResult.MatchStatus.EXACT_MATCH)
+                                .matchedLead(existingLead)
+                                .build();
+
+                when(deduplicationService.matchLead(eq("Akshat Gupta"), eq("9876543210"), eq("akshat@example.com"), eq(feesInquirySource), any(), any()))
+                                .thenReturn(matchResult);
+                when(deduplicationService.enrichAndSaveMatchedLead(eq(existingLead), any(), eq(matchResult), eq(testSuperAdmin), anyString()))
+                                .thenReturn(existingLead);
+
+                WebsiteLeadRequestDTO request = WebsiteLeadRequestDTO.builder()
+                                .sourceCode("WEBSITE_FEES_INQUIRY")
+                                .externalLeadId("fees-new-submit-2")
+                                .name("Akshat Gupta")
+                                .mobile("9876543210")
+                                .email("akshat@example.com")
+                                .build();
+
+                WebsiteLeadResponseDTO response = websiteLeadService.ingestLead(request, "127.0.0.1");
+
+                assertNotNull(response);
+                assertEquals("EXISTING_LEAD_MATCHED", response.getStatus());
+                assertEquals(existingLeadId, response.getLeadId());
+                assertEquals("LEAD-AKSHAT01", response.getLeadCode());
+
+                // Crucial: createLeadFromExternal must NOT have been called!
+                verify(leadService, never()).createLeadFromExternal(any(), any(), any());
+                verify(submissionRepository).save(any(WebsiteLeadSubmission.class));
         }
 }

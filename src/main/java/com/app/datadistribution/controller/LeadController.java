@@ -69,14 +69,29 @@ public class LeadController {
     private final ICourseTemplateService courseTemplateService;
     private final ILeadBulkUploadService leadBulkUploadService;
     private final com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
+    private final com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('LEAD_CREATE')")
     @Operation(summary = "Create a new lead")
     public ResponseEntity<ApiResponse<LeadResponse>> create(@Valid @RequestBody LeadRequest request) throws BadRequestException, UnauthorizedException {
         LeadResponse response = leadService.create(request);
+        boolean wasMatched = Boolean.TRUE.equals(response.getIsExistingLeadMatched())
+                || "MATCHED".equalsIgnoreCase(response.getCreationOutcome());
+        if (wasMatched) {
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(ApiResponse.success("Existing lead matched (" + response.getLeadCode() + "). Information and interests updated.", response, HttpStatus.OK.value()));
+        }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Lead created successfully", response, HttpStatus.CREATED.value()));
+    }
+
+    @GetMapping("/duplicates/diagnostic")
+    @PreAuthorize("hasAuthority('LEAD_READ') or hasRole('SUPER_ADMIN') or hasRole('ADMIN')")
+    @Operation(summary = "Read-only diagnostic report of potential historical duplicate leads")
+    public ResponseEntity<ApiResponse<java.util.List<com.app.datadistribution.dto.lead.LeadDuplicateDiagnosticDTO>>> getDuplicateDiagnostics() {
+        java.util.List<com.app.datadistribution.dto.lead.LeadDuplicateDiagnosticDTO> report = deduplicationService.generateDuplicateDiagnostics();
+        return ResponseEntity.ok(ApiResponse.success("Duplicate diagnostic report generated successfully", report, HttpStatus.OK.value()));
     }
 
     @PutMapping("/{id}")

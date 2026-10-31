@@ -1,0 +1,30 @@
+package com.app.datadistribution.dto.lead;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LeadCandidateSummaryDTO {
+    private UUID id;
+    private String leadCode;
+    private String fullName;
+    private String phoneNumber;
+    private String alternatePhoneNumber;
+    private String email;
+    private List<String> sourceNames;
+    private List<String> courseNames;
+    private String currentStatus;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+

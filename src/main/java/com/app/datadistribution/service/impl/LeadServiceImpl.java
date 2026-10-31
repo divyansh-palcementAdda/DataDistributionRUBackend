@@ -114,10 +114,17 @@ public class LeadServiceImpl implements ILeadService {
     private com.app.datadistribution.service.interfaces.ILeadActionEnforcementService leadActionEnforcementService;
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
 
     public void setLeadFieldSecurityService(
             com.app.datadistribution.service.interfaces.ILeadFieldSecurityService leadFieldSecurityService) {
         this.leadFieldSecurityService = leadFieldSecurityService;
+    }
+
+    public void setLeadDeduplicationService(
+            com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService) {
+        this.deduplicationService = deduplicationService;
     }
 
     private static final Set<String> ALLOWED_LEAD_SORT_FIELDS = Set.of(
@@ -197,6 +204,51 @@ public class LeadServiceImpl implements ILeadService {
             finalInterestedCourses.addAll(interestedCourses);
         }
 
+
+
+        // Canonical Lead Deduplication Check (Rules A through F)
+        if (deduplicationService != null) {
+            LeadSource primarySource = sources.isEmpty() ? null : sources.iterator().next();
+            String normPhone = deduplicationService.normalizePhone(request.getPhoneNumber());
+
+            com.app.datadistribution.dto.lead.LeadMatchResult matchResult = deduplicationService.executeWithPhoneLock(normPhone, () ->
+                    deduplicationService.matchLead(
+                            request.getFullName(),
+                            request.getPhoneNumber(),
+                            request.getEmail(),
+                            primarySource,
+                            finalInterestedCourses,
+                            programs
+                    )
+            );
+
+            if (matchResult != null && matchResult.isMatched()) {
+                Lead matchedLead = matchResult.getMatchedLead();
+                log.info("Manual lead creation matched existing lead {}: {} (status: {})",
+                        matchedLead.getLeadCode(), matchedLead.getFullName(), matchResult.getStatus());
+
+                leadDataScopeService.validateLeadWriteAccess(matchedLead, dataScope);
+
+                Lead enrichedLead = deduplicationService.enrichAndSaveMatchedLead(
+                        matchedLead,
+                        request,
+                        matchResult,
+                        currentUser,
+                        "Manual lead entry enquiry"
+                );
+
+                LeadResponse responseDto = leadMapper.toDto(enrichedLead);
+                responseDto.setMultiSource(enrichedLead.isMultiSource());
+                responseDto.setIsExistingLeadMatched(true);
+                responseDto.setCreationOutcome("MATCHED");
+
+                if (leadFieldSecurityService != null) {
+                    return leadFieldSecurityService.sanitizeResponse(responseDto);
+                }
+                return responseDto;
+            }
+        }
+
         Board board = null;
         if (request.getBoardId() != null) {
             board = boardRepository.findById(request.getBoardId())
@@ -266,7 +318,13 @@ public class LeadServiceImpl implements ILeadService {
             saved.getStatusHistories().add(savedHistory);
         }
 
-        return leadMapper.toDto(saved);
+        LeadResponse responseDto = leadMapper.toDto(saved);
+        if (responseDto != null) {
+            responseDto.setMultiSource(saved.isMultiSource());
+            responseDto.setIsExistingLeadMatched(false);
+            responseDto.setCreationOutcome("CREATED");
+        }
+        return responseDto;
     }
 
     @Override
@@ -308,6 +366,8 @@ public class LeadServiceImpl implements ILeadService {
         if (interestedCourses != null) {
             finalInterestedCourses.addAll(interestedCourses);
         }
+
+
 
         Board board = null;
         if (request.getBoardId() != null) {

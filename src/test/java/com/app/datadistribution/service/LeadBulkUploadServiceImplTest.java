@@ -92,6 +92,8 @@ class LeadBulkUploadServiceImplTest {
         private LeadStatusHistoryRepository leadStatusHistoryRepository;
         @Mock
         private ILeadDataScopeService leadDataScopeService;
+        @Mock
+        private com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
 
         @InjectMocks
         private LeadBulkUploadServiceImpl bulkUploadService;
@@ -130,6 +132,40 @@ class LeadBulkUploadServiceImplTest {
                         return l;
                 });
                 lenient().when(leadRepository.findById(any())).thenReturn(Optional.empty());
+
+                lenient().when(deduplicationService.normalizePhone(any())).thenAnswer(inv -> {
+                        String p = inv.getArgument(0);
+                        return p != null ? p.replaceAll("[^0-9]", "") : null;
+                });
+                lenient().when(deduplicationService.normalizeName(any())).thenAnswer(inv -> {
+                        String n = inv.getArgument(0);
+                        return n != null ? n.trim().toLowerCase() : "";
+                });
+                lenient().when(deduplicationService.normalizeEmail(any())).thenAnswer(inv -> {
+                        String e = inv.getArgument(0);
+                        return e != null ? e.trim().toLowerCase() : "";
+                });
+                lenient().when(deduplicationService.executeWithPhoneLock(any(), any())).thenAnswer(inv -> {
+                        java.util.function.Supplier<?> action = inv.getArgument(1);
+                        return action.get();
+                });
+                lenient().when(deduplicationService.matchLead(any(), any(), any(), any(), any(), any()))
+                                .thenReturn(com.app.datadistribution.dto.lead.LeadMatchResult.noMatch());
+                lenient().when(leadAcademicResolver.resolveLeadAcademicMappingsForUpload(any(), any(), any(), any(), any(), any(), any(), anyInt()))
+                                .thenReturn(LeadAcademicResolutionResult.builder()
+                                                .programs(Collections.emptySet())
+                                                .interestedCourses(Collections.emptySet())
+                                                .build());
+                lenient().when(deduplicationService.enrichAndSaveMatchedLead(any(), any(), any(), any(), any()))
+                                .thenAnswer(inv -> {
+                                        Lead lead = inv.getArgument(0);
+                                        com.app.datadistribution.dto.lead.LeadMatchResult match = inv.getArgument(2);
+                                        if (match != null && match.isEmailEnriched() && match.getEmailToEnrich() != null) {
+                                                lead.setEmail(match.getEmailToEnrich());
+                                        }
+                                        leadRepository.save(lead);
+                                        return lead;
+                                });
         }
 
         @Test
@@ -640,5 +676,98 @@ class LeadBulkUploadServiceImplTest {
                                                 null, null, null, mappingJson));
 
                 assertTrue(ex.getMessage().contains("UNSUPPORTED_IMPORT_FIELD"));
+        }
+
+        @Test
+        void testBulkUpload_Deduplication_ReusesExistingLead_AndTracksEnrichment() throws Exception {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (Workbook workbook = new XSSFWorkbook()) {
+                        Sheet sheet = workbook.createSheet("Leads");
+                        Row header = sheet.createRow(0);
+                        header.createCell(0).setCellValue("Full Name");
+                        header.createCell(1).setCellValue("Phone Number");
+                        header.createCell(2).setCellValue("Email");
+                        Row row1 = sheet.createRow(1);
+                        row1.createCell(0).setCellValue("John Doe");
+                        row1.createCell(1).setCellValue("9876543210");
+                        row1.createCell(2).setCellValue("john.new@example.com");
+                        workbook.write(out);
+                }
+
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "leads.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                out.toByteArray());
+
+                when(leadAcademicResolver.resolveLeadAcademicMappingsForUpload(any(), any(), any(), any(), any(), any(),
+                                any(), anyInt()))
+                                .thenReturn(LeadAcademicResolutionResult.builder()
+                                                .programs(Collections.emptySet())
+                                                .interestedCourses(Collections.emptySet())
+                                                .build());
+
+                Lead existingLead = Lead.builder()
+                                .leadCode("LEAD-EXISTING")
+                                .fullName("John Doe")
+                                .phoneNumber("9876543210")
+                                .leadSources(new java.util.HashSet<>())
+                                .interestedCourses(new java.util.HashSet<>())
+                                .programs(new java.util.HashSet<>())
+                                .currentStatus(defaultStatus)
+                                .build();
+                existingLead.setId(UUID.randomUUID());
+
+                com.app.datadistribution.dto.lead.LeadMatchResult matchResult = com.app.datadistribution.dto.lead.LeadMatchResult.builder()
+                                .status(com.app.datadistribution.dto.lead.LeadMatchResult.MatchStatus.ENRICHED_MATCH)
+                                .matchedLead(existingLead)
+                                .emailEnriched(true)
+                                .emailToEnrich("john.new@example.com")
+                                .matchReason("Enriched email")
+                                .build();
+
+                when(deduplicationService.matchLead(any(), any(), any(), any(), any(), any()))
+                                .thenReturn(matchResult);
+
+                BulkLeadUploadResponse response = bulkUploadService.bulkUploadLeads(
+                                file, null, null, null, null, null, null, null, null, null, null, null);
+
+                assertEquals(1, response.getTotalRows());
+                assertEquals(1, response.getSuccessCount());
+                assertEquals(1, response.getMatchedCount());
+                assertEquals(1, response.getEnrichedCount());
+                assertEquals(0, response.getCreatedCount());
+                assertEquals("john.new@example.com", existingLead.getEmail());
+                verify(leadRepository).save(existingLead);
+        }
+
+        @Test
+        void testBulkUpload_DuplicateRowInSameBatch_IsDetectedAndSkipped() throws Exception {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try (Workbook workbook = new XSSFWorkbook()) {
+                        Sheet sheet = workbook.createSheet("Leads");
+                        Row header = sheet.createRow(0);
+                        header.createCell(0).setCellValue("Full Name");
+                        header.createCell(1).setCellValue("Phone Number");
+                        Row row1 = sheet.createRow(1);
+                        row1.createCell(0).setCellValue("John Doe");
+                        row1.createCell(1).setCellValue("9876543210");
+                        Row row2 = sheet.createRow(2);
+                        row2.createCell(0).setCellValue("John Doe");
+                        row2.createCell(1).setCellValue("9876543210");
+                        workbook.write(out);
+                }
+
+                MockMultipartFile file = new MockMultipartFile(
+                                "file", "leads.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                out.toByteArray());
+
+                BulkLeadUploadResponse response = bulkUploadService.bulkUploadLeads(
+                                file, null, null, null, null, null, null, null, null, null, null, null);
+
+                assertEquals(2, response.getTotalRows());
+                assertEquals(1, response.getSuccessCount());
+                assertEquals(1, response.getDuplicateCount());
+                assertEquals(1, response.getCreatedCount());
         }
 }

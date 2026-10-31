@@ -103,6 +103,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
     private final LeadAcademicResolver leadAcademicResolver;
     private final LeadStatusHistoryRepository leadStatusHistoryRepository;
     private final ILeadDataScopeService leadDataScopeService;
+    private final com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^[+]?[0-9\\s\\-]{7,20}$");
@@ -216,14 +217,8 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         // Synchronize Department with assigned user (Source of Truth)
         selectedDepartment = LeadDepartmentResolver.resolveDepartmentForUser(selectedAssignedTo, selectedDepartment);
 
-        // 4. Preload Active Phone Numbers for Duplicate Detection
-        List<String> activePhoneNumbers = leadRepository.findAllActivePhoneNumbers();
-        Set<String> dbPhoneSet = activePhoneNumbers.stream()
-                .filter(Objects::nonNull)
-                .map(this::normalizePhoneNumber)
-                .filter(p -> !p.isBlank())
-                .collect(Collectors.toSet());
-        Set<String> fileProcessedPhoneSet = new HashSet<>();
+        // 4. Batch Duplicate Tracking & Counters
+        Set<String> fileProcessedSignatures = new HashSet<>();
 
         // 5. Parse Excel Rows
         List<BulkLeadUploadRowError> failedRows = new ArrayList<>();
@@ -232,6 +227,9 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
 
         int totalRows = 0;
         int successCount = 0;
+        int createdCount = 0;
+        int matchedCount = 0;
+        int enrichedCount = 0;
         int failedCount = 0;
         int duplicateCount = 0;
         int skippedCount = 0;
@@ -403,19 +401,21 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         continue;
                     }
 
-                    normalizedPhone = normalizePhoneNumber(rowDto.getPhoneNumberRaw());
-                    if (dbPhoneSet.contains(normalizedPhone) || fileProcessedPhoneSet.contains(normalizedPhone)) {
+                    normalizedPhone = deduplicationService.normalizePhone(rowDto.getPhoneNumberRaw());
+                    String normName = deduplicationService.normalizeName(rowDto.getFullNameRaw());
+                    String normEmail = deduplicationService.normalizeEmail(rowDto.getEmailRaw());
+                    String courseSig = rowDto.getCourseRaw() != null ? rowDto.getCourseRaw().trim().toLowerCase() : "";
+                    String sourceSig = rowDto.getLeadSourceRaw() != null ? rowDto.getLeadSourceRaw().trim().toLowerCase() : "";
+                    String rowSig = normName + "|" + normalizedPhone + "|" + normEmail + "|" + courseSig + "|" + sourceSig;
+
+                    if (fileProcessedSignatures.contains(rowSig)) {
                         duplicateCount++;
-                        log.warn("LEAD_IMPORT_ROW_FAILED\nimportId={}\nrow={}\nfield=phoneNumber\nrawValue={}\nerrorCode=DUPLICATE_PHONE_NUMBER\nmessage=Lead with this phone number already exists in system or batch",
-                                importId, displayRowNumber, rowDto.getPhoneNumberRaw());
-                        failedRows.add(BulkLeadUploadRowError.builder()
-                                .rowNumber(displayRowNumber)
-                                .field("phoneNumber")
-                                .value(rowDto.getPhoneNumberRaw())
-                                .reason("Lead with this phone number already exists in system or batch")
-                                .build());
+                        skippedCount++;
+                        log.info("Skipping exact duplicate row in same batch: row={}, phone={}, name={}",
+                                displayRowNumber, normalizedPhone, normName);
                         continue;
                     }
+                    fileProcessedSignatures.add(rowSig);
                 }
 
                 if (rowDto.getEmailRaw() != null && !rowDto.getEmailRaw().isBlank()) {
@@ -579,10 +579,53 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                     rowSources.add(ls);
                 }
 
-                // Add to processed phone numbers
-                if (normalizedPhone != null) {
-                    fileProcessedPhoneSet.add(normalizedPhone);
-                    dbPhoneSet.add(normalizedPhone);
+                // Lead Deduplication Matching (Canonical Rules A through F)
+                LeadSource primarySource = rowSources.isEmpty() ? null : rowSources.iterator().next();
+                com.app.datadistribution.dto.lead.LeadMatchResult matchResult = deduplicationService.executeWithPhoneLock(normalizedPhone, () ->
+                        deduplicationService.matchLead(
+                                rowDto.getFullNameRaw(),
+                                rowDto.getPhoneNumberRaw(),
+                                rowDto.getEmailRaw(),
+                                primarySource,
+                                academicResult.getInterestedCourses(),
+                                academicResult.getPrograms()
+                        )
+                );
+
+                if (matchResult.isMatched()) {
+                    Lead matchedLead = matchResult.getMatchedLead();
+                    log.info("LEAD_IMPORT_ROW_MATCHED\nimportId={}\nrow={}\nleadCode={}\nmatchStatus={}",
+                            importId, displayRowNumber, matchedLead.getLeadCode(), matchResult.getStatus());
+
+                    com.app.datadistribution.dto.lead.LeadRequest rowRequest = com.app.datadistribution.dto.lead.LeadRequest.builder()
+                            .fullName(rowDto.getFullNameRaw() != null ? rowDto.getFullNameRaw().trim() : null)
+                            .phoneNumber(rowDto.getPhoneNumberRaw() != null ? rowDto.getPhoneNumberRaw().trim() : null)
+                            .alternatePhoneNumber(rowDto.getAlternatePhoneNumberRaw() != null && !rowDto.getAlternatePhoneNumberRaw().isBlank() ? rowDto.getAlternatePhoneNumberRaw().trim() : null)
+                            .email(rowDto.getEmailRaw() != null && !rowDto.getEmailRaw().isBlank() ? rowDto.getEmailRaw().trim() : null)
+                            .city(rowDto.getCityRaw() != null && !rowDto.getCityRaw().isBlank() ? rowDto.getCityRaw().trim() : null)
+                            .state(rowDto.getStateRaw() != null && !rowDto.getStateRaw().isBlank() ? rowDto.getStateRaw().trim() : null)
+                            .country(rowDto.getCountryRaw() != null && !rowDto.getCountryRaw().isBlank() ? rowDto.getCountryRaw().trim() : null)
+                            .sourceDetails(rowDto.getSourceDetailsRaw() != null && !rowDto.getSourceDetailsRaw().isBlank() ? rowDto.getSourceDetailsRaw().trim() : null)
+                            .remarks(rowDto.getRemarksRaw() != null && !rowDto.getRemarksRaw().isBlank() ? rowDto.getRemarksRaw().trim() : null)
+                            .build();
+
+                    Lead enriched = deduplicationService.enrichAndSaveMatchedLead(
+                            matchedLead,
+                            rowRequest,
+                            matchResult,
+                            currentUser,
+                            "Bulk import row " + displayRowNumber + " (Import ID: " + importId + ")"
+                    );
+
+                    matchedCount++;
+                    if (matchResult.isEmailEnriched() || !matchResult.getNewCoursesToAdd().isEmpty() || !matchResult.getNewSourcesToAdd().isEmpty()) {
+                        enrichedCount++;
+                    }
+                    successCount++;
+                    if (academicResult.getCourse() != null) courseResolvedCount++;
+                    if (!academicResult.getPrograms().isEmpty()) programResolvedCount++;
+                    if (academicResult.getCourseType() != null) courseTypeResolvedCount++;
+                    continue;
                 }
 
                 // Build Lead Entity
@@ -735,6 +778,7 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
                         reloaded.getCourseType() != null ? reloaded.getCourseType().getName() : "");
 
                 // Increment verified success counters (only after DB-level verification passes)
+                createdCount++;
                 successCount++;
                 if (academicResult.getCourse() != null) courseResolvedCount++;
                 if (!academicResult.getPrograms().isEmpty()) programResolvedCount++;
@@ -776,6 +820,9 @@ public class LeadBulkUploadServiceImpl implements ILeadBulkUploadService {
         return BulkLeadUploadResponse.builder()
                 .totalRows(totalRows)
                 .successCount(successCount)
+                .createdCount(createdCount)
+                .matchedCount(matchedCount)
+                .enrichedCount(enrichedCount)
                 .failedCount(failedCount)
                 .duplicateCount(duplicateCount)
                 .skippedCount(skippedCount)

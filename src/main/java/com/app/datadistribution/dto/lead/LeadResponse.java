@@ -79,6 +79,15 @@ public class LeadResponse {
 
     private LeadActionEnforcementDTO actionEnforcement;
 
+    @JsonProperty("isExistingLeadMatched")
+    private Boolean isExistingLeadMatched;
+
+    private String creationOutcome;
+
+    public Boolean isExistingLeadMatched() {
+        return Boolean.TRUE.equals(isExistingLeadMatched);
+    }
+
 
 
     @JsonProperty("lastConnected")

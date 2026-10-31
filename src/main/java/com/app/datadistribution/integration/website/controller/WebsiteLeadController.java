@@ -72,7 +72,9 @@ public class WebsiteLeadController {
         WebsiteLeadResponseDTO response = websiteLeadService.ingestLead(request, clientIp);
 
         // 4. Return appropriate status: 200 for idempotent duplicate, 201 for freshly created
-        if ("EXISTING_SUBMISSION".equalsIgnoreCase(response.getStatus())) {
+        if ("EXISTING_SUBMISSION".equalsIgnoreCase(response.getStatus())
+                || "EXISTING_LEAD_MATCHED".equalsIgnoreCase(response.getStatus())
+                || "MATCHED".equalsIgnoreCase(response.getStatus())) {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(ApiResponse.success(response.getMessage(), response, HttpStatus.OK.value()));
         }

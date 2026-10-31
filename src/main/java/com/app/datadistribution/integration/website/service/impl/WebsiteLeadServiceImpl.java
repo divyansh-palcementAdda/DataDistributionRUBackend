@@ -1,8 +1,10 @@
 package com.app.datadistribution.integration.website.service.impl;
 
+import com.app.datadistribution.dto.lead.LeadMatchResult;
 import com.app.datadistribution.dto.lead.LeadRequest;
 import com.app.datadistribution.dto.lead.LeadResponse;
 import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
@@ -18,6 +20,7 @@ import com.app.datadistribution.repository.CourseRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.ILeadDeduplicationService;
 import com.app.datadistribution.service.interfaces.ILeadService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -41,6 +45,7 @@ public class WebsiteLeadServiceImpl implements IWebsiteLeadService {
     private final UserRepository userRepository;
     private final WebsiteLeadSubmissionRepository submissionRepository;
     private final WebsiteIntegrationProperties properties;
+    private final ILeadDeduplicationService deduplicationService;
 
     @Override
     @Transactional
@@ -157,7 +162,81 @@ public class WebsiteLeadServiceImpl implements IWebsiteLeadService {
                 .active(true)
                 .build();
 
-        // 7. Persist Lead via Canonical Service
+        // 7. Canonical Deduplication Check (Rules A through F)
+        String normPhone = deduplicationService.normalizePhone(request.getMobile());
+        Course resolvedCourse = resolvedCourseId != null ? courseRepository.findById(resolvedCourseId).orElse(null) : null;
+        Program resolvedProgram = resolvedProgramId != null ? programRepository.findById(resolvedProgramId).orElse(null) : null;
+
+        LeadMatchResult matchResult = deduplicationService.executeWithPhoneLock(normPhone, () ->
+                deduplicationService.matchLead(
+                        request.getName(),
+                        request.getMobile(),
+                        request.getEmail(),
+                        canonicalSource,
+                        resolvedCourse != null ? Set.of(resolvedCourse) : Set.of(),
+                        resolvedProgram != null ? Set.of(resolvedProgram) : Set.of()
+                )
+        );
+
+        if (matchResult.isMatched()) {
+            Lead matchedLead = matchResult.getMatchedLead();
+            log.info("Website lead matched existing lead {}: {} (status: {})",
+                    matchedLead.getLeadCode(), matchedLead.getFullName(), matchResult.getStatus());
+
+            Lead updatedLead = deduplicationService.enrichAndSaveMatchedLead(
+                    matchedLead,
+                    leadRequest,
+                    matchResult,
+                    systemUser,
+                    "Lead submitted via " + canonicalSource.getName() + "."
+            );
+
+            WebsiteLeadSubmission matchSubmission = WebsiteLeadSubmission.builder()
+                    .externalLeadId(externalLeadId)
+                    .sourceCode(canonicalSource.getCode())
+                    .leadId(updatedLead.getId())
+                    .leadCode(updatedLead.getLeadCode())
+                    .status("EXISTING_LEAD_MATCHED")
+                    .fullName(request.getName().trim())
+                    .mobile(request.getMobile().trim())
+                    .email(request.getEmail() != null ? request.getEmail().trim() : null)
+                    .courseInterested(courseInterest)
+                    .websiteUrl(request.getWebsiteUrl())
+                    .ipAddress(clientIp)
+                    .requestSummary(remarksBuilder.toString().trim())
+                    .build();
+
+            try {
+                submissionRepository.save(matchSubmission);
+            } catch (DataIntegrityViolationException dive) {
+                if (externalLeadId != null) {
+                    Optional<WebsiteLeadSubmission> prev = submissionRepository
+                            .findByExternalLeadIdAndSourceCode(externalLeadId, canonicalSource.getCode());
+                    if (prev.isPresent()) {
+                        return WebsiteLeadResponseDTO.builder()
+                                .externalLeadId(externalLeadId)
+                                .leadId(prev.get().getLeadId())
+                                .leadCode(prev.get().getLeadCode())
+                                .sourceCode(canonicalSource.getCode())
+                                .status("EXISTING_SUBMISSION")
+                                .message("Website lead already processed (idempotent submission)")
+                                .build();
+                    }
+                }
+                throw dive;
+            }
+
+            return WebsiteLeadResponseDTO.builder()
+                    .externalLeadId(externalLeadId)
+                    .leadId(updatedLead.getId())
+                    .leadCode(updatedLead.getLeadCode())
+                    .sourceCode(canonicalSource.getCode())
+                    .status("EXISTING_LEAD_MATCHED")
+                    .message("Existing lead matched and enquiry associated successfully")
+                    .build();
+        }
+
+        // 8. Persist Lead via Canonical Service
         LeadResponse createdLead = leadService.createLeadFromExternal(
                 leadRequest,
                 systemUser,

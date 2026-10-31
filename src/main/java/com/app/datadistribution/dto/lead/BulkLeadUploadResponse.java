@@ -17,6 +17,9 @@ public class BulkLeadUploadResponse {
 
     private int totalRows;
     private int successCount;
+    private int createdCount;
+    private int matchedCount;
+    private int enrichedCount;
     private int failedCount;
     private int duplicateCount;
     private int skippedCount;
@@ -34,5 +37,17 @@ public class BulkLeadUploadResponse {
 
     public int getDuplicateRows() {
         return duplicateCount;
+    }
+
+    public int getCreatedLeads() {
+        return createdCount;
+    }
+
+    public int getMatchedLeads() {
+        return matchedCount;
+    }
+
+    public int getEnrichedLeads() {
+        return enrichedCount;
     }
 }
