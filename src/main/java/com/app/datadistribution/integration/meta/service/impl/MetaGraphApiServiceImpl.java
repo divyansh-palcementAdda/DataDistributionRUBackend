@@ -1,6 +1,7 @@
 package com.app.datadistribution.integration.meta.service.impl;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -17,11 +18,15 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.app.datadistribution.integration.meta.config.MetaProperties;
+import com.app.datadistribution.integration.meta.dto.MetaAdDTO;
+import com.app.datadistribution.integration.meta.dto.MetaCampaignDTO;
 import com.app.datadistribution.integration.meta.dto.MetaLeadResponseDTO;
 import com.app.datadistribution.integration.meta.exception.MetaGraphApiException;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaGraphApiService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,11 +34,24 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class MetaGraphApiServiceImpl implements IMetaGraphApiService {
 
-    public static final String SUPPORTED_LEAD_FIELDS = "id,created_time,form_id,ad_id,adset_id,campaign_id,platform,field_data";
+    public static final String ENRICHED_LEAD_FIELDS = "id,created_time,form_id,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,platform,field_data";
+    public static final String BASELINE_LEAD_FIELDS = "id,created_time,form_id,ad_id,adset_id,campaign_id,platform,field_data";
+    public static final String SUPPORTED_LEAD_FIELDS = ENRICHED_LEAD_FIELDS;
 
     private final MetaProperties metaProperties;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+
+    // In-memory Caffeine caches for campaign metadata with 2-hour TTL
+    private final Cache<String, String> campaignNameCache = Caffeine.newBuilder()
+            .expireAfterWrite(2, TimeUnit.HOURS)
+            .maximumSize(1000)
+            .build();
+
+    private final Cache<String, String> adCampaignNameCache = Caffeine.newBuilder()
+            .expireAfterWrite(2, TimeUnit.HOURS)
+            .maximumSize(1000)
+            .build();
 
     @Autowired
     public MetaGraphApiServiceImpl(MetaProperties metaProperties, RestTemplateBuilder restTemplateBuilder) {
@@ -62,12 +80,30 @@ public class MetaGraphApiServiceImpl implements IMetaGraphApiService {
             throw new IllegalStateException("Meta page access token is not configured in application properties/environment");
         }
 
+        // 1. Try requesting enriched fields first
+        try {
+            MetaLeadResponseDTO dto = executeLeadQuery(leadgenId, pageAccessToken, ENRICHED_LEAD_FIELDS);
+            if (dto != null && dto.getCampaignId() != null && dto.getCampaignName() != null && !dto.getCampaignName().isBlank()) {
+                campaignNameCache.put(dto.getCampaignId(), dto.getCampaignName().trim());
+            }
+            return dto;
+        } catch (MetaGraphApiException e) {
+            // If code 100 (unsupported field on this leadgen endpoint), fallback to baseline fields
+            if (Integer.valueOf(100).equals(e.getErrorCode())) {
+                log.warn("Enriched fields rejected with code 100 for leadgen_id: {}. Falling back to baseline fields.", leadgenId);
+                return executeLeadQuery(leadgenId, pageAccessToken, BASELINE_LEAD_FIELDS);
+            }
+            throw e;
+        }
+    }
+
+    private MetaLeadResponseDTO executeLeadQuery(String leadgenId, String pageAccessToken, String fields) {
         String baseUrl = metaProperties.getGraphApiBaseUrl();
         String apiVersion = metaProperties.getGraphApiVersion();
 
         String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
                 .pathSegment(apiVersion, leadgenId)
-                .queryParam("fields", SUPPORTED_LEAD_FIELDS)
+                .queryParam("fields", fields)
                 .toUriString();
 
         HttpHeaders headers = new HttpHeaders();
@@ -165,6 +201,125 @@ public class MetaGraphApiServiceImpl implements IMetaGraphApiService {
         }
     }
 
+    @Override
+    public String retrieveCampaignName(String campaignId, String adId) {
+        // 1. Try resolving via campaignId first
+        if (campaignId != null && !campaignId.isBlank()) {
+            String trimmedCampId = campaignId.trim();
+            String cached = campaignNameCache.getIfPresent(trimmedCampId);
+            if (cached != null) {
+                log.debug("Found cached Meta campaign name for campaign_id {}: {}", trimmedCampId, cached);
+                return cached;
+            }
+
+            try {
+                String fetchedName = fetchCampaignNameDirect(trimmedCampId);
+                if (fetchedName != null && !fetchedName.isBlank()) {
+                    campaignNameCache.put(trimmedCampId, fetchedName.trim());
+                    return fetchedName.trim();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch campaign name directly for campaign_id {}: {}", trimmedCampId, sanitize(e.getMessage()));
+            }
+        }
+
+        // 2. If campaignId lookup didn't succeed, attempt resolving via adId
+        if (adId != null && !adId.isBlank()) {
+            String trimmedAdId = adId.trim();
+            String cachedFromAd = adCampaignNameCache.getIfPresent(trimmedAdId);
+            if (cachedFromAd != null) {
+                log.debug("Found cached Meta campaign name for ad_id {}: {}", trimmedAdId, cachedFromAd);
+                return cachedFromAd;
+            }
+
+            try {
+                String fetchedName = fetchCampaignNameViaAd(trimmedAdId);
+                if (fetchedName != null && !fetchedName.isBlank()) {
+                    adCampaignNameCache.put(trimmedAdId, fetchedName.trim());
+                    return fetchedName.trim();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch campaign name via ad_id {}: {}", trimmedAdId, sanitize(e.getMessage()));
+            }
+        }
+
+        return null;
+    }
+
+    private String fetchCampaignNameDirect(String campaignId) {
+        String pageAccessToken = metaProperties.getPageAccessToken();
+        if (pageAccessToken == null || pageAccessToken.isBlank()) {
+            return null;
+        }
+
+        String baseUrl = metaProperties.getGraphApiBaseUrl();
+        String apiVersion = metaProperties.getGraphApiVersion();
+
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .pathSegment(apiVersion, campaignId)
+                .queryParam("fields", "id,name")
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(pageAccessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.info("Requesting campaign metadata from Meta Graph API for campaign_id: {}", campaignId);
+        ResponseEntity<MetaCampaignDTO> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                requestEntity,
+                MetaCampaignDTO.class
+        );
+
+        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+            return response.getBody().getName();
+        }
+        return null;
+    }
+
+    private String fetchCampaignNameViaAd(String adId) {
+        String pageAccessToken = metaProperties.getPageAccessToken();
+        if (pageAccessToken == null || pageAccessToken.isBlank()) {
+            return null;
+        }
+
+        String baseUrl = metaProperties.getGraphApiBaseUrl();
+        String apiVersion = metaProperties.getGraphApiVersion();
+
+        java.net.URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .pathSegment(apiVersion, adId)
+                .queryParam("fields", "id,name,campaign{id,name}")
+                .build()
+                .toUri();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(pageAccessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.info("Requesting ad and campaign metadata from Meta Graph API for ad_id: {}", adId);
+        ResponseEntity<MetaAdDTO> response = restTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                requestEntity,
+                MetaAdDTO.class
+        );
+
+        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+            MetaAdDTO body = response.getBody();
+            if (body.getCampaign() != null && body.getCampaign().getName() != null) {
+                String cName = body.getCampaign().getName();
+                if (body.getCampaign().getId() != null) {
+                    campaignNameCache.put(body.getCampaign().getId(), cName);
+                }
+                return cName;
+            }
+        }
+        return null;
+    }
+
     private ParsedMetaError parseMetaErrorBody(String responseBody) {
         if (responseBody == null || responseBody.isBlank()) {
             return new ParsedMetaError(null, null, null, null);
@@ -186,23 +341,17 @@ public class MetaGraphApiServiceImpl implements IMetaGraphApiService {
     }
 
     private boolean isRetryableClientError(int httpStatus, Integer metaErrorCode) {
-        // Rate limit errors
         if (httpStatus == 429) {
             return true;
         }
         if (metaErrorCode != null) {
             int code = metaErrorCode;
-            // 4: Application request limit reached, 17: User request limit reached, 32: Page request limit reached, 613: Rate limit
             if (code == 4 || code == 17 || code == 32 || code == 613) {
                 return true;
             }
-            // 1 or 2: Temporary API service error on Meta's side
             if (code == 1 || code == 2) {
                 return true;
             }
-            // 100: Invalid parameter or unsupported field -> Permanent
-            // 190: Invalid or expired access token -> Permanent until admin updates token
-            // 200..299: Permissions error -> Permanent until admin updates permissions
             if (code == 100 || code == 190 || (code >= 200 && code <= 299)) {
                 return false;
             }

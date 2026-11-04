@@ -74,8 +74,22 @@ public class UserController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "currentlyWorking", required = false) Boolean currentlyWorking,
             @RequestParam(value = "period", defaultValue = "TODAY") String period,
-            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) throws UnauthorizedException, BadRequestException {
+            @RequestParam(value = "startDate", required = false) String startDateStr,
+            @RequestParam(value = "endDate", required = false) String endDateStr) throws UnauthorizedException, BadRequestException {
+
+        LocalDate startDate = null;
+        if (startDateStr != null && !startDateStr.trim().isEmpty()) {
+            try {
+                startDate = LocalDate.parse(startDateStr.trim());
+            } catch (Exception ignored) {}
+        }
+
+        LocalDate endDate = null;
+        if (endDateStr != null && !endDateStr.trim().isEmpty()) {
+            try {
+                endDate = LocalDate.parse(endDateStr.trim());
+            } catch (Exception ignored) {}
+        }
 
         UserPerformanceFilterRequest filterRequest = UserPerformanceFilterRequest.builder()
                 .page(page)

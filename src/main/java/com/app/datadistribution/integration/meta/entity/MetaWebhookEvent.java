@@ -20,7 +20,8 @@ import lombok.Setter;
 @Entity
 @Table(name = "meta_webhook_events", indexes = {
     @Index(name = "idx_meta_leadgen_id", columnList = "leadgen_id", unique = true),
-    @Index(name = "idx_meta_status_next_retry", columnList = "status, next_retry_at")
+    @Index(name = "idx_meta_status_next_retry", columnList = "status, next_retry_at"),
+    @Index(name = "idx_meta_campaign_id", columnList = "campaign_id")
 })
 @Getter
 @Setter
@@ -41,8 +42,20 @@ public class MetaWebhookEvent extends BaseEntity {
     @Column(name = "ad_id", length = 64)
     private String adId;
 
+    @Column(name = "ad_name", length = 255)
+    private String adName;
+
     @Column(name = "adgroup_id", length = 64)
     private String adgroupId;
+
+    @Column(name = "adset_name", length = 255)
+    private String adsetName;
+
+    @Column(name = "campaign_id", length = 64)
+    private String campaignId;
+
+    @Column(name = "campaign_name", length = 255)
+    private String campaignName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)

@@ -27,5 +27,10 @@ public interface UserLoginSessionRepository extends JpaRepository<UserLoginSessi
     List<UserLoginSession> findLatestSessionsForUser(@Param("userId") UUID userId);
 
     @Query("SELECT uls FROM UserLoginSession uls WHERE uls.user.id = :userId AND uls.sessionStatus = 'ACTIVE' AND uls.isDeleted = false ORDER BY uls.loginAt DESC")
-    Optional<UserLoginSession> findFirstActiveSessionByUserId(@Param("userId") UUID userId);
+    List<UserLoginSession> findAllActiveSessionsForUser(@Param("userId") UUID userId);
+
+    default Optional<UserLoginSession> findFirstActiveSessionByUserId(UUID userId) {
+        List<UserLoginSession> list = findAllActiveSessionsForUser(userId);
+        return (list != null && !list.isEmpty()) ? Optional.of(list.get(0)) : Optional.empty();
+    }
 }

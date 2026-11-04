@@ -30,14 +30,23 @@ public class MetaLeadResponseDTO {
     @JsonProperty("ad_id")
     private String adId;
 
+    @JsonProperty("ad_name")
+    private String adName;
+
     @JsonProperty("adset_id")
     private String adsetId;
+
+    @JsonProperty("adset_name")
+    private String adsetName;
 
     @JsonProperty("adgroup_id")
     private String adgroupId;
 
     @JsonProperty("campaign_id")
     private String campaignId;
+
+    @JsonProperty("campaign_name")
+    private String campaignName;
 
     @JsonProperty("page_id")
     private String pageId;

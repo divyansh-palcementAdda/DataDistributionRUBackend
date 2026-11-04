@@ -14,11 +14,13 @@ import com.app.datadistribution.integration.meta.dto.MetaLeadResponseDTO;
 import com.app.datadistribution.integration.meta.exception.MetaGraphApiException;
 import com.app.datadistribution.integration.meta.service.impl.MetaGraphApiServiceImpl;
 
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -50,15 +52,18 @@ class MetaGraphApiServiceTest {
     }
 
     @Test
-    @DisplayName("Lead Retrieval: Successful retrieval using verified fields, without adgroup_id")
+    @DisplayName("Lead Retrieval: Successful retrieval with campaign_name, ad_name, adset_name")
     void shouldRetrieveLeadSuccessfullyWithValidFields() {
         String mockResponseBody = "{"
                 + "\"id\":\"1681819043581192\","
                 + "\"created_time\":\"2026-10-27T10:30:00+0000\","
                 + "\"form_id\":\"7770001\","
                 + "\"ad_id\":\"8880002\","
+                + "\"ad_name\":\"Test Ad Creative 1\","
                 + "\"adset_id\":\"9990003\","
+                + "\"adset_name\":\"Indore Target Adset\","
                 + "\"campaign_id\":\"1110004\","
+                + "\"campaign_name\":\"MBA Admission 2027\","
                 + "\"platform\":\"fb\","
                 + "\"field_data\":["
                 + "  {\"name\":\"full_name\",\"values\":[\"Rohan Mehta\"]},"
@@ -67,8 +72,8 @@ class MetaGraphApiServiceTest {
                 + "]"
                 + "}";
 
-        // Verify that the request URL contains adset_id and DOES NOT contain adgroup_id or page_id
-        mockServer.expect(requestTo(containsString("fields=id,created_time,form_id,ad_id,adset_id,campaign_id,platform,field_data")))
+        // Verify request URL includes supported fields
+        mockServer.expect(requestTo(containsString("campaign_name")))
                 .andExpect(requestTo(not(containsString("adgroup_id"))))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header("Authorization", "Bearer " + PAGE_ACCESS_TOKEN))
@@ -81,9 +86,12 @@ class MetaGraphApiServiceTest {
         assertEquals("1681819043581192", result.getId());
         assertEquals("7770001", result.getFormId());
         assertEquals("8880002", result.getAdId());
+        assertEquals("Test Ad Creative 1", result.getAdName());
         assertEquals("9990003", result.getAdsetId());
+        assertEquals("Indore Target Adset", result.getAdsetName());
         assertEquals("9990003", result.getAdgroupId()); // Alias compatibility check
         assertEquals("1110004", result.getCampaignId());
+        assertEquals("MBA Admission 2027", result.getCampaignName());
         assertEquals("fb", result.getPlatform());
         assertNotNull(result.getFieldData());
         assertEquals(3, result.getFieldData().size());
@@ -91,16 +99,69 @@ class MetaGraphApiServiceTest {
     }
 
     @Test
+    @DisplayName("Direct Campaign Lookup: Retrieves campaign name and caches for subsequent requests")
+    void shouldRetrieveCampaignNameDirectlyAndCache() {
+        String campaignId = "CAMP_12345";
+        String campaignResponse = "{\"id\":\"CAMP_12345\",\"name\":\"BBA Lead Generation\"}";
+
+        // Expect exactly one HTTP request
+        mockServer.expect(requestTo(containsString("/v21.0/" + campaignId + "?fields=id,name")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer " + PAGE_ACCESS_TOKEN))
+                .andRespond(withSuccess(campaignResponse, MediaType.APPLICATION_JSON));
+
+        String name1 = graphApiService.retrieveCampaignName(campaignId, null);
+        assertEquals("BBA Lead Generation", name1);
+        mockServer.verify();
+
+        // Second call should return cached value without making a second HTTP request
+        String name2 = graphApiService.retrieveCampaignName(campaignId, null);
+        assertEquals("BBA Lead Generation", name2);
+    }
+
+    @Test
+    @DisplayName("Ad Fallback Lookup: Retrieves campaign name via ad ID when campaign ID is null")
+    void shouldRetrieveCampaignNameViaAdFallback() {
+        String adId = "AD_77777";
+        String adResponse = "{\"id\":\"AD_77777\",\"name\":\"Ad 1\",\"campaign\":{\"id\":\"CAMP_999\",\"name\":\"MCA Admissions Campaign\"}}";
+
+        mockServer.expect(requestTo(allOf(containsString("/v21.0/" + adId), containsString("fields=id,name,campaign"))))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer " + PAGE_ACCESS_TOKEN))
+                .andRespond(withSuccess(adResponse, MediaType.APPLICATION_JSON));
+
+        String name = graphApiService.retrieveCampaignName(null, adId);
+        assertEquals("MCA Admissions Campaign", name);
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("Safe Failure: Returns null when campaign lookup encounters HTTP 404 or server error")
+    void shouldReturnNullSafelyOnCampaignLookupFailure() {
+        String campaignId = "CAMP_FAIL_500";
+
+        mockServer.expect(requestTo(containsString(campaignId)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        String name = graphApiService.retrieveCampaignName(campaignId, null);
+        assertNull(name);
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("Error Handling: Code 100 invalid-field error throws non-retryable MetaGraphApiException")
     void shouldHandleCode100InvalidFieldError() {
         String errorJson = "{"
                 + "\"error\":{"
-                + "  \"message\":\"(#100) Tried accessing nonexisting field (adgroup_id)\","
+                + "  \"message\":\"(#100) Tried accessing nonexisting field (unknown_field)\","
                 + "  \"type\":\"OAuthException\","
                 + "  \"code\":100"
                 + "}"
                 + "}";
 
+        // If both enriched and baseline fail with 100
+        mockServer.expect(requestTo(containsString(LEADGEN_ID)))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).body(errorJson).contentType(MediaType.APPLICATION_JSON));
         mockServer.expect(requestTo(containsString(LEADGEN_ID)))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST).body(errorJson).contentType(MediaType.APPLICATION_JSON));
 

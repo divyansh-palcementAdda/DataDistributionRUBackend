@@ -597,6 +597,7 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         Map<UUID, List<TimeInterval>> userSessionIntervals = new HashMap<>();
         Map<UUID, List<TimeInterval>> userInactiveIntervals = new HashMap<>();
         Map<UUID, LocalDateTime> userLastLoginTime = new HashMap<>();
+        Map<UUID, LocalDateTime> userLastLogoutTime = new HashMap<>();
         LocalDateTime fifteenMinAgo = now.minusMinutes(AUTO_LOGOUT_THRESHOLD_MINUTES);
 
         for (Object s : sessionRows) {
@@ -637,9 +638,31 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
                 sessionEnd = loginAt;
             }
 
-            // Clip session duration to requested period [startOfPeriod, endOfPeriod)
-            LocalDateTime clipStart = loginAt.isBefore(startOfPeriod) ? startOfPeriod : loginAt;
+            // Stale / unclosed session boundary protection:
+            // If the session started before startOfPeriod:
+            // If sessionEnd is before startOfPeriod, it ended in the past; contributes 0h to this period.
+            // If sessionEnd is after startOfPeriod, user had activity into this period.
+            // To prevent an overnight unclosed session from accumulating 14+ hours starting from midnight (00:00:00),
+            // we clip its start to the realistic start of work in this period (at most 4 hours before sessionEnd).
+            LocalDateTime clipStart;
+            if (loginAt.isBefore(startOfPeriod)) {
+                if (!sessionEnd.isAfter(startOfPeriod)) {
+                    clipStart = sessionEnd; // Results in 0 duration
+                } else {
+                    LocalDateTime realisticStart = sessionEnd.minusHours(4).isAfter(startOfPeriod)
+                            ? sessionEnd.minusHours(4) : startOfPeriod;
+                    clipStart = realisticStart;
+                }
+            } else {
+                clipStart = loginAt;
+            }
+
             LocalDateTime clipEnd = sessionEnd.isAfter(endOfPeriod) ? endOfPeriod : sessionEnd;
+
+            // Bound single continuous session without break to at most 10 hours
+            if (clipEnd.isAfter(clipStart) && Duration.between(clipStart, clipEnd).toHours() > 10) {
+                clipStart = clipEnd.minusHours(10);
+            }
 
             if (clipEnd.isAfter(clipStart)) {
                 userSessionIntervals.computeIfAbsent(uid, k -> new ArrayList<>()).add(new TimeInterval(clipStart, clipEnd));
@@ -657,9 +680,14 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
 
             // Logout count within [startOfPeriod, endOfPeriod)
             // Count actual user logout events; exclude internal SYSTEM_LOGOUT cleanups
+            // Deduplicate rapid logouts within 10 seconds
             if (logoutAt != null && !logoutAt.isBefore(startOfPeriod) && logoutAt.isBefore(endOfPeriod)) {
                 if (logoutReason == null || !LogoutReason.SYSTEM_LOGOUT.name().equalsIgnoreCase(logoutReason)) {
-                    dto.logoutCount++;
+                    LocalDateTime prevLogout = userLastLogoutTime.get(uid);
+                    if (prevLogout == null || Duration.between(prevLogout, logoutAt).abs().toSeconds() >= 10) {
+                        dto.logoutCount++;
+                        userLastLogoutTime.put(uid, logoutAt);
+                    }
                 }
             }
         }
@@ -705,12 +733,21 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
             }
 
             long netWorkingSecs = Math.max(0, totalActiveSecs - totalInactiveSecs);
+            long maxDailySecs = 12 * 3600;
+            long periodDays = Math.max(1, Duration.between(startOfPeriod, endOfPeriod).toDays());
+            long maxPeriodSecs = periodDays * maxDailySecs;
+            netWorkingSecs = Math.min(maxPeriodSecs, netWorkingSecs);
+
             dto.workingHours = Math.round((netWorkingSecs / 3600.0) * 100.0) / 100.0;
+
+            // Ensure logout count doesn't unrealistically exceed login count + 1
+            if (dto.logoutCount > dto.loginCount + 1) {
+                dto.logoutCount = dto.loginCount + 1;
+            }
         }
 
         return map;
     }
-
     private Set<UUID> getDescendantStatusIds(String rootCode) {
         List<LeadStatus> allStatuses = leadStatusRepository.findAll();
         Set<UUID> collected = new HashSet<>();
@@ -855,11 +892,23 @@ public class UserPerformanceServiceImpl implements IUserPerformanceService {
         if (obj == null) return null;
         if (obj instanceof LocalDateTime ldt) return ldt;
         if (obj instanceof java.sql.Timestamp ts) return ts.toLocalDateTime();
-        if (obj instanceof java.util.Date d) return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+        if (obj instanceof java.util.Date d) return d.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDateTime();
+        String str = obj.toString().trim();
+        if (str.isEmpty()) return null;
+        if (str.contains(" ")) {
+            str = str.replace(" ", "T");
+        }
+        if (str.endsWith("Z") || str.endsWith("z")) {
+            str = str.substring(0, str.length() - 1);
+        }
         try {
-            return LocalDateTime.parse(obj.toString());
+            return LocalDateTime.parse(str);
         } catch (Exception e) {
-            return null;
+            try {
+                return LocalDate.parse(str).atStartOfDay();
+            } catch (Exception ignored) {
+                return null;
+            }
         }
     }
 

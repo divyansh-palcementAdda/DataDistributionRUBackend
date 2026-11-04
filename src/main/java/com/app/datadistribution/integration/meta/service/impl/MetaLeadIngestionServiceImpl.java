@@ -29,6 +29,7 @@ import com.app.datadistribution.integration.meta.entity.MetaWebhookEvent;
 import com.app.datadistribution.integration.meta.entity.MetaWebhookEventStatus;
 import com.app.datadistribution.integration.meta.exception.MetaGraphApiException;
 import com.app.datadistribution.integration.meta.repository.MetaWebhookEventRepository;
+import com.app.datadistribution.integration.meta.service.MetaCampaignCourseResolver;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaGraphApiService;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaLeadIngestionService;
 import com.app.datadistribution.repository.CourseRepository;
@@ -53,6 +54,7 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
     private final CourseRepository courseRepository;
     private final ProgramRepository programRepository;
     private final UserRepository userRepository;
+    private final MetaCampaignCourseResolver metaCampaignCourseResolver;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$");
 
@@ -117,15 +119,35 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
                 throw new RuntimeException("Null response received from Meta Graph API for leadgen_id: " + event.getLeadgenId());
             }
 
-            // Enrich event metadata if missing from initial webhook payload
+            // Retrieve campaign name: use leadDto if present, else fallback to Graph API lookup via campaignId or adId
+            String effectiveCampaignId = leadDto.getCampaignId() != null ? leadDto.getCampaignId() : event.getCampaignId();
+            String effectiveAdId = leadDto.getAdId() != null ? leadDto.getAdId() : event.getAdId();
+            String campaignName = leadDto.getCampaignName();
+            if (campaignName == null || campaignName.isBlank()) {
+                campaignName = metaGraphApiService.retrieveCampaignName(effectiveCampaignId, effectiveAdId);
+            }
+
+            // Enrich event metadata
             if ((event.getAdId() == null || event.getAdId().isBlank()) && leadDto.getAdId() != null) {
                 event.setAdId(leadDto.getAdId());
+            }
+            if ((event.getAdName() == null || event.getAdName().isBlank()) && leadDto.getAdName() != null) {
+                event.setAdName(leadDto.getAdName());
             }
             if ((event.getAdgroupId() == null || event.getAdgroupId().isBlank()) && leadDto.getAdsetId() != null) {
                 event.setAdgroupId(leadDto.getAdsetId());
             }
+            if ((event.getAdsetName() == null || event.getAdsetName().isBlank()) && leadDto.getAdsetName() != null) {
+                event.setAdsetName(leadDto.getAdsetName());
+            }
             if ((event.getFormId() == null || event.getFormId().isBlank()) && leadDto.getFormId() != null) {
                 event.setFormId(leadDto.getFormId());
+            }
+            if ((event.getCampaignId() == null || event.getCampaignId().isBlank()) && effectiveCampaignId != null) {
+                event.setCampaignId(effectiveCampaignId);
+            }
+            if ((event.getCampaignName() == null || event.getCampaignName().isBlank()) && campaignName != null) {
+                event.setCampaignName(campaignName);
             }
 
             // 2. Parse field_data
@@ -172,12 +194,38 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
                 }
             }
 
+            // 4b. If course not resolved from form questions, extract from Meta Campaign Name
+            String resolvedCourseFromCampaignName = null;
+            if (resolvedCourseId == null && campaignName != null && !campaignName.isBlank()) {
+                try {
+                    MetaCampaignCourseResolver.CourseResolutionResult resolutionResult =
+                            metaCampaignCourseResolver.resolveCourse(campaignName);
+                    if (resolutionResult.isSuccess()) {
+                        Course matchedCourse = resolutionResult.getCourse();
+                        resolvedCourseId = matchedCourse.getId();
+                        resolvedCourseFromCampaignName = matchedCourse.getCourseName();
+                        log.info("Meta lead {}: resolved interested course '{}' ({}) from campaign name '{}'",
+                                event.getLeadgenId(), matchedCourse.getCourseName(), matchedCourse.getId(), campaignName);
+                    } else if (resolutionResult.isAmbiguous()) {
+                        log.warn("Meta lead {}: Ambiguous course match for campaign name '{}'. Leaving course unresolved.",
+                                event.getLeadgenId(), campaignName);
+                    } else {
+                        log.info("Meta lead {}: No course match for campaign name '{}'",
+                                event.getLeadgenId(), campaignName);
+                    }
+                } catch (Exception e) {
+                    log.error("Meta lead {}: Error resolving course from campaign name '{}': {}",
+                            event.getLeadgenId(), campaignName, e.getMessage());
+                }
+            }
+
             // 5. Source attribution
             List<UUID> leadSourceIds = resolveMetaLeadSource(leadDto.getPlatform());
 
             // 6. Structured Remarks & Source Details
-            String sourceDetails = String.format("Meta Lead ID: %s | Form: %s | Ad: %s",
+            String sourceDetails = String.format("Meta Lead ID: %s | Campaign: %s | Form: %s | Ad: %s",
                     event.getLeadgenId(),
+                    campaignName != null ? campaignName : (effectiveCampaignId != null ? effectiveCampaignId : "N/A"),
                     leadDto.getFormId() != null ? leadDto.getFormId() : "N/A",
                     leadDto.getAdId() != null ? leadDto.getAdId() : "N/A");
 
@@ -186,8 +234,14 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             remarksBuilder.append("Lead ID: ").append(event.getLeadgenId()).append("\n");
             if (leadDto.getFormId() != null) remarksBuilder.append("Form ID: ").append(leadDto.getFormId()).append("\n");
             if (leadDto.getAdId() != null) remarksBuilder.append("Ad ID: ").append(leadDto.getAdId()).append("\n");
+            if (leadDto.getAdName() != null) remarksBuilder.append("Ad Name: ").append(leadDto.getAdName()).append("\n");
             if (leadDto.getAdsetId() != null) remarksBuilder.append("Ad Set ID: ").append(leadDto.getAdsetId()).append("\n");
-            if (leadDto.getCampaignId() != null) remarksBuilder.append("Campaign ID: ").append(leadDto.getCampaignId()).append("\n");
+            if (leadDto.getAdsetName() != null) remarksBuilder.append("Ad Set Name: ").append(leadDto.getAdsetName()).append("\n");
+            if (effectiveCampaignId != null) remarksBuilder.append("Campaign ID: ").append(effectiveCampaignId).append("\n");
+            if (campaignName != null) remarksBuilder.append("Campaign Name: ").append(campaignName).append("\n");
+            if (resolvedCourseFromCampaignName != null) {
+                remarksBuilder.append("Interested Course (from Campaign): ").append(resolvedCourseFromCampaignName).append("\n");
+            }
             if (leadDto.getPlatform() != null) remarksBuilder.append("Platform: ").append(leadDto.getPlatform()).append("\n");
             if (courseAnswer != null && resolvedCourseId == null && resolvedProgramId == null) {
                 remarksBuilder.append("Course Inquiry: \"").append(courseAnswer).append("\" (No direct catalog match - review manually)\n");
@@ -226,8 +280,8 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             event.setNextRetryAt(null);
             eventRepository.save(event);
 
-            log.info("Successfully ingested Meta lead. leadgen_id: {}, created lead_code: {}",
-                    event.getLeadgenId(), leadResponse.getLeadCode());
+            log.info("Successfully ingested Meta lead. leadgen_id: {}, created lead_code: {}, course_id: {}",
+                    event.getLeadgenId(), leadResponse.getLeadCode(), resolvedCourseId);
 
         } catch (Exception e) {
             log.error("Failed to process Meta webhook event for leadgen_id: {}. Attempt {} of {}",
@@ -418,25 +472,9 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             }
         }
 
-        // Fallback to superadmin or any admin
-        Optional<User> superadminOpt = userRepository.findByUsername("superadmin");
-        if (superadminOpt.isPresent() && !superadminOpt.get().isDeleted() && superadminOpt.get().isActive()) {
-            return superadminOpt.get();
-        }
-
-        List<User> allUsers = userRepository.findAll();
-        for (User u : allUsers) {
-            if (!u.isDeleted() && u.isActive()) {
-                if (u.getRoles() != null && u.getRoles().stream().anyMatch(r ->
-                        RoleType.SUPER_ADMIN.name().equalsIgnoreCase(r.getName()) ||
-                        RoleType.ADMIN.name().equalsIgnoreCase(r.getName()))) {
-                    return u;
-                }
-            }
-        }
-
-        // Absolute fallback to first active user
-        return allUsers.stream().filter(u -> !u.isDeleted() && u.isActive()).findFirst()
-                .orElseThrow(() -> new IllegalStateException("No active users found in system to associate with imported lead"));
+        return userRepository.findByUsername("superadmin")
+                .filter(u -> !u.isDeleted())
+                .or(() -> userRepository.findAll().stream().filter(u -> !u.isDeleted()).findFirst())
+                .orElse(null);
     }
 }

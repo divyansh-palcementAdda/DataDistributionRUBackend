@@ -11,4 +11,15 @@ public interface IMetaGraphApiService {
      * @return MetaLeadResponseDTO containing form field data, or null/exception if retrieval failed
      */
     MetaLeadResponseDTO retrieveLead(String leadgenId);
+
+    /**
+     * Retrieves the campaign name from Meta Graph API using the campaignId or adId.
+     * Uses an in-memory Caffeine cache to avoid duplicate API requests.
+     * Fails safely by returning null if unavailable (does not fail lead ingestion).
+     *
+     * @param campaignId Optional Meta campaign ID
+     * @param adId Optional Meta ad ID
+     * @return The retrieved campaign name, or null if unavailable
+     */
+    String retrieveCampaignName(String campaignId, String adId);
 }
