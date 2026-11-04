@@ -76,7 +76,9 @@ public class SecurityConfig {
                     "/api/webhooks/meta",
                     "/api/webhooks/meta/**",
                     "/api/integrations/website",
-                    "/api/integrations/website/**"
+                    "/api/integrations/website/**",
+                    "/api/integrations/google-ads",
+                    "/api/integrations/google-ads/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             );
