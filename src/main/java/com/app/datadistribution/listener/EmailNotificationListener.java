@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -46,7 +47,7 @@ public class EmailNotificationListener {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpScheduled(FollowUpScheduledEvent event) {
         log.info("Processing FollowUpScheduledEvent after commit: {}", event);
@@ -112,7 +113,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpRescheduled(FollowUpRescheduledEvent event) {
         log.info("Processing FollowUpRescheduledEvent after commit: {}", event);
@@ -171,7 +172,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpCompleted(FollowUpCompletedEvent event) {
         log.info("Processing FollowUpCompletedEvent after commit: {}", event);
@@ -219,7 +220,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpCancelled(FollowUpCancelledEvent event) {
         log.info("Processing FollowUpCancelledEvent after commit: {}", event);
@@ -267,7 +268,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onLeadAllocated(LeadAllocatedEvent event) {
         log.info("Processing LeadAllocatedEvent after commit: {}", event);
@@ -323,7 +324,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onLeadReassigned(LeadReassignedEvent event) {
         log.info("Processing LeadReassignedEvent after commit: {}", event);
