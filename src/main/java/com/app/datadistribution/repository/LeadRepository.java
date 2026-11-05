@@ -22,6 +22,9 @@ public interface LeadRepository extends JpaRepository<Lead, UUID>, JpaSpecificat
     @Query("SELECT l FROM Lead l WHERE l.isDeleted = false AND (l.phoneNumber = :phone OR l.alternatePhoneNumber = :phone OR (LENGTH(:phoneSuffix) >= 7 AND (l.phoneNumber LIKE %:phoneSuffix% OR l.alternatePhoneNumber LIKE %:phoneSuffix%)))")
     List<Lead> findCandidateLeadsByPhone(@org.springframework.data.repository.query.Param("phone") String phone, @org.springframework.data.repository.query.Param("phoneSuffix") String phoneSuffix);
 
+    @Query("SELECT l FROM Lead l LEFT JOIN FETCH l.currentStatus LEFT JOIN FETCH l.course WHERE l.id = :id AND l.isDeleted = false")
+    Optional<Lead> findByIdWithStatusAndCourse(@org.springframework.data.repository.query.Param("id") UUID id);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT l FROM Lead l WHERE l.id = :id AND l.isDeleted = false")
     Optional<Lead> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") UUID id);

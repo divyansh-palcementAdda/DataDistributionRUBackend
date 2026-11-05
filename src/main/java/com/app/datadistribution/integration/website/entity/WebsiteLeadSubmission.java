@@ -36,7 +36,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class WebsiteLeadSubmission extends BaseEntity {
 
-    @Column(name = "external_lead_id", length = 100)
+    @Column(name = "external_lead_id", length = 500)
     private String externalLeadId;
 
     @Column(name = "source_code", nullable = false, length = 50)

@@ -42,28 +42,28 @@ public class GoogleAdsLeadEvent extends BaseEntity {
     @Builder.Default
     private String provider = "GOOGLE_ADS";
 
-    @Column(name = "external_lead_id", nullable = false, length = 100)
+    @Column(name = "external_lead_id", nullable = false, length = 500)
     private String externalLeadId;
 
-    @Column(name = "form_id", length = 100)
+    @Column(name = "form_id", length = 255)
     private String formId;
 
-    @Column(name = "campaign_id", length = 100)
+    @Column(name = "campaign_id", length = 255)
     private String campaignId;
 
-    @Column(name = "adgroup_id", length = 100)
+    @Column(name = "adgroup_id", length = 255)
     private String adgroupId;
 
-    @Column(name = "creative_id", length = 100)
+    @Column(name = "creative_id", length = 255)
     private String creativeId;
 
-    @Column(name = "gcl_id", length = 255)
+    @Column(name = "gcl_id", length = 500)
     private String gclId;
 
-    @Column(name = "lead_source", length = 100)
+    @Column(name = "lead_source", length = 255)
     private String leadSource;
 
-    @Column(name = "submission_time", length = 100)
+    @Column(name = "submission_time", length = 255)
     private String submissionTime;
 
     @Column(name = "is_test", nullable = false)
@@ -95,10 +95,10 @@ public class GoogleAdsLeadEvent extends BaseEntity {
     @Column(name = "mobile", length = 50)
     private String mobile;
 
-    @Column(name = "email", length = 100)
+    @Column(name = "email", length = 150)
     private String email;
 
-    @Column(name = "course_interested", length = 200)
+    @Column(name = "course_interested", length = 255)
     private String courseInterested;
 }
 

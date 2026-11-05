@@ -311,4 +311,61 @@ class GoogleAdsWebhookServiceTest {
 
                 assertThrows(BadRequestException.class, () -> webhookService.processWebhook(request, "{}"));
         }
+
+        @Test
+        @DisplayName("Should successfully persist Google Ads lead with 224+ char hex lead_id")
+        void shouldSuccessfullyProcessLongGoogleAdsLeadId_224Chars() throws BadRequestException {
+                String longLeadId = "01466bbee417a0957dd509adf15301e10f3f020d3e751b59a7d2102258c98d28d8ff9147e527157b6cde9c4eb23e7783c6346b65ee752396ce29f7fe383f28bc1cec6b231a0b88293e4ed528a04854f3105ecf45851cfff21e88efc82c614a086f918fb04dd39ae17306a717a0020099";
+
+                GoogleAdsWebhookRequest request = GoogleAdsWebhookRequest.builder()
+                                .leadId(longLeadId)
+                                .googleKey("valid_key")
+                                .formId("form_456")
+                                .campaignId("camp_789")
+                                .adgroupId("adgroup_101")
+                                .creativeId("creative_202")
+                                .gclId("gclid_test_long_hash_value")
+                                .leadSource("google_search")
+                                .leadSubmitTime("2026-11-05 14:00:12")
+                                .isTest(false)
+                                .userColumnData(List.of(
+                                                new GoogleAdsWebhookRequest.UserColumnData("FULL_NAME", "Real Applicant", null),
+                                                new GoogleAdsWebhookRequest.UserColumnData("PHONE_NUMBER", "+919876543210", null),
+                                                new GoogleAdsWebhookRequest.UserColumnData("EMAIL", "applicant@gmail.com", null)
+                                ))
+                                .build();
+
+                doNothing().when(validator).validate(anyString());
+                when(eventRepository.findByProviderAndExternalLeadId("GOOGLE_ADS", longLeadId))
+                                .thenReturn(Optional.empty());
+
+                LeadSource leadSource = LeadSource.builder().name("Google Ads").code("GOOGLE_ADS").build();
+                leadSource.setId(UUID.randomUUID());
+                when(leadSourceRepository.findByCodeIgnoreCaseAndIsDeletedFalse("GOOGLE_ADS"))
+                                .thenReturn(Optional.of(leadSource));
+
+                when(deduplicationService.normalizePhone("+919876543210")).thenReturn("9876543210");
+                when(deduplicationService.executeWithPhoneLock(eq("9876543210"), any()))
+                                .thenReturn(LeadMatchResult.noMatch());
+                when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(superadminUser));
+
+                UUID createdId = UUID.randomUUID();
+                LeadResponse createdResp = LeadResponse.builder().id(createdId).leadCode("LEAD-41167AF1").build();
+                when(leadService.createLeadFromExternal(any(LeadRequest.class), any(), anyString()))
+                                .thenReturn(createdResp);
+
+                webhookService.processWebhook(request, "{\"lead_id\":\"" + longLeadId + "\",\"google_key\":\"valid_key\"}");
+
+                ArgumentCaptor<GoogleAdsLeadEvent> eventCaptor = ArgumentCaptor.forClass(GoogleAdsLeadEvent.class);
+                verify(eventRepository).save(eventCaptor.capture());
+                GoogleAdsLeadEvent saved = eventCaptor.getValue();
+
+                assertEquals(longLeadId, saved.getExternalLeadId());
+                assertEquals(224, saved.getExternalLeadId().length());
+                assertEquals("PROCESSED", saved.getProcessingStatus());
+                assertEquals("LEAD-41167AF1", saved.getLeadCode());
+                assertEquals("Real Applicant", saved.getFullName());
+                assertEquals("+919876543210", saved.getMobile());
+                assertEquals("applicant@gmail.com", saved.getEmail());
+        }
 }

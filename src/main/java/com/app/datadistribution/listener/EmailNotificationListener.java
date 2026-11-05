@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -45,6 +46,7 @@ public class EmailNotificationListener {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpScheduled(FollowUpScheduledEvent event) {
         log.info("Processing FollowUpScheduledEvent after commit: {}", event);
@@ -62,7 +64,9 @@ public class EmailNotificationListener {
             }
             User counselor = userOpt.get();
 
-            Optional<Lead> leadOpt = leadRepository.findById(event.getLeadId()).filter(l -> !l.isDeleted());
+            Optional<Lead> leadOpt = leadRepository.findByIdWithStatusAndCourse(event.getLeadId())
+                    .or(() -> leadRepository.findById(event.getLeadId()))
+                    .filter(l -> !l.isDeleted());
             if (leadOpt.isEmpty()) {
                 log.warn("Lead {} not found for follow-up {}. Skipping email.", event.getLeadId(),
                         event.getFollowUpId());
@@ -76,11 +80,8 @@ public class EmailNotificationListener {
             String studentEmail = lead.getEmail();
             String leadCode = lead.getLeadCode();
             String followUpType = event.getFollowUpStatus() != null ? event.getFollowUpStatus() : "General Follow-up";
-            String leadStatusName = lead.getCurrentStatus() != null ? lead.getCurrentStatus().getName()
-                    : (lead.getLeadStatus() != null ? lead.getLeadStatus().getName() : "Pending");
-            String courseName = lead.getCourse() != null ? lead.getCourse().getCourseName()
-                    : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty()
-                            ? lead.getInterestedCourses().iterator().next().getCourseName() : "-");
+            String leadStatusName = resolveLeadStatusName(lead);
+            String courseName = resolveCourseName(lead);
             String leadUrl = frontendUrl + "/leads/" + lead.getId();
 
             String formattedDate = event.getFollowUpDate() != null ? event.getFollowUpDate().format(DATE_FORMATTER)
@@ -111,6 +112,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpRescheduled(FollowUpRescheduledEvent event) {
         log.info("Processing FollowUpRescheduledEvent after commit: {}", event);
@@ -123,7 +125,9 @@ public class EmailNotificationListener {
                 return;
             User counselor = userOpt.get();
 
-            Optional<Lead> leadOpt = leadRepository.findById(event.getLeadId()).filter(l -> !l.isDeleted());
+            Optional<Lead> leadOpt = leadRepository.findByIdWithStatusAndCourse(event.getLeadId())
+                    .or(() -> leadRepository.findById(event.getLeadId()))
+                    .filter(l -> !l.isDeleted());
             if (leadOpt.isEmpty())
                 return;
             Lead lead = leadOpt.get();
@@ -134,10 +138,8 @@ public class EmailNotificationListener {
             String studentEmail = lead.getEmail();
             String leadCode = lead.getLeadCode();
             String followUpType = event.getFollowUpStatus() != null ? event.getFollowUpStatus() : "Follow-up";
-            String leadStatusName = lead.getCurrentStatus() != null ? lead.getCurrentStatus().getName() : "-";
-            String courseName = lead.getCourse() != null ? lead.getCourse().getCourseName()
-                    : (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty()
-                            ? lead.getInterestedCourses().iterator().next().getCourseName() : "-");
+            String leadStatusName = resolveLeadStatusName(lead);
+            String courseName = resolveCourseName(lead);
             String leadUrl = frontendUrl + "/leads/" + lead.getId();
 
             String formattedDate = event.getNewFollowUpDate() != null
@@ -169,6 +171,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpCompleted(FollowUpCompletedEvent event) {
         log.info("Processing FollowUpCompletedEvent after commit: {}", event);
@@ -216,6 +219,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onFollowUpCancelled(FollowUpCancelledEvent event) {
         log.info("Processing FollowUpCancelledEvent after commit: {}", event);
@@ -263,6 +267,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onLeadAllocated(LeadAllocatedEvent event) {
         log.info("Processing LeadAllocatedEvent after commit: {}", event);
@@ -318,6 +323,7 @@ public class EmailNotificationListener {
     }
 
     @Async("taskExecutor")
+    @Transactional(readOnly = true)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onLeadReassigned(LeadReassignedEvent event) {
         log.info("Processing LeadReassignedEvent after commit: {}", event);
@@ -383,5 +389,47 @@ public class EmailNotificationListener {
             log.error("Failed to process LeadReassignedEvent for user {}: {}", event.getTargetUserId(), e.getMessage(),
                     e);
         }
+    }
+
+    private String resolveLeadStatusName(Lead lead) {
+        if (lead == null) {
+            return "Pending";
+        }
+        try {
+            if (lead.getCurrentStatus() != null) {
+                return lead.getCurrentStatus().getName();
+            }
+        } catch (Exception e) {
+            log.warn("Could not lazily load currentStatus name for lead {}: {}", lead.getId(), e.getMessage());
+        }
+        try {
+            if (lead.getLeadStatus() != null) {
+                return lead.getLeadStatus().getName();
+            }
+        } catch (Exception e) {
+            log.warn("Could not lazily load leadStatus name for lead {}: {}", lead.getId(), e.getMessage());
+        }
+        return "Pending";
+    }
+
+    private String resolveCourseName(Lead lead) {
+        if (lead == null) {
+            return "-";
+        }
+        try {
+            if (lead.getCourse() != null) {
+                return lead.getCourse().getCourseName();
+            }
+        } catch (Exception e) {
+            log.warn("Could not lazily load course name for lead {}: {}", lead.getId(), e.getMessage());
+        }
+        try {
+            if (lead.getInterestedCourses() != null && !lead.getInterestedCourses().isEmpty()) {
+                return lead.getInterestedCourses().iterator().next().getCourseName();
+            }
+        } catch (Exception e) {
+            log.warn("Could not lazily load interested courses for lead {}: {}", lead.getId(), e.getMessage());
+        }
+        return "-";
     }
 }
