@@ -1,9 +1,11 @@
 package com.app.datadistribution.service.impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import com.app.datadistribution.dto.lead.LeadResponse;
 import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadAssignmentHistory;
 import com.app.datadistribution.entity.User;
+import com.app.datadistribution.event.LeadAllocatedEvent;
+import com.app.datadistribution.event.LeadReassignedEvent;
 import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.exception.UnauthorizedException;
@@ -40,10 +44,12 @@ public class LeadAssignmentServiceImpl implements ILeadAssignmentService {
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final ILeadDataScopeService leadDataScopeService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
-    public LeadResponse assignLead(UUID leadId, LeadAssignmentRequest request) throws UnauthorizedException, BadRequestException {
+    public LeadResponse assignLead(UUID leadId, LeadAssignmentRequest request)
+            throws UnauthorizedException, BadRequestException {
         Lead lead = leadRepository.findById(leadId)
                 .filter(l -> !l.isDeleted())
                 .orElseThrow(() -> new ResourcesNotFoundException("Lead not found with id: " + leadId));
@@ -55,12 +61,14 @@ public class LeadAssignmentServiceImpl implements ILeadAssignmentService {
         User oldAssignedUser = lead.getAssignedTo();
         User newAssignedUser = userRepository.findById(request.getAssignedToUserId())
                 .filter(u -> !u.isDeleted())
-                .orElseThrow(() -> new ResourcesNotFoundException("User to assign not found with id: " + request.getAssignedToUserId()));
+                .orElseThrow(() -> new ResourcesNotFoundException(
+                        "User to assign not found with id: " + request.getAssignedToUserId()));
 
         if (dataScope.isSelfScope() && !newAssignedUser.getId().equals(dataScope.getUserId())) {
             throw new BadRequestException("Counselors can only assign leads to themselves.");
         }
-        if (dataScope.isDepartmentScope() && dataScope.getDepartmentUserIds() != null && !dataScope.getDepartmentUserIds().contains(newAssignedUser.getId())) {
+        if (dataScope.isDepartmentScope() && dataScope.getDepartmentUserIds() != null
+                && !dataScope.getDepartmentUserIds().contains(newAssignedUser.getId())) {
             throw new BadRequestException("HOD can only assign leads to users in their mapped department(s).");
         }
 
@@ -87,6 +95,36 @@ public class LeadAssignmentServiceImpl implements ILeadAssignmentService {
                 oldAssignedUser != null ? oldAssignedUser.getUsername() : "NONE",
                 newAssignedUser.getUsername());
 
+        // Publish event for transaction-safe email & in-app notifications
+        if (eventPublisher != null) {
+            String deptName = (savedLead.getDepartment() != null) ? savedLead.getDepartment().getName()
+                    : "General Department";
+            if (oldAssignedUser != null) {
+                String sourceName = (oldAssignedUser.getFirstName() != null ? oldAssignedUser.getFirstName() : "")
+                        + " " + (oldAssignedUser.getLastName() != null ? oldAssignedUser.getLastName() : "");
+                eventPublisher.publishEvent(LeadReassignedEvent.builder()
+                        .targetUserId(newAssignedUser.getId())
+                        .sourceUserId(oldAssignedUser.getId())
+                        .sourceUserName(sourceName.trim())
+                        .reassignedByUserId(currentUser != null ? currentUser.getId() : null)
+                        .reassignedCount(1)
+                        .departmentName(deptName)
+                        .reason(request.getRemarks())
+                        .reassignmentTime(LocalDateTime.now())
+                        .batchId(UUID.randomUUID().toString())
+                        .build());
+            } else {
+                eventPublisher.publishEvent(LeadAllocatedEvent.builder()
+                        .targetUserId(newAssignedUser.getId())
+                        .allocatedByUserId(currentUser != null ? currentUser.getId() : null)
+                        .allocatedCount(1)
+                        .departmentName(deptName)
+                        .allocationTime(LocalDateTime.now())
+                        .batchId(UUID.randomUUID().toString())
+                        .build());
+            }
+        }
+
         return leadMapper.toDto(savedLead);
     }
 
@@ -109,13 +147,12 @@ public class LeadAssignmentServiceImpl implements ILeadAssignmentService {
                 .collect(Collectors.toList());
     }
 
-    private User getCurrentUserEntity() throws UnauthorizedException {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            throw new UnauthorizedException("User is not authenticated");
+    private User getCurrentUserEntity() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication
+                .getPrincipal() instanceof com.app.datadistribution.security.UserDetailsImpl userDetails) {
+            return userRepository.findById(userDetails.getId()).orElse(null);
         }
-        String username = auth.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourcesNotFoundException("User not found with username: " + username));
+        return null;
     }
 }

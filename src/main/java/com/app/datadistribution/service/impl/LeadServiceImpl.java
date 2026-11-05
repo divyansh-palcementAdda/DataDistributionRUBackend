@@ -115,6 +115,8 @@ public class LeadServiceImpl implements ILeadService {
     private final LeadMapper leadMapper;
     private final jakarta.persistence.EntityManager entityManager;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.app.datadistribution.service.interfaces.ILeadDeduplicationService deduplicationService;
 
     public void setLeadFieldSecurityService(
@@ -316,6 +318,19 @@ public class LeadServiceImpl implements ILeadService {
         LeadStatusHistory savedHistory = leadStatusHistoryRepository.save(initialHistory);
         if (saved.getStatusHistories() != null) {
             saved.getStatusHistories().add(savedHistory);
+        }
+
+        // Publish allocation event for notification if assigned upon creation
+        if (saved.getAssignedTo() != null && eventPublisher != null) {
+            String deptName = saved.getDepartment() != null ? saved.getDepartment().getName() : "General Department";
+            eventPublisher.publishEvent(com.app.datadistribution.event.LeadAllocatedEvent.builder()
+                    .targetUserId(saved.getAssignedTo().getId())
+                    .allocatedByUserId(currentUser != null ? currentUser.getId() : null)
+                    .allocatedCount(1)
+                    .departmentName(deptName)
+                    .allocationTime(LocalDateTime.now())
+                    .batchId(UUID.randomUUID().toString())
+                    .build());
         }
 
         LeadResponse responseDto = leadMapper.toDto(saved);
