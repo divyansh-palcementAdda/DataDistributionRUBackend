@@ -31,6 +31,7 @@ import com.app.datadistribution.exception.BadRequestException;
 import com.app.datadistribution.exception.DuplicateResourceException;
 import com.app.datadistribution.exception.ResourcesNotFoundException;
 import com.app.datadistribution.mapper.UserMapper;
+import com.app.datadistribution.notification.service.INotificationRealtimeService;
 import com.app.datadistribution.repository.RoleRepository;
 import com.app.datadistribution.repository.UserRepository;
 import com.app.datadistribution.security.JwtService;
@@ -56,6 +57,7 @@ public class AuthServiceImpl implements IAuthService {
     private final RefreshTokenService refreshTokenService;
     private final IActivityLogService activityLogService;
     private final com.app.datadistribution.service.interfaces.IUserActivityService userActivityService;
+    private final INotificationRealtimeService notificationRealtimeService;
 
     @Override
     @Transactional
@@ -200,6 +202,10 @@ public class AuthServiceImpl implements IAuthService {
                     userActivityService.recordLogout(user.getId(), refreshToken, logoutReason != null ? logoutReason : com.app.datadistribution.enums.LogoutReason.MANUAL_LOGOUT);
                 }
 
+                if (notificationRealtimeService != null && user != null) {
+                    notificationRealtimeService.closeUserEmitters(user.getId());
+                }
+
                 log.info("LOGOUT SUCCESS | Refresh token revoked | Reason: {}", logoutReason);
 
                 activityLogService.logActivity(
@@ -225,6 +231,10 @@ public class AuthServiceImpl implements IAuthService {
 
             if (userActivityService != null) {
                 userActivityService.recordLogout(userId, null, com.app.datadistribution.enums.LogoutReason.SYSTEM_LOGOUT);
+            }
+
+            if (notificationRealtimeService != null) {
+                notificationRealtimeService.closeUserEmitters(userId);
             }
 
             log.info("GLOBAL LOGOUT SUCCESS | All sessions revoked for userId={}", userId);

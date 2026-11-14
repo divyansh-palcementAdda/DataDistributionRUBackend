@@ -89,6 +89,23 @@ public class NotificationRealtimeServiceImpl implements INotificationRealtimeSer
         userEmitters.keySet().forEach(userId -> pushNotification(userId, notification));
     }
 
+    @Override
+    public void closeUserEmitters(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        List<SseEmitter> emitters = userEmitters.remove(userId);
+        if (emitters != null) {
+            for (SseEmitter emitter : emitters) {
+                try {
+                    emitter.complete();
+                } catch (Exception e) {
+                    log.debug("Error completing emitter on closeUserEmitters for user {}: {}", userId, e.getMessage());
+                }
+            }
+        }
+    }
+
     private void removeEmitter(UUID userId, SseEmitter emitter) {
         List<SseEmitter> emitters = userEmitters.get(userId);
         if (emitters != null) {

@@ -13,5 +13,7 @@ public interface INotificationRealtimeService {
     void pushNotification(UUID userId, NotificationResponseDTO notification);
 
     void broadcast(NotificationResponseDTO notification);
+
+    void closeUserEmitters(UUID userId);
 }
 
