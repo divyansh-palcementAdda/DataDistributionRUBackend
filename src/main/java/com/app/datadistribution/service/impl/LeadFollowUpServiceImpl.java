@@ -172,6 +172,9 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         log.info("Follow-up {} scheduled for lead {} on {} by user {}",
                 saved.getId(), lead.getLeadCode(), saved.getFollowUpDate(), currentUser.getUsername());
 
+        // Auto-resolve all eligible existing MISSED follow-ups for this lead to MISSED_COMPLETED
+        resolveMissedFollowUpsForLead(lead.getId(), currentUser, "NEW_FOLLOWUP_SCHEDULED");
+
         // Publish event for transaction-safe email notification after commit
         if (eventPublisher != null) {
             eventPublisher.publishEvent(FollowUpScheduledEvent.builder()
@@ -189,10 +192,12 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
         if (leadActionEnforcementService != null) {
             com.app.datadistribution.dto.lead.LeadActionEnforcementDTO enforcement =
                     leadActionEnforcementService.checkActionEnforcement(lead, currentUser);
-            responseDto.setActionEnforcement(enforcement);
-            responseDto.setLeadActionRequired(enforcement.isRestricted());
-            log.info("MANDATORY_LEAD_ACTION_COMPLETED - leadId={}, userId={}, action=FOLLOW_UP, followUpId={}, restricted={}",
-                    lead.getId(), currentUser.getId(), saved.getId(), enforcement.isRestricted());
+            if (enforcement != null) {
+                responseDto.setActionEnforcement(enforcement);
+                responseDto.setLeadActionRequired(enforcement.isRestricted());
+                log.info("MANDATORY_LEAD_ACTION_COMPLETED - leadId={}, userId={}, action=FOLLOW_UP, followUpId={}, restricted={}",
+                        lead.getId(), currentUser.getId(), saved.getId(), enforcement.isRestricted());
+            }
         }
 
         return responseDto;
@@ -247,7 +252,7 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
             }
         }
 
-        if (followUp.isCompleted() || followUp.getStatus() == FollowUpStatus.COMPLETED || followUp.getStatus() == FollowUpStatus.CANCELLED) {
+        if (followUp.isCompleted() || followUp.getStatus() == FollowUpStatus.COMPLETED || followUp.getStatus() == FollowUpStatus.CANCELLED || followUp.getStatus() == FollowUpStatus.MISSED_COMPLETED) {
             throw new BadRequestException("Cannot reschedule a completed or cancelled follow-up.");
         }
 
@@ -686,6 +691,39 @@ public class LeadFollowUpServiceImpl implements ILeadFollowUpService {
                 .leadActionRequired(enforcement.isRestricted())
                 .actionEnforcement(enforcement)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public int resolveMissedFollowUpsForLead(UUID leadId, User currentUser, String resolutionReason) {
+        if (leadId == null || leadFollowUpRepository == null) {
+            return 0;
+        }
+        List<LeadFollowUp> missedFollowUps = leadFollowUpRepository.findMissedFollowUpsByLeadId(leadId);
+        if (missedFollowUps == null || missedFollowUps.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<LeadFollowUp> toSave = new java.util.ArrayList<>();
+        for (LeadFollowUp f : missedFollowUps) {
+            if (f.getStatus() == FollowUpStatus.MISSED && !f.isCompleted()) {
+                f.setStatus(FollowUpStatus.MISSED_COMPLETED);
+                f.setCompleted(true);
+                f.setCompletedAt(now);
+                String currentRemarks = f.getRemarks();
+                String note = "[Auto-Resolved: Missed Follow-up Completed via " + resolutionReason + "]";
+                f.setRemarks((currentRemarks != null && !currentRemarks.isBlank())
+                        ? currentRemarks + " | " + note
+                        : note);
+                toSave.add(f);
+            }
+        }
+        if (!toSave.isEmpty()) {
+            leadFollowUpRepository.saveAll(toSave);
+            log.info("Auto-resolved {} MISSED follow-up(s) to MISSED_COMPLETED for lead {} via {} (acting user: {})",
+                    toSave.size(), leadId, resolutionReason, currentUser != null ? currentUser.getUsername() : "SYSTEM");
+        }
+        return toSave.size();
     }
 
     private User getCurrentUserEntity() throws UnauthorizedException {

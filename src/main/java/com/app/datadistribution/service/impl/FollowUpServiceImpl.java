@@ -194,6 +194,8 @@ public class FollowUpServiceImpl implements FollowUpService {
                 spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.COMPLETED));
             } else if ("MISSED".equals(category)) {
                 spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED));
+            } else if ("MISSED_COMPLETED".equals(category)) {
+                spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED_COMPLETED));
             } else if ("CANCELLED".equals(category)) {
                 spec = spec.and(FollowUpSpecification.hasStatus(FollowUpStatus.CANCELLED));
             }
@@ -420,6 +422,7 @@ public class FollowUpServiceImpl implements FollowUpService {
         long upcoming = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.UPCOMING)));
         long completed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.COMPLETED)));
         long missed = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED)));
+        long missedCompleted = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.MISSED_COMPLETED)));
         long cancelled = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.CANCELLED)));
         long notConnected = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.hasStatus(FollowUpStatus.NOT_CONNECTED)));
         long overdue = leadFollowUpRepository.count(baseSpec.and(FollowUpSpecification.isOverdue()));
@@ -433,6 +436,7 @@ public class FollowUpServiceImpl implements FollowUpService {
                 .upcomingFollowUps(upcoming)
                 .completedFollowUps(completed)
                 .missedFollowUps(missed)
+                .missedCompletedFollowUps(missedCompleted)
                 .cancelledFollowUps(cancelled)
                 .notConnectedFollowUps(notConnected)
                 .overdueFollowUps(overdue)

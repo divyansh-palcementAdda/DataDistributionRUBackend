@@ -20,6 +20,7 @@ public class FollowUpSummaryDTO {
     private long upcomingFollowUps;
     private long completedFollowUps;
     private long missedFollowUps;
+    private long missedCompletedFollowUps;
     private long cancelledFollowUps;
     private long notConnectedFollowUps;
     private long overdueFollowUps;

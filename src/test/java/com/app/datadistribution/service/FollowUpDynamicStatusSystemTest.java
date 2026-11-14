@@ -203,12 +203,13 @@ class FollowUpDynamicStatusSystemTest {
         List<FollowUpStatusDropdownResponse> result = dropdownService.getFollowUpStatusesDropdown();
 
         assertNotNull(result);
-        assertEquals(6, result.size());
+        assertEquals(7, result.size());
         assertTrue(result.stream().anyMatch(r -> "PENDING".equals(r.getName()) && "Pending".equals(r.getDisplayName())));
         assertTrue(result.stream().anyMatch(r -> "UPCOMING".equals(r.getName()) && "Upcoming".equals(r.getDisplayName())));
         assertTrue(result.stream().anyMatch(r -> "COMPLETED".equals(r.getName()) && "Completed".equals(r.getDisplayName())));
         assertTrue(result.stream().anyMatch(r -> "CANCELLED".equals(r.getName()) && "Cancelled".equals(r.getDisplayName())));
         assertTrue(result.stream().anyMatch(r -> "MISSED".equals(r.getName()) && "Missed".equals(r.getDisplayName())));
+        assertTrue(result.stream().anyMatch(r -> "MISSED_COMPLETED".equals(r.getName()) && "Missed Completed".equals(r.getDisplayName())));
         assertTrue(result.stream().anyMatch(r -> "NOT_CONNECTED".equals(r.getName()) && "Not Connected".equals(r.getDisplayName())));
     }
 

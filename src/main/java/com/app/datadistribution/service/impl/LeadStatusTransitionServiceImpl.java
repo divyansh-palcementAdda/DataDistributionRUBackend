@@ -174,6 +174,10 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
             completeActiveFollowUpsForRegisteredLead(savedLead);
         }
 
+        // Canonical missed follow-up resolution: whenever lead status changes to any valid stage,
+        // all eligible MISSED follow-ups for this lead become MISSED_COMPLETED
+        resolveMissedFollowUpsForLead(savedLead.getId(), currentUser, "LEAD_STATUS_CHANGED");
+
         return savedLead;
     }
 
@@ -295,5 +299,36 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
         }
         lead.setNextFollowUpDate(null);
         leadRepository.save(lead);
+    }
+
+    private int resolveMissedFollowUpsForLead(UUID leadId, User currentUser, String resolutionReason) {
+        if (leadId == null || leadFollowUpRepository == null) {
+            return 0;
+        }
+        List<LeadFollowUp> missedFollowUps = leadFollowUpRepository.findMissedFollowUpsByLeadId(leadId);
+        if (missedFollowUps == null || missedFollowUps.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<LeadFollowUp> toSave = new ArrayList<>();
+        for (LeadFollowUp f : missedFollowUps) {
+            if (f.getStatus() == FollowUpStatus.MISSED && !f.isCompleted()) {
+                f.setStatus(FollowUpStatus.MISSED_COMPLETED);
+                f.setCompleted(true);
+                f.setCompletedAt(now);
+                String currentRemarks = f.getRemarks();
+                String note = "[Auto-Resolved: Missed Follow-up Completed via " + resolutionReason + "]";
+                f.setRemarks((currentRemarks != null && !currentRemarks.isBlank())
+                        ? currentRemarks + " | " + note
+                        : note);
+                toSave.add(f);
+            }
+        }
+        if (!toSave.isEmpty()) {
+            leadFollowUpRepository.saveAll(toSave);
+            log.info("Auto-resolved {} MISSED follow-up(s) to MISSED_COMPLETED for lead {} via {} (acting user: {})",
+                    toSave.size(), leadId, resolutionReason, currentUser != null ? currentUser.getUsername() : "SYSTEM");
+        }
+        return toSave.size();
     }
 }
