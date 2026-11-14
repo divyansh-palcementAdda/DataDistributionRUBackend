@@ -228,6 +228,8 @@ public interface LeadMapper {
                 .grade(toDto(lead.getGrade()))
                 .department(departmentDto)
                 .remarks(lead.getRemarks())
+                .latestStatusRemark(lead.getRemarks())
+                .initialRemarks(lead.getRemarks())
                 .currentStatus(toDto(lead.getCurrentStatus()))
                 .assignedTo(userMapper.toSummaryDto(lead.getAssignedTo()))
                 .createdBy(userMapper.toSummaryDto(lead.getCreatedByUser()))

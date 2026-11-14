@@ -50,6 +50,8 @@ public class LeadResponse {
     private GradeResponse grade;
     private DepartmentSummaryDTO department;
     private String remarks;
+    private String latestStatusRemark;
+    private String initialRemarks;
     private LeadStatusResponse currentStatus;
     private UserSummaryResponse assignedTo;
     private UserSummaryResponse createdBy;
@@ -57,6 +59,21 @@ public class LeadResponse {
 
     @JsonProperty("isAvailed")
     private boolean isAvailed;
+
+    @JsonProperty("isAvailed")
+    public boolean isAvailed() {
+        return isAvailed;
+    }
+
+    @JsonProperty("isAvailed")
+    public void setIsAvailed(boolean isAvailed) {
+        this.isAvailed = isAvailed;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setAvailed(boolean availed) {
+        this.isAvailed = availed;
+    }
 
     @JsonProperty("isMultiSource")
     private boolean multiSource;

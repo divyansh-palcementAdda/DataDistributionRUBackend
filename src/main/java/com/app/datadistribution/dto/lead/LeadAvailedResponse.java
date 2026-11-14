@@ -25,6 +25,21 @@ public class LeadAvailedResponse {
     @JsonProperty("isAvailed")
     private boolean isAvailed;
 
+    @JsonProperty("isAvailed")
+    public boolean isAvailed() {
+        return isAvailed;
+    }
+
+    @JsonProperty("isAvailed")
+    public void setIsAvailed(boolean isAvailed) {
+        this.isAvailed = isAvailed;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public void setAvailed(boolean availed) {
+        this.isAvailed = availed;
+    }
+
     private UserSummaryResponse availedBy;
     private LocalDateTime availedAt;
 

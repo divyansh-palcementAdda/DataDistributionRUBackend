@@ -321,6 +321,8 @@ public class LeadFieldSecurityServiceImpl implements ILeadFieldSecurityService {
         }
         if (!authorities.contains(PermissionType.LEAD_FIELD_REMARKS_READ.name())) {
             r.setRemarks(null);
+            r.setLatestStatusRemark(null);
+            r.setInitialRemarks(null);
         }
 
         // Campus Visit

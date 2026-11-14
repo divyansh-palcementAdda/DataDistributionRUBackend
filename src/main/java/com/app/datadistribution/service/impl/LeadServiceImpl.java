@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -206,23 +207,19 @@ public class LeadServiceImpl implements ILeadService {
             finalInterestedCourses.addAll(interestedCourses);
         }
 
-
-
         // Canonical Lead Deduplication Check (Rules A through F)
         if (deduplicationService != null) {
             LeadSource primarySource = sources.isEmpty() ? null : sources.iterator().next();
             String normPhone = deduplicationService.normalizePhone(request.getPhoneNumber());
 
-            com.app.datadistribution.dto.lead.LeadMatchResult matchResult = deduplicationService.executeWithPhoneLock(normPhone, () ->
-                    deduplicationService.matchLead(
+            com.app.datadistribution.dto.lead.LeadMatchResult matchResult = deduplicationService
+                    .executeWithPhoneLock(normPhone, () -> deduplicationService.matchLead(
                             request.getFullName(),
                             request.getPhoneNumber(),
                             request.getEmail(),
                             primarySource,
                             finalInterestedCourses,
-                            programs
-                    )
-            );
+                            programs));
 
             if (matchResult != null && matchResult.isMatched()) {
                 Lead matchedLead = matchResult.getMatchedLead();
@@ -236,8 +233,7 @@ public class LeadServiceImpl implements ILeadService {
                         request,
                         matchResult,
                         currentUser,
-                        "Manual lead entry enquiry"
-                );
+                        "Manual lead entry enquiry");
 
                 LeadResponse responseDto = leadMapper.toDto(enrichedLead);
                 responseDto.setMultiSource(enrichedLead.isMultiSource());
@@ -350,7 +346,8 @@ public class LeadServiceImpl implements ILeadService {
 
     @Override
     @Transactional
-    public LeadResponse createLeadFromExternal(LeadRequest request, User systemUser, String importSourceDescription) throws BadRequestException {
+    public LeadResponse createLeadFromExternal(LeadRequest request, User systemUser, String importSourceDescription)
+            throws BadRequestException {
         Set<LeadSource> sources = resolveLeadSources(request.getLeadSourceIds());
         Set<Course> interestedCourses = resolveCourses(request.getInterestedCourseIds());
 
@@ -381,8 +378,6 @@ public class LeadServiceImpl implements ILeadService {
         if (interestedCourses != null) {
             finalInterestedCourses.addAll(interestedCourses);
         }
-
-
 
         Board board = null;
         if (request.getBoardId() != null) {
@@ -522,12 +517,13 @@ public class LeadServiceImpl implements ILeadService {
         if (updateProgIds == null && regCourseId != null && lead.getPrograms() != null) {
             updateProgIds = lead.getPrograms().stream().map(Program::getId).collect(Collectors.toSet());
         }
-        UUID effectiveCourseTypeId = request.getCourseTypeId() != null 
-                ? request.getCourseTypeId() 
+        UUID effectiveCourseTypeId = request.getCourseTypeId() != null
+                ? request.getCourseTypeId()
                 : (lead.getCourseType() != null ? lead.getCourseType().getId() : null);
 
-        com.app.datadistribution.service.dto.LeadAcademicResolutionResult academicResult = leadAcademicResolver.resolveLeadAcademicMappings(
-                updateProgIds, regCourseId, request.getInterestedCourseIds(), effectiveCourseTypeId);
+        com.app.datadistribution.service.dto.LeadAcademicResolutionResult academicResult = leadAcademicResolver
+                .resolveLeadAcademicMappings(
+                        updateProgIds, regCourseId, request.getInterestedCourseIds(), effectiveCourseTypeId);
         Set<Program> programs = academicResult.getPrograms();
         Course course = academicResult.getCourse();
         CourseType courseType = academicResult.getCourseType();
@@ -639,6 +635,13 @@ public class LeadServiceImpl implements ILeadService {
         leadDataScopeService.validateLeadReadAccess(lead, dataScope);
 
         LeadResponse dto = leadMapper.toDto(lead);
+        String latestRemark = resolveLatestStatusRemarkForLead(lead);
+        if (latestRemark != null && !latestRemark.isBlank()) {
+            dto.setLatestStatusRemark(latestRemark);
+            dto.setRemarks(latestRemark);
+        } else if (lead.getRemarks() != null && !lead.getRemarks().isBlank()) {
+            dto.setLatestStatusRemark(lead.getRemarks());
+        }
         if (lead.getAssignedTo() != null) {
             leadAvailedRepository
                     .findByLeadIdAndAvailedByUserIdAndIsDeletedFalse(lead.getId(), lead.getAssignedTo().getId())
@@ -866,10 +869,19 @@ public class LeadServiceImpl implements ILeadService {
             }
         }
 
+        Map<UUID, String> latestStatusRemarksByLeadId = resolveLatestStatusRemarks(leadIds, leads);
+
         UserMapper userMapper = org.mapstruct.factory.Mappers.getMapper(UserMapper.class);
         List<LeadResponse> content = leads.stream()
                 .map(lead -> {
                     LeadResponse leadDto = leadMapper.toDto(lead);
+                    String latestRemark = latestStatusRemarksByLeadId.get(lead.getId());
+                    if (latestRemark != null && !latestRemark.isBlank()) {
+                        leadDto.setLatestStatusRemark(latestRemark);
+                        leadDto.setRemarks(latestRemark);
+                    } else if (lead.getRemarks() != null && !lead.getRemarks().isBlank()) {
+                        leadDto.setLatestStatusRemark(lead.getRemarks());
+                    }
                     if (lead.getAssignedTo() != null) {
                         Map<UUID, LeadAvailed> userMap = availedByLeadAndUser.get(lead.getId());
                         if (userMap != null && userMap.containsKey(lead.getAssignedTo().getId())) {
@@ -1092,14 +1104,18 @@ public class LeadServiceImpl implements ILeadService {
                     newStatus != null ? newStatus.getName() + " (" + newStatus.getId() + ")" : "null",
                     statusChanged);
 
-            // Defensive: If lead is already REGISTERED, reject any calling or other non-registered status changes
+            // Defensive: If lead is already REGISTERED, reject any calling or other
+            // non-registered status changes
             if (isRegisteredStatus(oldStatus)) {
                 if (isRegisteredStatus(newStatus)) {
-                    log.info("[changeStatus] Lead {} is already REGISTERED and new status is also REGISTERED. Idempotent return.",
+                    log.info(
+                            "[changeStatus] Lead {} is already REGISTERED and new status is also REGISTERED. Idempotent return.",
                             lead.getLeadCode());
                     return enrichWithActionEnforcement(leadMapper.toDto(lead), lead, currentUser);
                 }
-                throw new BadRequestException("Lead is already registered. Calling workflow is terminated and status cannot be changed to " + newStatus.getName() + ".");
+                throw new BadRequestException(
+                        "Lead is already registered. Calling workflow is terminated and status cannot be changed to "
+                                + newStatus.getName() + ".");
             }
 
             String effectiveFeedback = (request.getFeedback() != null && !request.getFeedback().isBlank())
@@ -1215,7 +1231,8 @@ public class LeadServiceImpl implements ILeadService {
                 updated = changeLeadStatusInternal(lead, newStatus, currentUser, effectiveFeedback);
                 log.info(
                         "[changeStatus] changeLeadStatusInternal completed successfully. New lead currentStatus is: {}",
-                        (updated != null && updated.getCurrentStatus() != null) ? updated.getCurrentStatus().getName() : "null");
+                        (updated != null && updated.getCurrentStatus() != null) ? updated.getCurrentStatus().getName()
+                                : "null");
             } else {
                 log.info("[changeStatus] Status is unchanged. Skipping status transition for lead {}",
                         lead.getLeadCode());
@@ -1870,20 +1887,141 @@ public class LeadServiceImpl implements ILeadService {
 
         String trimmed = (remarks != null && !remarks.isBlank()) ? remarks.trim() : null;
         lead.setRemarks(trimmed);
+        if (trimmed != null && lead.getCurrentStatus() != null) {
+            List<LeadStatusHistory> latestHistories = leadStatusHistoryRepository
+                    .findByLeadIdOrderByCreatedAtDescIdDesc(lead.getId());
+            if (!latestHistories.isEmpty()) {
+                LeadStatusHistory latest = latestHistories.get(0);
+                if (latest.getNewStatus() != null
+                        && latest.getNewStatus().getId().equals(lead.getCurrentStatus().getId())) {
+                    latest.setFeedback(trimmed);
+                    leadStatusHistoryRepository.save(latest);
+                }
+            }
+        }
         Lead saved = leadRepository.save(lead);
-        return leadMapper.toDto(saved);
+        LeadResponse responseDto = leadMapper.toDto(saved);
+        if (trimmed != null) {
+            responseDto.setLatestStatusRemark(trimmed);
+            responseDto.setRemarks(trimmed);
+        }
+        return responseDto;
     }
 
     private LeadResponse enrichWithActionEnforcement(LeadResponse dto, Lead lead, User currentUser) {
-        if (dto != null && lead != null && leadActionEnforcementService != null) {
-            try {
-                if (currentUser == null) {
-                    currentUser = getCurrentUserEntity();
+        if (dto != null && lead != null) {
+            String latestRemark = resolveLatestStatusRemarkForLead(lead);
+            if (latestRemark != null && !latestRemark.isBlank()) {
+                dto.setLatestStatusRemark(latestRemark);
+                dto.setRemarks(latestRemark);
+            }
+            if (leadActionEnforcementService != null) {
+                try {
+                    if (currentUser == null) {
+                        currentUser = getCurrentUserEntity();
+                    }
+                    dto.setActionEnforcement(leadActionEnforcementService.checkActionEnforcement(lead, currentUser));
+                } catch (Exception ignored) {
                 }
-                dto.setActionEnforcement(leadActionEnforcementService.checkActionEnforcement(lead, currentUser));
-            } catch (Exception ignored) {
             }
         }
         return dto;
+    }
+
+    /**
+     * Resolves the latest status remark for a batch of leads from
+     * LeadStatusHistory.
+     * Prioritizes:
+     * 1. The most recent non-blank status history entry matching the lead's current
+     * status (preferring non-AUTO_PARENT).
+     * 2. The most recent non-blank status history entry overall.
+     * 3. Fallback to lead.getRemarks().
+     */
+    private Map<UUID, String> resolveLatestStatusRemarks(List<UUID> leadIds, List<Lead> leads) {
+        if (leadStatusHistoryRepository == null || leadIds == null || leadIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<UUID, String> result = new HashMap<>();
+        List<LeadStatusHistory> histories = leadStatusHistoryRepository
+                .findByLeadIdInOrderByCreatedAtDescIdDesc(leadIds);
+
+        Map<UUID, List<LeadStatusHistory>> groupedByLead = histories.stream()
+                .filter(h -> h.getLead() != null && h.getLead().getId() != null)
+                .collect(Collectors.groupingBy(h -> h.getLead().getId()));
+
+        for (Lead lead : leads) {
+            UUID leadId = lead.getId();
+            List<LeadStatusHistory> leadHistories = groupedByLead.get(leadId);
+            String latestRemark = determineLatestStatusRemark(lead, leadHistories);
+            if (latestRemark != null && !latestRemark.isBlank()) {
+                result.put(leadId, latestRemark);
+            }
+        }
+
+        return result;
+    }
+
+    private String resolveLatestStatusRemarkForLead(Lead lead) {
+        if (leadStatusHistoryRepository == null || lead == null || lead.getId() == null) {
+            return (lead != null && lead.getRemarks() != null) ? lead.getRemarks().trim() : null;
+        }
+        List<LeadStatusHistory> histories = leadStatusHistoryRepository
+                .findByLeadIdOrderByCreatedAtDescIdDesc(lead.getId());
+        return determineLatestStatusRemark(lead, histories);
+    }
+
+    private String determineLatestStatusRemark(Lead lead, List<LeadStatusHistory> leadHistories) {
+        if (leadHistories != null && !leadHistories.isEmpty()) {
+            UUID currentStatusId = lead.getCurrentStatus() != null ? lead.getCurrentStatus().getId() : null;
+
+            // 1. Look for history matching the current status, preferring human/user
+            // remarks over AUTO_PARENT
+            if (currentStatusId != null) {
+                // First pass: matching current status and NOT AUTO_PARENT with non-blank
+                // feedback
+                for (LeadStatusHistory h : leadHistories) {
+                    if (h.getNewStatus() != null && currentStatusId.equals(h.getNewStatus().getId())) {
+                        String fb = h.getFeedback();
+                        if (fb != null && !fb.isBlank() && !"AUTO_PARENT".equalsIgnoreCase(h.getTransitionType())) {
+                            return fb.trim();
+                        }
+                    }
+                }
+
+                // Second pass: matching current status with any non-blank feedback
+                for (LeadStatusHistory h : leadHistories) {
+                    if (h.getNewStatus() != null && currentStatusId.equals(h.getNewStatus().getId())) {
+                        String fb = h.getFeedback();
+                        if (fb != null && !fb.isBlank()) {
+                            return fb.trim();
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback to newest history overall with non-blank feedback (preferring
+            // non-AUTO_PARENT)
+            for (LeadStatusHistory h : leadHistories) {
+                String fb = h.getFeedback();
+                if (fb != null && !fb.isBlank() && !"AUTO_PARENT".equalsIgnoreCase(h.getTransitionType())) {
+                    return fb.trim();
+                }
+            }
+
+            for (LeadStatusHistory h : leadHistories) {
+                String fb = h.getFeedback();
+                if (fb != null && !fb.isBlank()) {
+                    return fb.trim();
+                }
+            }
+        }
+
+        // 3. Fallback to lead.getRemarks()
+        if (lead != null && lead.getRemarks() != null && !lead.getRemarks().isBlank()) {
+            return lead.getRemarks().trim();
+        }
+
+        return null;
     }
 }

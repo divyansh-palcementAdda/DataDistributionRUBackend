@@ -161,9 +161,12 @@ public class LeadStatusTransitionServiceImpl implements ILeadStatusTransitionSer
                     currentUser != null ? currentUser.getUsername() : "SYSTEM");
         }
 
-        // Update current status and last contacted timestamp
+        // Update current status, last contacted timestamp, and latest status remarks
         lead.setCurrentStatus(targetStatus);
         lead.setLastContactedAt(now);
+        if (feedbackOrRemarks != null && !feedbackOrRemarks.isBlank()) {
+            lead.setRemarks(feedbackOrRemarks.trim());
+        }
         Lead savedLead = leadRepository.save(lead);
 
         // Canonical registration side-effects: complete all PENDING and UPCOMING follow-ups atomically

@@ -51,6 +51,8 @@ class LeadStatusHistoryFilterTest {
     @Mock
     private LeadStatusRepository leadStatusRepository;
     @Mock
+    private com.app.datadistribution.repository.LeadStatusHistoryRepository leadStatusHistoryRepository;
+    @Mock
     private LeadAvailedRepository leadAvailedRepository;
     @Mock
     private ILeadDataScopeService leadDataScopeService;
