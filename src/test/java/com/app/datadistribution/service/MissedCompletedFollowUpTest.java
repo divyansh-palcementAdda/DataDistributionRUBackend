@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -133,8 +134,8 @@ class MissedCompletedFollowUpTest {
         when(auth.isAuthenticated()).thenReturn(true);
         when(auth.getName()).thenReturn("counselor1");
         when(auth.getPrincipal()).thenReturn("counselor1");
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(auth);
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(auth);
         SecurityContextHolder.setContext(securityContext);
 
         UserDataScope scope = UserDataScope.builder()
@@ -171,6 +172,11 @@ class MissedCompletedFollowUpTest {
         // Instantiate LeadStatusTransitionServiceImpl directly for transition tests
         statusTransitionService = new LeadStatusTransitionServiceImpl(
                 leadRepository, leadStatusRepository, leadStatusHistoryRepository, leadFollowUpRepository);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

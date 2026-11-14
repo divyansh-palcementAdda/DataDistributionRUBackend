@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ public class UserActivityIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
         testUser = userRepository.findAll().stream().findFirst().orElse(null);
         if (testUser != null) {
             UserDetailsImpl userDetails = UserDetailsImpl.build(testUser);
@@ -52,6 +54,11 @@ public class UserActivityIntegrationTest {
             );
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
