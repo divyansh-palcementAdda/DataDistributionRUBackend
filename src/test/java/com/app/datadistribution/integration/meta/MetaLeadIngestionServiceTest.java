@@ -15,7 +15,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.app.datadistribution.dto.lead.LeadRequest;
 import com.app.datadistribution.dto.lead.LeadResponse;
+import com.app.datadistribution.dto.lead.LeadMatchResult;
 import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
@@ -28,12 +30,16 @@ import com.app.datadistribution.integration.meta.entity.MetaWebhookEvent;
 import com.app.datadistribution.integration.meta.entity.MetaWebhookEventStatus;
 import com.app.datadistribution.integration.meta.exception.MetaGraphApiException;
 import com.app.datadistribution.integration.meta.repository.MetaWebhookEventRepository;
+import com.app.datadistribution.integration.meta.service.MetaCampaignCourseResolver;
+import com.app.datadistribution.integration.meta.service.MetaCampaignCourseResolver.MetaCourseResolutionResult;
 import com.app.datadistribution.integration.meta.service.impl.MetaLeadIngestionServiceImpl;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaGraphApiService;
+import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.CourseRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.ILeadDeduplicationService;
 import com.app.datadistribution.service.interfaces.ILeadService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +81,15 @@ class MetaLeadIngestionServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private MetaCampaignCourseResolver metaCampaignCourseResolver;
+
+    @Mock
+    private ILeadDeduplicationService deduplicationService;
+
+    @Mock
+    private LeadMapper leadMapper;
+
     @InjectMocks
     private MetaLeadIngestionServiceImpl ingestionService;
 
@@ -93,6 +109,16 @@ class MetaLeadIngestionServiceTest {
                 .code("META_ADS")
                 .build();
         metaSource.setId(UUID.randomUUID());
+
+        lenient().when(deduplicationService.executeWithPhoneLock(any(), any()))
+                .thenAnswer(inv -> {
+                    java.util.function.Supplier<?> s = inv.getArgument(1);
+                    return s.get();
+                });
+        lenient().when(deduplicationService.matchLead(any(), any(), any(), any(), any(), any()))
+                .thenReturn(LeadMatchResult.builder().status(LeadMatchResult.MatchStatus.NO_MATCH).build());
+        lenient().when(metaCampaignCourseResolver.resolve(any(), any()))
+                .thenReturn(MetaCourseResolutionResult.noMatch("No match", null, null, java.util.Collections.emptyList(), false));
     }
 
     @Test
@@ -151,8 +177,17 @@ class MetaLeadIngestionServiceTest {
         matchedCourse.setId(UUID.randomUUID());
 
         when(metaGraphApiService.retrieveLead("100200300")).thenReturn(leadDto);
-        when(courseRepository.findByCourseNameIgnoreCaseAndIsDeletedFalse("B.Tech Computer Science"))
-                .thenReturn(Optional.of(matchedCourse));
+        when(metaCampaignCourseResolver.resolve(any(), any())).thenReturn(
+                MetaCourseResolutionResult.success(
+                        matchedCourse,
+                        MetaCourseResolutionResult.ResolutionMethod.FORM_ANSWER,
+                        "Matched B.Tech Computer Science from form",
+                        "what_course_are_you_interested_in?",
+                        "B.Tech Computer Science",
+                        List.of(matchedCourse),
+                        false
+                )
+        );
         when(leadSourceRepository.findByCodeIgnoreCase("META_ADS")).thenReturn(Optional.of(metaSource));
         when(metaProperties.getSystemUsername()).thenReturn("superadmin");
         when(userRepository.findByUsername("superadmin")).thenReturn(Optional.of(systemUser));
@@ -378,10 +413,15 @@ class MetaLeadIngestionServiceTest {
                 .build();
 
         when(metaGraphApiService.retrieveLead("888777")).thenReturn(leadDto);
-        when(courseRepository.findByCourseNameIgnoreCaseAndIsDeletedFalse("Unknown Exotic Subject"))
-                .thenReturn(Optional.empty());
-        when(courseRepository.findByCourseCodeIgnoreCaseAndIsDeletedFalse("Unknown Exotic Subject"))
-                .thenReturn(Optional.empty());
+        when(metaCampaignCourseResolver.resolve(any(), any())).thenReturn(
+                MetaCourseResolutionResult.noMatch(
+                        "Applicant selected course 'Unknown Exotic Subject' not found in Course Master",
+                        "course",
+                        "Unknown Exotic Subject",
+                        java.util.Collections.emptyList(),
+                        false
+                )
+        );
         when(programRepository.findByNameIgnoreCaseAndIsDeletedFalse("Unknown Exotic Subject"))
                 .thenReturn(Optional.empty());
         when(programRepository.findByCodeIgnoreCaseAndIsDeletedFalse("Unknown Exotic Subject"))

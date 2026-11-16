@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -14,9 +15,11 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.app.datadistribution.dto.lead.LeadMatchResult;
 import com.app.datadistribution.dto.lead.LeadRequest;
 import com.app.datadistribution.dto.lead.LeadResponse;
 import com.app.datadistribution.entity.Course;
+import com.app.datadistribution.entity.Lead;
 import com.app.datadistribution.entity.LeadSource;
 import com.app.datadistribution.entity.Program;
 import com.app.datadistribution.entity.User;
@@ -32,10 +35,12 @@ import com.app.datadistribution.integration.meta.repository.MetaWebhookEventRepo
 import com.app.datadistribution.integration.meta.service.MetaCampaignCourseResolver;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaGraphApiService;
 import com.app.datadistribution.integration.meta.service.interfaces.IMetaLeadIngestionService;
+import com.app.datadistribution.mapper.LeadMapper;
 import com.app.datadistribution.repository.CourseRepository;
 import com.app.datadistribution.repository.LeadSourceRepository;
 import com.app.datadistribution.repository.ProgramRepository;
 import com.app.datadistribution.repository.UserRepository;
+import com.app.datadistribution.service.interfaces.ILeadDeduplicationService;
 import com.app.datadistribution.service.interfaces.ILeadService;
 
 import lombok.RequiredArgsConstructor;
@@ -55,6 +60,8 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
     private final ProgramRepository programRepository;
     private final UserRepository userRepository;
     private final MetaCampaignCourseResolver metaCampaignCourseResolver;
+    private final ILeadDeduplicationService deduplicationService;
+    private final LeadMapper leadMapper;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$");
 
@@ -174,50 +181,43 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             String city = extractField(fieldMap, "city");
             String state = extractField(fieldMap, "state");
 
-            // 4. Academic resolution without guessing
+            // 4. Intelligent Academic Resolution using Campaign Name & Form field_data (Phase 2 & Phase 5)
+            MetaCampaignCourseResolver.MetaCourseResolutionResult courseResolution =
+                    metaCampaignCourseResolver.resolve(campaignName, leadDto.getFieldData());
+
             UUID resolvedCourseId = null;
+            String resolvedCourseName = null;
+            if (courseResolution.isSuccess()) {
+                Course matchedCourse = courseResolution.getCourse();
+                resolvedCourseId = matchedCourse.getId();
+                resolvedCourseName = matchedCourse.getCourseName();
+                log.info("Meta lead {}: resolved interested course '{}' ({}) via {}",
+                        event.getLeadgenId(), resolvedCourseName, resolvedCourseId, courseResolution.getMappingMethod());
+            } else {
+                log.info("Meta lead {}: course resolution unresolved. Reason: {}",
+                        event.getLeadgenId(), courseResolution.getMappingReason());
+            }
+
+            // Fallback for Program interest if course is unresolved and applicant specified a program name
             UUID resolvedProgramId = null;
-            String courseAnswer = extractCourseAnswer(fieldMap);
-            if (courseAnswer != null && !courseAnswer.isBlank()) {
-                // Exact / case-insensitive search against active Courses
-                Optional<Course> courseOpt = courseRepository.findByCourseNameIgnoreCaseAndIsDeletedFalse(courseAnswer)
-                        .or(() -> courseRepository.findByCourseCodeIgnoreCaseAndIsDeletedFalse(courseAnswer));
-                if (courseOpt.isPresent() && courseOpt.get().isActive()) {
-                    resolvedCourseId = courseOpt.get().getId();
-                } else {
-                    // Exact / case-insensitive search against active Programs
-                    Optional<Program> programOpt = programRepository.findByNameIgnoreCaseAndIsDeletedFalse(courseAnswer)
-                            .or(() -> programRepository.findByCodeIgnoreCaseAndIsDeletedFalse(courseAnswer));
-                    if (programOpt.isPresent() && programOpt.get().isActive()) {
-                        resolvedProgramId = programOpt.get().getId();
-                    }
+            String courseAnswer = courseResolution.getCourseAnswer() != null
+                    ? courseResolution.getCourseAnswer()
+                    : extractCourseAnswer(fieldMap);
+
+            if (resolvedCourseId == null && courseAnswer != null && !courseAnswer.isBlank()) {
+                Optional<Program> programOpt = programRepository.findByNameIgnoreCaseAndIsDeletedFalse(courseAnswer)
+                        .or(() -> programRepository.findByCodeIgnoreCaseAndIsDeletedFalse(courseAnswer));
+                if (programOpt.isPresent() && programOpt.get().isActive()) {
+                    resolvedProgramId = programOpt.get().getId();
                 }
             }
 
-            // 4b. If course not resolved from form questions, extract from Meta Campaign Name
-            String resolvedCourseFromCampaignName = null;
-            if (resolvedCourseId == null && campaignName != null && !campaignName.isBlank()) {
-                try {
-                    MetaCampaignCourseResolver.CourseResolutionResult resolutionResult =
-                            metaCampaignCourseResolver.resolveCourse(campaignName);
-                    if (resolutionResult.isSuccess()) {
-                        Course matchedCourse = resolutionResult.getCourse();
-                        resolvedCourseId = matchedCourse.getId();
-                        resolvedCourseFromCampaignName = matchedCourse.getCourseName();
-                        log.info("Meta lead {}: resolved interested course '{}' ({}) from campaign name '{}'",
-                                event.getLeadgenId(), matchedCourse.getCourseName(), matchedCourse.getId(), campaignName);
-                    } else if (resolutionResult.isAmbiguous()) {
-                        log.warn("Meta lead {}: Ambiguous course match for campaign name '{}'. Leaving course unresolved.",
-                                event.getLeadgenId(), campaignName);
-                    } else {
-                        log.info("Meta lead {}: No course match for campaign name '{}'",
-                                event.getLeadgenId(), campaignName);
-                    }
-                } catch (Exception e) {
-                    log.error("Meta lead {}: Error resolving course from campaign name '{}': {}",
-                            event.getLeadgenId(), campaignName, e.getMessage());
-                }
-            }
+            // Enrich event with audit and traceability fields (Phase 8)
+            event.setCourseQuestion(courseResolution.getCourseQuestion());
+            event.setCourseAnswer(courseResolution.getCourseAnswer());
+            event.setResolvedCourseId(resolvedCourseId);
+            event.setMappingMethod(courseResolution.getMappingMethod() != null ? courseResolution.getMappingMethod().name() : "UNRESOLVED");
+            event.setMappingReason(courseResolution.getMappingReason());
 
             // 5. Source attribution
             List<UUID> leadSourceIds = resolveMetaLeadSource(leadDto.getPlatform());
@@ -239,9 +239,20 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             if (leadDto.getAdsetName() != null) remarksBuilder.append("Ad Set Name: ").append(leadDto.getAdsetName()).append("\n");
             if (effectiveCampaignId != null) remarksBuilder.append("Campaign ID: ").append(effectiveCampaignId).append("\n");
             if (campaignName != null) remarksBuilder.append("Campaign Name: ").append(campaignName).append("\n");
-            if (resolvedCourseFromCampaignName != null) {
-                remarksBuilder.append("Interested Course (from Campaign): ").append(resolvedCourseFromCampaignName).append("\n");
+
+            if (resolvedCourseName != null) {
+                remarksBuilder.append("Interested Course: ").append(resolvedCourseName).append("\n");
+                remarksBuilder.append("Course Mapping Method: ").append(courseResolution.getMappingMethod()).append("\n");
+                remarksBuilder.append("Course Mapping Details: ").append(courseResolution.getMappingReason()).append("\n");
+            } else {
+                remarksBuilder.append("Interested Course: Unresolved\n");
+                remarksBuilder.append("Course Mapping Details: ").append(courseResolution.getMappingReason()).append("\n");
             }
+
+            if (courseResolution.getStatus() == MetaCampaignCourseResolver.MetaCourseResolutionResult.Status.CONFLICT) {
+                remarksBuilder.append("Warning: ").append(courseResolution.getMappingReason()).append("\n");
+            }
+
             if (leadDto.getPlatform() != null) remarksBuilder.append("Platform: ").append(leadDto.getPlatform()).append("\n");
             if (courseAnswer != null && resolvedCourseId == null && resolvedProgramId == null) {
                 remarksBuilder.append("Course Inquiry: \"").append(courseAnswer).append("\" (No direct catalog match - review manually)\n");
@@ -254,6 +265,7 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             User systemUser = resolveSystemUser();
 
             // 8. Build LeadRequest
+            List<UUID> interestedCourseIds = resolvedCourseId != null ? List.of(resolvedCourseId) : Collections.emptyList();
             LeadRequest leadRequest = LeadRequest.builder()
                     .fullName(fullName)
                     .phoneNumber(phone)
@@ -264,13 +276,51 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
                     .leadSourceIds(leadSourceIds)
                     .sourceDetails(sourceDetails.length() > 255 ? sourceDetails.substring(0, 255) : sourceDetails)
                     .courseId(resolvedCourseId)
+                    .interestedCourseIds(interestedCourseIds)
                     .programId(resolvedProgramId)
                     .remarks(remarksBuilder.toString().trim())
                     .active(true)
                     .build();
 
-            // 9. Save Lead using existing business workflow
-            LeadResponse leadResponse = leadService.createLeadFromExternal(leadRequest, systemUser);
+            // 9. Canonical Deduplication Check (Rules A through F) & Lead Persistence (Phase 6)
+            String normPhone = deduplicationService != null ? deduplicationService.normalizePhone(phone) : phone;
+            Course resolvedCourse = resolvedCourseId != null ? courseRepository.findById(resolvedCourseId).orElse(null) : null;
+            Program resolvedProgram = resolvedProgramId != null ? programRepository.findById(resolvedProgramId).orElse(null) : null;
+
+            LeadMatchResult matchResult = null;
+            if (deduplicationService != null) {
+                LeadSource primarySource = (leadSourceIds != null && !leadSourceIds.isEmpty())
+                        ? leadSourceRepository.findById(leadSourceIds.get(0)).orElse(null)
+                        : null;
+                matchResult = deduplicationService.executeWithPhoneLock(normPhone, () ->
+                        deduplicationService.matchLead(
+                                fullName,
+                                phone,
+                                email,
+                                primarySource,
+                                resolvedCourse != null ? Set.of(resolvedCourse) : Collections.emptySet(),
+                                resolvedProgram != null ? Set.of(resolvedProgram) : Collections.emptySet()
+                        )
+                );
+            }
+
+            LeadResponse leadResponse;
+            if (matchResult != null && matchResult.isMatched()) {
+                Lead matchedLead = matchResult.getMatchedLead();
+                log.info("Meta lead matched existing lead {}: {} (match status: {})",
+                        matchedLead.getLeadCode(), matchedLead.getFullName(), matchResult.getStatus());
+
+                Lead updatedLead = deduplicationService.enrichAndSaveMatchedLead(
+                        matchedLead,
+                        leadRequest,
+                        matchResult,
+                        systemUser,
+                        "Lead imported from Meta Lead Ads."
+                );
+                leadResponse = leadMapper.toDto(updatedLead);
+            } else {
+                leadResponse = leadService.createLeadFromExternal(leadRequest, systemUser);
+            }
 
             // 10. Update Event Status
             event.setStatus(MetaWebhookEventStatus.PROCESSED);
@@ -280,7 +330,7 @@ public class MetaLeadIngestionServiceImpl implements IMetaLeadIngestionService {
             event.setNextRetryAt(null);
             eventRepository.save(event);
 
-            log.info("Successfully ingested Meta lead. leadgen_id: {}, created lead_code: {}, course_id: {}",
+            log.info("Successfully ingested Meta lead. leadgen_id: {}, lead_code: {}, course_id: {}",
                     event.getLeadgenId(), leadResponse.getLeadCode(), resolvedCourseId);
 
         } catch (Exception e) {

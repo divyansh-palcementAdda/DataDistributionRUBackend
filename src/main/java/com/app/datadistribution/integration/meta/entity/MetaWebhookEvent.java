@@ -84,4 +84,19 @@ public class MetaWebhookEvent extends BaseEntity {
 
     @Column(name = "lead_code", length = 50)
     private String leadCode;
+
+    @Column(name = "course_question", length = 255)
+    private String courseQuestion;
+
+    @Column(name = "course_answer", length = 255)
+    private String courseAnswer;
+
+    @Column(name = "resolved_course_id")
+    private UUID resolvedCourseId;
+
+    @Column(name = "mapping_method", length = 50)
+    private String mappingMethod;
+
+    @Column(name = "mapping_reason", length = 255)
+    private String mappingReason;
 }
